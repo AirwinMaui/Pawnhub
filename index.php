@@ -1,3 +1,3 @@
 <?php
-echo "App deployed successfully";
-?>
+header("Location: login.php");
+exit;
