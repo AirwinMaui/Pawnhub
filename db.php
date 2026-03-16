@@ -1,7 +1,7 @@
 <?php
 define('DB_HOST', 'pawnhub.mysql.database.azure.com');
 define('DB_USER', 'PawnhubAdmin@pawnhub');
-define('DB_PASS', 'YOUR_NEW_PASSWORD_HERE');
+define('DB_PASS', 'Admin123');
 define('DB_NAME', 'pawnhub');
 define('DB_PORT', '3306');
 
