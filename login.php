@@ -1,24 +1,31 @@
 <?php
 session_start();
 require 'db.php';
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
-    if ($username && $password) {
+    if ($username === '' || $password === '') {
+        $error = 'Please fill in all fields.';
+    } else {
         $stmt = $pdo->prepare("
-            SELECT u.*, t.business_name as tenant_name
+            SELECT u.*, t.business_name AS tenant_name
             FROM users u
             LEFT JOIN tenants t ON u.tenant_id = t.id
-            WHERE u.username = ? AND u.status = 'approved' AND u.is_suspended = 0
+            WHERE u.username = ? 
+              AND u.status = 'approved' 
+              AND u.is_suspended = 0
             LIMIT 1
         ");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
+            session_regenerate_id(true);
+
             $_SESSION['user'] = [
                 'id'          => $user['id'],
                 'name'        => $user['fullname'],
@@ -27,33 +34,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'tenant_id'   => $user['tenant_id'],
                 'tenant_name' => $user['tenant_name'],
             ];
-            switch ($user['role']) {
-                case 'super_admin': header('Location: superadmin.php'); break;
-                case 'admin':       header('Location: tenant.php');     break;
-                case 'staff':       header('Location: staff.php');      break;
-                case 'cashier':     header('Location: cashier.php');    break;
-                default:            header('Location: login.php');
+
+            if ($user['role'] === 'super_admin') {
+                header('Location: superadmin.php');
+                exit;
             }
-            exit;
+
+            if ($user['role'] === 'admin') {
+                header('Location: tenant.php');
+                exit;
+            }
+
+            if ($user['role'] === 'staff') {
+                header('Location: staff.php');
+                exit;
+            }
+
+            if ($user['role'] === 'cashier') {
+                header('Location: cashier.php');
+                exit;
+            }
+
+            session_unset();
+            session_destroy();
+            $error = 'Unknown user role.';
         } else {
             $chk = $pdo->prepare("SELECT status, is_suspended FROM users WHERE username = ? LIMIT 1");
             $chk->execute([$username]);
             $chk = $chk->fetch();
-            if (!$chk)                    $error = 'Username not found.';
-            elseif ($chk['is_suspended']) $error = 'Your account has been suspended.';
-            elseif ($chk['status'] === 'pending')  $error = 'Your account is pending approval.';
-            elseif ($chk['status'] === 'rejected') $error = 'Your account was rejected.';
-            else                          $error = 'Incorrect password.';
+
+            if (!$chk) {
+                $error = 'Username not found.';
+            } elseif ((int)$chk['is_suspended'] === 1) {
+                $error = 'Your account has been suspended.';
+            } elseif ($chk['status'] === 'pending') {
+                $error = 'Your account is pending approval.';
+            } elseif ($chk['status'] === 'rejected') {
+                $error = 'Your account was rejected.';
+            } else {
+                $error = 'Incorrect password.';
+            }
         }
-    } else {
-        $error = 'Please fill in all fields.';
     }
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PawnHub — Login</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -114,22 +143,56 @@ h1 span{color:#60a5fa;}
   <div class="box">
     <div class="title">Welcome back 👋</div>
     <div class="desc">Sign in to your PawnHub account</div>
-    <?php if($error): ?>
-    <div class="err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><?=htmlspecialchars($error)?></div>
+
+    <?php if ($error): ?>
+      <div class="err">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <?= htmlspecialchars($error) ?>
+      </div>
     <?php endif; ?>
-    <form method="POST">
-      <div class="fg"><label>Username</label>
-        <div class="iw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <input type="text" name="username" class="finput" placeholder="Enter your username" value="<?=htmlspecialchars($_POST['username']??'')?>" required></div></div>
-      <div class="fg"><label>Password</label>
-        <div class="iw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <input type="password" name="password" id="pw" class="finput" placeholder="Enter your password" required>
-        <button type="button" class="toggle" onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-        </div></div>
+
+    <form method="POST" action="">
+      <div class="fg">
+        <label>Username</label>
+        <div class="iw">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <input type="text" name="username" class="finput" placeholder="Enter your username" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>Password</label>
+        <div class="iw">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <input type="password" name="password" id="pw" class="finput" placeholder="Enter your password" required>
+          <button type="button" class="toggle" onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <button type="submit" class="btn">Sign In</button>
     </form>
+
     <div class="footer">Don't have an account? <a href="signup.php">Apply for access</a></div>
-    <div class="badges"><span class="badge">🔒 SSL Secured</span><span class="badge">📋 BSP Compliant</span><span class="badge">🛡️ Data Protected</span></div>
+    <div class="badges">
+      <span class="badge">🔒 SSL Secured</span>
+      <span class="badge">📋 BSP Compliant</span>
+      <span class="badge">🛡️ Data Protected</span>
+    </div>
   </div>
 </div>
 </body>
