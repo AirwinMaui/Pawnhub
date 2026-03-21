@@ -172,19 +172,19 @@ $sales_chart_labels = $sales_chart_data = [];
 if ($active_page === 'sales_report') {
     try {
         $sq = "SELECT COUNT(*) AS total_transactions, COUNT(DISTINCT tenant_id) AS active_tenants,
-                 COALESCE(SUM(principal_amount),0) AS total_revenue,
-                 COALESCE(AVG(principal_amount),0) AS avg_transaction
+                 COALESCE(SUM(loan_amount),0) AS total_revenue,
+                 COALESCE(AVG(loan_amount),0) AS avg_transaction
                FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
         $sp = [$sales_date_from, $sales_date_to];
         if ($sales_tenant) { $sq .= " AND tenant_id=?"; $sp[] = $sales_tenant; }
         $s = $pdo->prepare($sq); $s->execute($sp); $sales_summary = $s->fetch();
 
         if ($sales_period === 'daily') {
-            $tq = "SELECT DATE(created_at) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(principal_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+            $tq = "SELECT DATE(created_at) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(loan_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
         } elseif ($sales_period === 'weekly') {
-            $tq = "SELECT CONCAT(YEAR(created_at),'-W',LPAD(WEEK(created_at),2,'0')) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(principal_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+            $tq = "SELECT CONCAT(YEAR(created_at),'-W',LPAD(WEEK(created_at),2,'0')) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(loan_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
         } else {
-            $tq = "SELECT DATE_FORMAT(created_at,'%b %Y') AS period_label, DATE_FORMAT(created_at,'%Y-%m') AS sort_key, COUNT(*) AS tx_count, COALESCE(SUM(principal_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+            $tq = "SELECT DATE_FORMAT(created_at,'%b %Y') AS period_label, DATE_FORMAT(created_at,'%Y-%m') AS sort_key, COUNT(*) AS tx_count, COALESCE(SUM(loan_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
         }
         $tp = [$sales_date_from, $sales_date_to];
         if ($sales_tenant) { $tq .= " AND tenant_id=?"; $tp[] = $sales_tenant; }
@@ -194,8 +194,8 @@ if ($active_page === 'sales_report') {
         $sales_chart_data   = array_column($sales_data, 'revenue');
 
         $ptq = "SELECT t.business_name, t.plan,
-                  COUNT(pt.id) AS tx_count, COALESCE(SUM(pt.principal_amount),0) AS revenue,
-                  COALESCE(AVG(pt.principal_amount),0) AS avg_tx, MAX(pt.created_at) AS last_tx
+                  COUNT(pt.id) AS tx_count, COALESCE(SUM(pt.loan_amount),0) AS revenue,
+                  COALESCE(AVG(pt.loan_amount),0) AS avg_tx, MAX(pt.created_at) AS last_tx
                 FROM tenants t LEFT JOIN pawn_transactions pt ON pt.tenant_id=t.id
                   AND DATE(pt.created_at) BETWEEN ? AND ?
                 WHERE t.status='active'";
@@ -648,7 +648,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <?php if(empty($tx_history)):?><div class="empty-state"><p>No transactions found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Ticket No.</th><th>Amount (₱)</th><th>Status</th><th>Date</th></tr></thead><tbody>
         <?php foreach($tx_history as $i=>$tx):$ts=$tx['status']??'';?>
-        <tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($tx['business_name']??'—')?></td><td class="ticket-tag"><?=htmlspecialchars($tx['ticket_number']??$tx['id'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['principal_amount']??0,2)?></td><td><span class="badge <?=$ts==='active'?'b-green':($ts==='redeemed'?'b-blue':($ts==='forfeited'?'b-red':'b-gray'))?>"><?=ucfirst($ts)?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td></tr>
+        <tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($tx['business_name']??'—')?></td><td class="ticket-tag"><?=htmlspecialchars($tx['ticket_no']??$tx['id'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['loan_amount']??0,2)?></td><td><span class="badge <?=$ts==='active'?'b-green':($ts==='redeemed'?'b-blue':($ts==='forfeited'?'b-red':'b-gray'))?>"><?=ucfirst($ts)?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td></tr>
         <?php endforeach;?></tbody></table><?php endif;?>
       </div>
 
