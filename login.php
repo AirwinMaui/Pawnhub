@@ -3,6 +3,15 @@ session_start();
 require 'db.php';
 
 $error = '';
+$ip = $_SERVER['REMOTE_ADDR'] ?? '::1';
+
+// ── Audit log helper (inline — no extra file needed) ──────────
+function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type, string $entity_id, string $message, $tenant_id = null): void {
+    try {
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
+            ->execute([$tenant_id, $actor_id, $actor_username, $actor_role, $action, $entity_type, $entity_id, $message, $_SERVER['REMOTE_ADDR'] ?? '::1']);
+    } catch (PDOException $e) { /* never crash on log failure */ }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
@@ -13,9 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Fetch user + tenant status
         $stmt = $pdo->prepare("
-            SELECT u.*, 
-                   t.business_name AS tenant_name,
-                   t.status AS tenant_status
+            SELECT u.*, t.business_name AS tenant_name, t.status AS tenant_status
             FROM users u
             LEFT JOIN tenants t ON u.tenant_id = t.id
             WHERE u.username = ?
@@ -26,9 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
 
-            // ── Block checks (in order of priority) ──────────────
+            // ── Block checks ─────────────────────────────────
             if ((int)$user['is_suspended'] === 1) {
                 $error = 'Your account has been suspended. Please contact your administrator.';
+                write_audit($pdo, $user['id'], $user['username'], $user['role'],
+                    'LOGIN_BLOCKED', 'user', (string)$user['id'],
+                    'Login blocked — account is suspended.', $user['tenant_id']);
 
             } elseif ($user['status'] === 'pending') {
                 $error = 'Your account is pending approval.';
@@ -36,24 +46,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($user['status'] === 'rejected') {
                 $error = 'Your account application was rejected.';
 
-            } elseif (
-                $user['role'] !== 'super_admin' &&
-                $user['tenant_status'] !== 'active'
-            ) {
-                // Tenant is deactivated or inactive — block all tenant users
-                if ($user['tenant_status'] === 'inactive') {
-                    $error = 'Your account has been deactivated. Please contact PawnHub support to reactivate your subscription.';
-                } else {
-                    $error = 'Your business account is not active. Please contact PawnHub support.';
-                }
+            } elseif ($user['role'] !== 'super_admin' && ($user['tenant_status'] ?? '') !== 'active') {
+                $error = ($user['tenant_status'] === 'inactive')
+                    ? 'Your account has been deactivated. Please contact PawnHub support to reactivate your subscription.'
+                    : 'Your business account is not active. Please contact PawnHub support.';
+                write_audit($pdo, $user['id'], $user['username'], $user['role'],
+                    'LOGIN_BLOCKED', 'tenant', (string)$user['tenant_id'],
+                    'Login blocked — tenant is ' . ($user['tenant_status'] ?? 'unknown') . '.', $user['tenant_id']);
 
             } elseif ($user['status'] !== 'approved') {
                 $error = 'Your account is not approved.';
 
             } else {
-                // ── All checks passed — allow login ──────────────
+                // ── Login success ─────────────────────────────
                 session_regenerate_id(true);
-
                 $_SESSION['user'] = [
                     'id'          => $user['id'],
                     'name'        => $user['fullname'],
@@ -63,34 +69,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'tenant_name' => $user['tenant_name'],
                 ];
 
-                if ($user['role'] === 'super_admin') {
-                    header('Location: superadmin.php');
-                    exit;
-                }
-                if ($user['role'] === 'admin') {
-                    header('Location: tenant.php');
-                    exit;
-                }
-                if ($user['role'] === 'staff') {
-                    header('Location: staff.php');
-                    exit;
-                }
-                if ($user['role'] === 'cashier') {
-                    header('Location: cashier.php');
-                    exit;
-                }
+                // ── Log successful login ──────────────────────
+                write_audit($pdo, $user['id'], $user['username'], $user['role'],
+                    'USER_LOGIN', 'user', (string)$user['id'],
+                    $user['fullname'] . ' (' . $user['role'] . ') logged in successfully.', $user['tenant_id']);
 
-                session_unset();
-                session_destroy();
+                if ($user['role'] === 'super_admin') { header('Location: superadmin.php'); exit; }
+                if ($user['role'] === 'admin')        { header('Location: tenant.php');     exit; }
+                if ($user['role'] === 'staff')        { header('Location: staff.php');      exit; }
+                if ($user['role'] === 'cashier')      { header('Location: cashier.php');    exit; }
+
+                session_unset(); session_destroy();
                 $error = 'Unknown user role.';
             }
 
         } else {
-            // Wrong password or username not found
+            // ── Wrong credentials ─────────────────────────────
             if (!$user) {
                 $error = 'Username not found.';
             } else {
                 $error = 'Incorrect password.';
+                write_audit($pdo, $user['id'], $user['username'], $user['role'] ?? 'unknown',
+                    'LOGIN_FAILED', 'user', (string)$user['id'],
+                    'Failed login attempt for username: ' . $username . '.', $user['tenant_id'] ?? null);
             }
         }
     }

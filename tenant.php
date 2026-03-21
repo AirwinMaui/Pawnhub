@@ -28,6 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             else {
                 $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,?,'approved',?,NOW())")
                     ->execute([$tid,$fullname,$email,$username,password_hash($password,PASSWORD_BCRYPT),$role,$u['id']]);
+                $new_uid = $pdo->lastInsertId();
+                write_audit($pdo,$u['id'],$u['username'],'admin','USER_CREATE','user',(string)$new_uid,"Admin created $role account for \"$fullname\" (username: $username).",$tid);
                 $success_msg = ucfirst($role)." account for \"$fullname\" created!";
                 $active_page = 'users';
             }
@@ -40,9 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $susp = intval($_POST['is_suspended']);
         if ($susp) {
             $pdo->prepare("UPDATE users SET is_suspended=0,suspended_at=NULL,suspension_reason=NULL WHERE id=? AND tenant_id=?")->execute([$uid,$tid]);
+            write_audit($pdo,$u['id'],$u['username'],'admin','USER_UNSUSPEND','user',(string)$uid,"Admin unsuspended user ID $uid.",$tid);
             $success_msg = 'User unsuspended.';
         } else {
             $pdo->prepare("UPDATE users SET is_suspended=1,suspended_at=NOW(),suspension_reason='Suspended by admin.' WHERE id=? AND tenant_id=?")->execute([$uid,$tid]);
+            write_audit($pdo,$u['id'],$u['username'],'admin','USER_SUSPEND','user',(string)$uid,"Admin suspended user ID $uid.",$tid);
             $success_msg = 'User suspended.';
         }
         $active_page = 'users';
@@ -54,11 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE pawn_void_requests SET status='approved',decided_by=?,decided_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$vrid,$tid]);
         $pdo->prepare("UPDATE pawn_transactions SET status='Voided' WHERE ticket_no=? AND tenant_id=?")->execute([$ticket_no,$tid]);
         $pdo->prepare("UPDATE item_inventory SET status='voided' WHERE ticket_no=? AND tenant_id=?")->execute([$ticket_no,$tid]);
+        write_audit($pdo,$u['id'],$u['username'],'admin','VOID_APPROVED','pawn_transaction',$ticket_no,"Admin approved void for ticket $ticket_no.",$tid);
         $success_msg = 'Void approved.'; $active_page = 'void_requests';
     }
     if ($_POST['action'] === 'reject_void') {
         $vrid = intval($_POST['void_id']);
         $pdo->prepare("UPDATE pawn_void_requests SET status='rejected',decided_by=?,decided_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$vrid,$tid]);
+        write_audit($pdo,$u['id'],$u['username'],'admin','VOID_REJECTED','pawn_void_request',(string)$vrid,"Admin rejected void request ID $vrid.",$tid);
         $success_msg = 'Void rejected.'; $active_page = 'void_requests';
     }
 
@@ -66,11 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'approve_renewal') {
         $rrid = intval($_POST['renewal_id']);
         $pdo->prepare("UPDATE renewal_requests SET verification_status='verified',verified_by_admin_id=?,verified_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$rrid,$tid]);
+        write_audit($pdo,$u['id'],$u['username'],'admin','RENEWAL_APPROVED','renewal_request',(string)$rrid,"Admin approved renewal request ID $rrid.",$tid);
         $success_msg = 'Renewal approved.'; $active_page = 'renewals';
     }
     if ($_POST['action'] === 'reject_renewal') {
         $rrid = intval($_POST['renewal_id']);
         $pdo->prepare("UPDATE renewal_requests SET verification_status='rejected',verified_by_admin_id=?,verified_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$rrid,$tid]);
+        write_audit($pdo,$u['id'],$u['username'],'admin','RENEWAL_REJECTED','renewal_request',(string)$rrid,"Admin rejected renewal request ID $rrid.",$tid);
         $success_msg = 'Renewal rejected.'; $active_page = 'renewals';
     }
 
