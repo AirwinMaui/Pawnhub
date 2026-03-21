@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'db.php';
+require 'mailer.php';
 
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
@@ -11,6 +12,90 @@ $success_msg = $error_msg = '';
 
 // ── POST ACTIONS ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+
+    // ── ADD TENANT + SEND INVITE EMAIL ────────────────────────
+    if ($_POST['action'] === 'add_tenant') {
+        $bname    = trim($_POST['business_name'] ?? '');
+        $oname    = trim($_POST['owner_name']    ?? '');
+        $email    = trim($_POST['email']         ?? '');
+        $phone    = trim($_POST['phone']         ?? '');
+        $address  = trim($_POST['address']       ?? '');
+        $plan     = in_array($_POST['plan']??'', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
+        $branches = intval($_POST['branches']    ?? 1);
+
+        if ($bname && $oname && $email) {
+            $chk = $pdo->prepare("SELECT id FROM users WHERE email=?");
+            $chk->execute([$email]);
+            if ($chk->fetch()) {
+                $error_msg = 'Email already registered in the system.';
+            } else {
+                try {
+                    $pdo->beginTransaction();
+                    $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status) VALUES (?,?,?,?,?,?,?,'pending')")
+                        ->execute([$bname,$oname,$email,$phone,$address,$plan,$branches]);
+                    $new_tid    = $pdo->lastInsertId();
+                    $token      = bin2hex(random_bytes(32));
+                    $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
+                    $pdo->prepare("INSERT INTO tenant_invitations (tenant_id,email,owner_name,token,status,expires_at,created_by) VALUES (?,?,?,?,'pending',?,?)")
+                        ->execute([$new_tid,$email,$oname,$token,$expires_at,$u['id']]);
+                    $pdo->commit();
+                    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\" and sent invitation to $email.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+                    $sent = sendTenantInvitation($email, $oname, $bname, $token);
+                    $success_msg = $sent
+                        ? "✅ Tenant \"$bname\" created! Invitation sent to $email."
+                        : "⚠️ Tenant created but email failed. Token: $token — Check mailer.php settings.";
+                    $active_page = 'tenants';
+                } catch (PDOException $e) {
+                    $pdo->rollBack();
+                    $error_msg = 'Database error: ' . $e->getMessage();
+                }
+            }
+        } else {
+            $error_msg = 'Fill in all required fields.';
+        }
+    }
+
+    // ── RESEND INVITATION ─────────────────────────────────────
+    if ($_POST['action'] === 'resend_invite') {
+        $inv_id = intval($_POST['inv_id']);
+        $inv    = $pdo->prepare("SELECT i.*,t.business_name FROM tenant_invitations i JOIN tenants t ON i.tenant_id=t.id WHERE i.id=?");
+        $inv->execute([$inv_id]); $inv = $inv->fetch();
+        if ($inv && $inv['status'] === 'pending') {
+            $token      = bin2hex(random_bytes(32));
+            $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
+            $pdo->prepare("UPDATE tenant_invitations SET token=?,expires_at=? WHERE id=?")->execute([$token,$expires_at,$inv_id]);
+            $sent = sendTenantInvitation($inv['email'],$inv['owner_name'],$inv['business_name'],$token);
+            $success_msg = $sent ? "📧 Invitation resent to {$inv['email']}!" : "⚠️ Failed to send. Check mailer.php settings.";
+        }
+        $active_page = 'invitations';
+    }
+
+    // ── CHANGE TENANT PLAN ────────────────────────────────────
+    if ($_POST['action'] === 'change_plan') {
+        $tid_p    = intval($_POST['tenant_id']);
+        $new_plan = in_array($_POST['new_plan']??'', ['Starter','Pro','Enterprise']) ? $_POST['new_plan'] : 'Starter';
+        $plan_limits = ['Starter'=>3,'Pro'=>999,'Enterprise'=>999];
+        $new_limit   = $plan_limits[$new_plan] ?? 3;
+        $pdo->prepare("UPDATE tenants SET plan=? WHERE id=?")->execute([$new_plan,$tid_p]);
+        if ($new_limit < 999) {
+            $sl = $pdo->prepare("SELECT id FROM users WHERE tenant_id=? AND role IN ('staff','cashier') AND is_suspended=0 ORDER BY created_at ASC");
+            $sl->execute([$tid_p]); $sl = $sl->fetchAll();
+            if (count($sl) > $new_limit) {
+                $excess = array_slice($sl, $new_limit);
+                foreach ($excess as $ex) {
+                    $pdo->prepare("UPDATE users SET is_suspended=1,suspended_at=NOW(),suspension_reason='Plan downgraded — staff limit exceeded.' WHERE id=?")->execute([$ex['id']]);
+                }
+                $success_msg = "Plan changed to <strong>$new_plan</strong>. " . count($excess) . " staff suspended due to new limit.";
+            } else {
+                $success_msg = "Plan updated to <strong>$new_plan</strong> successfully!";
+            }
+        } else {
+            $pdo->prepare("UPDATE users SET is_suspended=0,suspended_at=NULL,suspension_reason=NULL WHERE tenant_id=? AND suspension_reason='Plan downgraded — staff limit exceeded.'")->execute([$tid_p]);
+            $success_msg = "Plan upgraded to <strong>$new_plan</strong>! Previously suspended staff have been restored.";
+        }
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'CHANGE_PLAN','tenant',?,?,?,NOW())")->execute([$tid_p,$u['id'],$u['username'],'super_admin',$tid_p,"Plan changed to $new_plan for tenant ID $tid_p.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+        $active_page = 'tenants';
+    }
 
     if ($_POST['action'] === 'approve_tenant') {
         $tid = intval($_POST['tenant_id']);
@@ -57,13 +142,20 @@ try {
             (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id AND u.role != 'super_admin') AS user_count,
             (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id AND u.status='pending') AS pending_users,
             (SELECT u.fullname FROM users u WHERE u.tenant_id=t.id AND u.role='admin' AND u.status='approved' LIMIT 1) AS admin_name,
-            (SELECT u.id FROM users u WHERE u.tenant_id=t.id AND u.role='admin' LIMIT 1) AS admin_uid
+            (SELECT u.id FROM users u WHERE u.tenant_id=t.id AND u.role='admin' LIMIT 1) AS admin_uid,
+            (SELECT status FROM tenant_invitations ti WHERE ti.tenant_id=t.id ORDER BY ti.created_at DESC LIMIT 1) AS invite_status
         FROM tenants t ORDER BY t.created_at DESC
     ")->fetchAll();
 } catch (PDOException $e) {
     $tenants = [];
     $error_msg = 'Error loading tenants: ' . $e->getMessage();
 }
+
+try {
+    $invitations = $pdo->query("SELECT i.*,t.business_name,t.plan FROM tenant_invitations i JOIN tenants t ON i.tenant_id=t.id ORDER BY i.created_at DESC")->fetchAll();
+} catch (PDOException $e) { $invitations = []; }
+
+$pending_inv = count(array_filter($invitations, fn($i) => $i['status'] === 'pending'));
 
 $total_tenants    = count($tenants);
 $active_tenants   = count(array_filter($tenants, fn($t) => $t['status'] === 'active'));
@@ -359,6 +451,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>Tenant Management
       <?php if($pending_tenants>0):?><span class="sb-pill"><?=$pending_tenants?></span><?php endif;?>
     </a>
+    <a href="?page=invitations" class="sb-item <?= $active_page==='invitations'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email Invitations
+      <?php if($pending_inv>0):?><span class="sb-pill"><?=$pending_inv?></span><?php endif;?>
+    </a>
     <div class="sb-section">Analytics</div>
     <a href="?page=reports" class="sb-item <?= $active_page==='reports'?'active':'' ?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports
@@ -383,12 +479,17 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <span class="topbar-title">
-        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs'];
+        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs'];
         echo $titles[$active_page]??'Dashboard'; ?>
       </span>
       <span class="super-chip">SUPER ADMIN</span>
     </div>
-    <div style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button onclick="document.getElementById('addTenantModal').classList.add('open')" class="btn-sm btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Add Tenant + Invite
+      </button>
+      <div style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
+    </div>
   </header>
 
   <div class="content">
@@ -514,7 +615,9 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
           <td>
             <?php if($t['status']==='active'):?><form method="POST" style="display:inline;" onsubmit="return confirm('Deactivate? Their users cannot login until reactivated.')"><input type="hidden" name="action" value="deactivate_tenant"><input type="hidden" name="tenant_id" value="<?=$t['id']?>"><button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">Deactivate</button></form>
+            <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.7rem;">⭐ Plan</button>
             <?php elseif($t['status']==='inactive'):?><form method="POST" style="display:inline;"><input type="hidden" name="action" value="activate_tenant"><input type="hidden" name="tenant_id" value="<?=$t['id']?>"><button type="submit" class="btn-sm btn-success" style="font-size:.7rem;">Activate</button></form>
+            <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.7rem;">⭐ Plan</button>
             <?php elseif($t['status']==='pending'):?><button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button><button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
             <?php else:?><span style="font-size:.73rem;color:var(--text-dim);">—</span><?php endif;?>
           </td>
@@ -724,9 +827,116 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <?php endif;?>
       </div>
 
+    <!-- ══ INVITATIONS PAGE ════════════════════════════════════ -->
+    <?php elseif($active_page==='invitations'): ?>
+      <div class="card" style="overflow-x:auto;">
+        <div class="card-hdr">
+          <span class="card-title">📧 Email Invitations</span>
+          <span style="font-size:.75rem;color:var(--text-dim);"><?=count($invitations)?> total · <?=$pending_inv?> pending</span>
+        </div>
+        <?php if(empty($invitations)):?>
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/></svg>
+            <p>No invitations sent yet. Click "Add Tenant + Invite" to get started.</p>
+          </div>
+        <?php else:?>
+          <table>
+            <thead><tr><th>Tenant</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Expires</th><th>Sent</th><th>Actions</th></tr></thead>
+            <tbody>
+            <?php foreach($invitations as $inv):?>
+            <tr>
+              <td style="font-weight:600;"><?=htmlspecialchars($inv['business_name'])?></td>
+              <td><?=htmlspecialchars($inv['owner_name'])?></td>
+              <td style="font-family:monospace;font-size:.76rem;"><?=htmlspecialchars($inv['email'])?></td>
+              <td><span class="badge <?=$inv['plan']==='Enterprise'?'plan-ent':($inv['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$inv['plan']?></span></td>
+              <td><span class="badge <?=$inv['status']==='used'?'b-green':($inv['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($inv['status'])?></span></td>
+              <td style="font-size:.75rem;color:<?=strtotime($inv['expires_at'])<time()&&$inv['status']==='pending'?'var(--danger)':'var(--text-dim)'?>;"><?=date('M d, Y h:i A',strtotime($inv['expires_at']))?></td>
+              <td style="font-size:.74rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($inv['created_at']))?></td>
+              <td>
+                <?php if($inv['status']==='pending'):?>
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="action" value="resend_invite">
+                  <input type="hidden" name="inv_id" value="<?=$inv['id']?>">
+                  <button type="submit" class="btn-sm btn-warning" style="font-size:.7rem;">📧 Resend</button>
+                </form>
+                <?php else:?><span style="font-size:.74rem;color:var(--text-dim);">✓ Registered</span><?php endif;?>
+              </td>
+            </tr>
+            <?php endforeach;?>
+            </tbody>
+          </table>
+        <?php endif;?>
+      </div>
+
     <?php endif;?>
   </div><!-- /content -->
 </div><!-- /main -->
+
+<!-- ══ ADD TENANT MODAL ════════════════════════════════════════ -->
+<div class="modal-overlay" id="addTenantModal">
+  <div class="modal" style="width:560px;">
+    <div class="mhdr">
+      <div><div class="mtitle">➕ Add Tenant + Send Invite</div><div class="msub">An invitation link will be sent to the owner's Gmail.</div></div>
+      <button class="mclose" onclick="document.getElementById('addTenantModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="mbody">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#15803d;margin-bottom:16px;line-height:1.8;">📧 <strong>Flow:</strong> Fill form → Token generated → Email sent to owner → Owner clicks link → Owner sets username & password → Owner accesses system ✅</div>
+      <form method="POST">
+        <input type="hidden" name="action" value="add_tenant">
+        <div style="font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;display:block;">Business Information</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div style="grid-column:1/-1;"><label class="flabel">Business Name *</label><input type="text" name="business_name" class="finput" placeholder="GoldKing Pawnshop" required></div>
+          <div><label class="flabel">Owner Full Name *</label><input type="text" name="owner_name" class="finput" placeholder="Juan Dela Cruz" required></div>
+          <div><label class="flabel">Owner Gmail *</label><input type="email" name="email" class="finput" placeholder="owner@gmail.com" required></div>
+          <div><label class="flabel">Phone</label><input type="text" name="phone" class="finput" placeholder="09XXXXXXXXX"></div>
+          <div><label class="flabel">Address</label><input type="text" name="address" class="finput" placeholder="Street, City, Province"></div>
+          <div><label class="flabel">Plan *</label><select name="plan" class="finput"><option value="Starter">Starter — Free</option><option value="Pro">Pro — ₱999/mo</option><option value="Enterprise">Enterprise — ₱2,499/mo</option></select></div>
+          <div><label class="flabel">Branches</label><input type="number" name="branches" class="finput" value="1" min="1"></div>
+        </div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:.77rem;color:#1d4ed8;margin-bottom:14px;">ℹ️ No password needed — the owner will set their own via the invitation link sent to their Gmail.</div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('addTenantModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Create + Send Invite
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CHANGE PLAN MODAL ═══════════════════════════════════════ -->
+<div class="modal-overlay" id="planModal">
+  <div class="modal" style="width:440px;">
+    <div class="mhdr">
+      <div><div class="mtitle">⭐ Change Tenant Plan</div><div class="msub" id="plan_modal_sub"></div></div>
+      <button class="mclose" onclick="document.getElementById('planModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="mbody">
+      <form method="POST">
+        <input type="hidden" name="action" value="change_plan">
+        <input type="hidden" name="tenant_id" id="plan_tid">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+          <?php foreach(['Starter'=>['Free','#475569','#f1f5f9','1 Branch, 3 Staff'],'Pro'=>['₱999/mo','#1d4ed8','#eff6ff','3 Branches, Unlimited'],'Enterprise'=>['₱2,499/mo','#7c3aed','#f3e8ff','10 Branches, Unlimited']] as $pn=>[$pp,$pc,$pbg,$pf]):?>
+          <label style="cursor:pointer;">
+            <input type="radio" name="new_plan" value="<?=$pn?>" id="plan_<?=$pn?>" style="display:none;" onchange="updatePlanCard('<?=$pn?>')">
+            <div id="plan_card_<?=$pn?>" style="border:2px solid #e2e8f0;border-radius:10px;padding:12px;text-align:center;transition:all .15s;">
+              <div style="font-size:.82rem;font-weight:800;color:<?=$pc?>;margin-bottom:2px;"><?=$pn?></div>
+              <div style="font-size:.75rem;font-weight:700;color:<?=$pc?>;margin-bottom:6px;"><?=$pp?></div>
+              <div style="font-size:.68rem;color:#94a3b8;"><?=$pf?></div>
+            </div>
+          </label>
+          <?php endforeach;?>
+        </div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:11px;font-size:.78rem;color:#1d4ed8;margin-bottom:14px;line-height:1.6;">ℹ️ Changing the plan takes effect immediately. If downgrading, excess staff will be suspended automatically.</div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('planModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary" style="background:#7c3aed;border-color:#7c3aed;">Save Plan Change</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- ══ APPROVE MODAL ══════════════════════════════════════════ -->
 <div class="modal-overlay" id="approveModal">
@@ -756,9 +966,29 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 </div>
 
 <script>
-['approveModal','rejectModal'].forEach(id=>{document.getElementById(id).addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
+['approveModal','rejectModal','addTenantModal','planModal'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+});
 function openApproveModal(tid,uid,name){document.getElementById('approve_tid').value=tid;document.getElementById('approve_uid').value=uid;document.getElementById('approve_sub').textContent='Business: '+name;document.getElementById('approveModal').classList.add('open');}
 function openRejectModal(tid,uid,name){document.getElementById('reject_tid').value=tid;document.getElementById('reject_uid').value=uid;document.getElementById('reject_sub').textContent='Business: '+name;document.getElementById('rejectModal').classList.add('open');}
+function openPlanModal(tid,name,currentPlan){
+  document.getElementById('plan_tid').value=tid;
+  document.getElementById('plan_modal_sub').textContent=name;
+  const radio=document.getElementById('plan_'+currentPlan);
+  if(radio){radio.checked=true;updatePlanCard(currentPlan);}
+  document.getElementById('planModal').classList.add('open');
+}
+function updatePlanCard(selected){
+  const colors={Starter:'#475569',Pro:'#1d4ed8',Enterprise:'#7c3aed'};
+  const bgs={Starter:'#f1f5f9',Pro:'#eff6ff',Enterprise:'#f3e8ff'};
+  ['Starter','Pro','Enterprise'].forEach(p=>{
+    const card=document.getElementById('plan_card_'+p);
+    if(!card)return;
+    if(p===selected){card.style.borderColor=colors[p];card.style.background=bgs[p];}
+    else{card.style.borderColor='#e2e8f0';card.style.background='#fff';}
+  });
+}
 </script>
 </body>
 </html>
