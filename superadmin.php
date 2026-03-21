@@ -97,6 +97,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'tenants';
     }
 
+    if ($_POST['action'] === 'save_system_settings') {
+        $sys_name    = trim($_POST['system_name']    ?? 'PawnHub');
+        $sys_tagline = trim($_POST['system_tagline'] ?? 'Multi-Tenant Pawnshop Management');
+        $plan_starter_staff    = max(1, intval($_POST['starter_staff']    ?? 3));
+        $plan_starter_branches = max(1, intval($_POST['starter_branches'] ?? 1));
+        $plan_pro_staff        = intval($_POST['pro_staff']        ?? 0); // 0 = unlimited
+        $plan_pro_branches     = max(1, intval($_POST['pro_branches']     ?? 3));
+        $plan_ent_staff        = intval($_POST['ent_staff']        ?? 0);
+        $plan_ent_branches     = max(1, intval($_POST['ent_branches']     ?? 10));
+        $plan_starter_price    = trim($_POST['starter_price'] ?? 'Free');
+        $plan_pro_price        = trim($_POST['pro_price']     ?? '₱999/mo');
+        $plan_ent_price        = trim($_POST['ent_price']     ?? '₱2,499/mo');
+
+        try {
+            // Upsert into system_settings table
+            $pdo->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES
+                ('system_name',?),('system_tagline',?),
+                ('starter_staff',?),('starter_branches',?),
+                ('pro_staff',?),('pro_branches',?),
+                ('ent_staff',?),('ent_branches',?),
+                ('starter_price',?),('pro_price',?),('ent_price',?)
+                ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)")
+                ->execute([$sys_name,$sys_tagline,
+                    $plan_starter_staff,$plan_starter_branches,
+                    $plan_pro_staff,$plan_pro_branches,
+                    $plan_ent_staff,$plan_ent_branches,
+                    $plan_starter_price,$plan_pro_price,$plan_ent_price]);
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (NULL,?,?,?,'SETTINGS_UPDATE','system','1','Super Admin updated system settings.',?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = 'System settings saved successfully!';
+        } catch (PDOException $e) {
+            $error_msg = 'Error saving settings: ' . $e->getMessage();
+        }
+        $active_page = 'settings';
+    }
+
     if ($_POST['action'] === 'approve_tenant') {
         $tid = intval($_POST['tenant_id']);
         $uid = intval($_POST['user_id']);
@@ -189,6 +224,28 @@ try {
 
 $plan_dist = ['Starter' => 0, 'Pro' => 0, 'Enterprise' => 0];
 foreach ($tenants as $t) { if (isset($plan_dist[$t['plan']])) $plan_dist[$t['plan']]++; }
+
+// ── FETCH SYSTEM SETTINGS ─────────────────────────────────────
+$sys_settings = [];
+try {
+    $rows = $pdo->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll();
+    foreach ($rows as $row) { $sys_settings[$row['setting_key']] = $row['setting_value']; }
+} catch (PDOException $e) { /* table may not exist yet */ }
+
+// Defaults if not set
+$ss = array_merge([
+    'system_name'       => 'PawnHub',
+    'system_tagline'    => 'Multi-Tenant Pawnshop Management',
+    'starter_staff'     => 3,
+    'starter_branches'  => 1,
+    'pro_staff'         => 0,
+    'pro_branches'      => 3,
+    'ent_staff'         => 0,
+    'ent_branches'      => 10,
+    'starter_price'     => 'Free',
+    'pro_price'         => '₱999/mo',
+    'ent_price'         => '₱2,499/mo',
+], $sys_settings);
 
 // ── FILTERS ──────────────────────────────────────────────────
 $report_type      = $_GET['report_type']    ?? 'tenant_activity';
@@ -466,6 +523,9 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     <a href="?page=audit_logs" class="sb-item <?= $active_page==='audit_logs'?'active':'' ?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Audit Logs
     </a>
+    <a href="?page=settings" class="sb-item <?= $active_page==='settings'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings
+    </a>
   </nav>
   <div class="sb-footer">
     <a href="logout.php" class="sb-logout">
@@ -479,7 +539,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <span class="topbar-title">
-        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs'];
+        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs','settings'=>'System Settings'];
         echo $titles[$active_page]??'Dashboard'; ?>
       </span>
       <span class="super-chip">SUPER ADMIN</span>
@@ -755,7 +815,182 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <?php endforeach;?></tbody></table><?php endif;?>
       </div>
 
-    <!-- ══ AUDIT LOGS ═══════════════════════════════════════════ -->
+    <!-- ══ SETTINGS PAGE ═══════════════════════════════════════ -->
+    <?php elseif($active_page==='settings'): ?>
+
+      <form method="POST">
+        <input type="hidden" name="action" value="save_system_settings">
+
+        <!-- System Branding -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-hdr"><span class="card-title">🎨 System Branding</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div>
+              <label class="flabel">System Name</label>
+              <input type="text" name="system_name" class="finput" value="<?=htmlspecialchars($ss['system_name'])?>" placeholder="PawnHub">
+              <div style="font-size:.71rem;color:var(--text-dim);margin-top:4px;">Shown in the browser title and sidebar.</div>
+            </div>
+            <div>
+              <label class="flabel">System Tagline</label>
+              <input type="text" name="system_tagline" class="finput" value="<?=htmlspecialchars($ss['system_tagline'])?>" placeholder="Multi-Tenant Pawnshop Management">
+              <div style="font-size:.71rem;color:var(--text-dim);margin-top:4px;">Shown on the login page.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscription Plan Settings -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-hdr">
+            <span class="card-title">📦 Subscription Plan Limits</span>
+            <span style="font-size:.74rem;color:var(--text-dim);">These limits are enforced per tenant based on their plan.</span>
+          </div>
+
+          <!-- Plan Cards -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+
+            <!-- STARTER -->
+            <div style="border:2px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+              <div style="background:#f1f5f9;padding:14px 16px;border-bottom:1px solid #e2e8f0;">
+                <div style="font-size:.9rem;font-weight:800;color:#475569;">Starter</div>
+                <div style="font-size:.75rem;color:#94a3b8;margin-top:2px;">Basic pawnshop operations</div>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+                <div>
+                  <label class="flabel">Price / Label</label>
+                  <input type="text" name="starter_price" class="finput" value="<?=htmlspecialchars($ss['starter_price'])?>" placeholder="Free">
+                </div>
+                <div>
+                  <label class="flabel">Max Branches</label>
+                  <input type="number" name="starter_branches" class="finput" value="<?=(int)$ss['starter_branches']?>" min="1" max="99">
+                </div>
+                <div>
+                  <label class="flabel">Max Staff + Cashiers</label>
+                  <input type="number" name="starter_staff" class="finput" value="<?=(int)$ss['starter_staff']?>" min="1" max="999">
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit</div>
+                </div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
+                  <div>✅ Pawn tickets</div>
+                  <div>✅ Customer management</div>
+                  <div>✅ Basic reports</div>
+                  <div style="color:#dc2626;">❌ Multi-branch</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PRO -->
+            <div style="border:2px solid #bfdbfe;border-radius:12px;overflow:hidden;">
+              <div style="background:#eff6ff;padding:14px 16px;border-bottom:1px solid #bfdbfe;">
+                <div style="font-size:.9rem;font-weight:800;color:#1d4ed8;">Pro</div>
+                <div style="font-size:.75rem;color:#93c5fd;margin-top:2px;">Growing pawnshop business</div>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+                <div>
+                  <label class="flabel">Price / Label</label>
+                  <input type="text" name="pro_price" class="finput" value="<?=htmlspecialchars($ss['pro_price'])?>" placeholder="₱999/mo">
+                </div>
+                <div>
+                  <label class="flabel">Max Branches</label>
+                  <input type="number" name="pro_branches" class="finput" value="<?=(int)$ss['pro_branches']?>" min="1" max="99">
+                </div>
+                <div>
+                  <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
+                  <input type="number" name="pro_staff" class="finput" value="<?=(int)$ss['pro_staff']?>" min="0">
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 means no limit</div>
+                </div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
+                  <div>✅ Everything in Starter</div>
+                  <div>✅ Multi-branch support</div>
+                  <div>✅ Unlimited staff</div>
+                  <div>✅ Advanced reports</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ENTERPRISE -->
+            <div style="border:2px solid #ddd6fe;border-radius:12px;overflow:hidden;">
+              <div style="background:#f3e8ff;padding:14px 16px;border-bottom:1px solid #ddd6fe;">
+                <div style="font-size:.9rem;font-weight:800;color:#7c3aed;">Enterprise</div>
+                <div style="font-size:.75rem;color:#c4b5fd;margin-top:2px;">Large pawnshop chains</div>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+                <div>
+                  <label class="flabel">Price / Label</label>
+                  <input type="text" name="ent_price" class="finput" value="<?=htmlspecialchars($ss['ent_price'])?>" placeholder="₱2,499/mo">
+                </div>
+                <div>
+                  <label class="flabel">Max Branches</label>
+                  <input type="number" name="ent_branches" class="finput" value="<?=(int)$ss['ent_branches']?>" min="1" max="999">
+                </div>
+                <div>
+                  <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
+                  <input type="number" name="ent_staff" class="finput" value="<?=(int)$ss['ent_staff']?>" min="0">
+                </div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
+                  <div>✅ Everything in Pro</div>
+                  <div>✅ Dedicated support</div>
+                  <div>✅ Custom branding</div>
+                  <div>✅ Priority processing</div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /plan grid -->
+        </div>
+
+        <!-- User Role Permissions Info -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-hdr"><span class="card-title">👤 User Role Permissions</span></div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Permission</th><th style="text-align:center;">Super Admin</th><th style="text-align:center;">Admin (Tenant)</th><th style="text-align:center;">Staff</th><th style="text-align:center;">Cashier</th></tr></thead>
+              <tbody>
+                <?php
+                $perms = [
+                  ['Manage Tenants',          true,  false, false, false],
+                  ['Approve/Reject Tenants',  true,  false, false, false],
+                  ['View Sales Report',       true,  false, false, false],
+                  ['View Audit Logs',         true,  false, false, false],
+                  ['System Settings',         true,  false, false, false],
+                  ['Manage Staff/Cashiers',   false, true,  false, false],
+                  ['Approve Void Requests',   false, true,  false, false],
+                  ['Approve Renewals',        false, true,  false, false],
+                  ['Theme & Branding',        false, true,  false, false],
+                  ['View Tenant Reports',     false, true,  false, false],
+                  ['Create Pawn Tickets',     false, false, true,  false],
+                  ['Register Customers',      false, false, true,  false],
+                  ['Request Void',            false, false, true,  false],
+                  ['Process Payment',         false, false, true,  true ],
+                  ['View Ticket Status',      false, true,  true,  true ],
+                ];
+                foreach($perms as [$label,$sa,$ad,$st,$ca]):?>
+                <tr>
+                  <td style="font-size:.8rem;font-weight:500;"><?=$label?></td>
+                  <?php foreach([$sa,$ad,$st,$ca] as $allowed):?>
+                  <td style="text-align:center;">
+                    <?php if($allowed):?>
+                      <span style="color:#16a34a;font-size:1rem;">✓</span>
+                    <?php else:?>
+                      <span style="color:#e2e8f0;font-size:1rem;">—</span>
+                    <?php endif;?>
+                  </td>
+                  <?php endforeach;?>
+                </tr>
+                <?php endforeach;?>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px;font-size:.75rem;color:var(--text-dim);background:#f8fafc;border-radius:8px;padding:10px 14px;">
+            ℹ️ Role permissions are fixed by the system. Contact the developer to modify role-level access.
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+          <button type="submit" class="btn-sm btn-primary" style="padding:10px 24px;font-size:.88rem;">
+            💾 Save Settings
+          </button>
+        </div>
+      </form>
+
     <?php elseif($active_page==='audit_logs'): ?>
 
       <form method="GET"><input type="hidden" name="page" value="audit_logs">

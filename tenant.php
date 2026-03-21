@@ -2,6 +2,37 @@
 session_start();
 require 'db.php';
 require 'theme_helper.php';
+
+// ── Audit Log Helper ─────────────────────────────────────────
+function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type = '', string $entity_id = '', string $message = '', $tenant_id = null): void {
+    try {
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
+            ->execute([$tenant_id, $actor_id, $actor_username, $actor_role, $action, $entity_type, $entity_id, $message, $_SERVER['REMOTE_ADDR'] ?? '::1']);
+    } catch (PDOException $e) {}
+}
+
+// ── Plan Limit Helper ─────────────────────────────────────────
+function getPlanLimits(PDO $pdo, string $plan): array {
+    // Default limits per plan
+    $defaults = [
+        'Starter'    => ['staff' => 3,  'branches' => 1],
+        'Pro'        => ['staff' => 0,  'branches' => 3],
+        'Enterprise' => ['staff' => 0,  'branches' => 10],
+    ];
+    // Try to get super-admin-configured limits from system_settings
+    try {
+        $sk = $plan === 'Starter' ? 'starter_staff' : ($plan === 'Pro' ? 'pro_staff' : 'ent_staff');
+        $bk = $plan === 'Starter' ? 'starter_branches' : ($plan === 'Pro' ? 'pro_branches' : 'ent_branches');
+        $rows = $pdo->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('$sk','$bk')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($rows)) {
+            return [
+                'staff'    => isset($rows[$sk]) ? (int)$rows[$sk] : ($defaults[$plan]['staff'] ?? 0),
+                'branches' => isset($rows[$bk]) ? (int)$rows[$bk] : ($defaults[$plan]['branches'] ?? 1),
+            ];
+        }
+    } catch (PDOException $e) {}
+    return $defaults[$plan] ?? ['staff' => 3, 'branches' => 1];
+}
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'admin') { header('Location: login.php'); exit; }
@@ -23,15 +54,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $password = trim($_POST['password']  ?? '');
         $role     = in_array($_POST['role'], ['staff','cashier']) ? $_POST['role'] : 'staff';
         if ($fullname && $username && $password) {
-            $chk = $pdo->prepare("SELECT id FROM users WHERE username=?"); $chk->execute([$username]);
-            if ($chk->fetch()) { $error_msg = 'Username already taken.'; }
-            else {
-                $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,?,'approved',?,NOW())")
-                    ->execute([$tid,$fullname,$email,$username,password_hash($password,PASSWORD_BCRYPT),$role,$u['id']]);
-                $new_uid = $pdo->lastInsertId();
-                write_audit($pdo,$u['id'],$u['username'],'admin','USER_CREATE','user',(string)$new_uid,"Admin created $role account for \"$fullname\" (username: $username).",$tid);
-                $success_msg = ucfirst($role)." account for \"$fullname\" created!";
-                $active_page = 'users';
+
+            // ── Plan limit enforcement ────────────────────────
+            $tenant_row  = $pdo->prepare("SELECT plan FROM tenants WHERE id=?");
+            $tenant_row->execute([$tid]);
+            $tenant_row  = $tenant_row->fetch();
+            $plan_limits = getPlanLimits($pdo, $tenant_row['plan'] ?? 'Starter');
+            $staff_limit = $plan_limits['staff']; // 0 = unlimited
+
+            $current_count = (int)$pdo->query(
+                "SELECT COUNT(*) FROM users WHERE tenant_id=$tid AND role IN ('staff','cashier') AND is_suspended=0"
+            )->fetchColumn();
+
+            if ($staff_limit > 0 && $current_count >= $staff_limit) {
+                $plan_name = $tenant_row['plan'] ?? 'Starter';
+                $error_msg = "⚠️ Staff limit reached for your <strong>$plan_name</strong> plan ($staff_limit max). Please ask the Super Admin to upgrade your subscription to add more staff.";
+            } else {
+                $chk = $pdo->prepare("SELECT id FROM users WHERE username=?"); $chk->execute([$username]);
+                if ($chk->fetch()) { $error_msg = 'Username already taken.'; }
+                else {
+                    $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,?,'approved',?,NOW())")
+                        ->execute([$tid,$fullname,$email,$username,password_hash($password,PASSWORD_BCRYPT),$role,$u['id']]);
+                    $new_uid = $pdo->lastInsertId();
+                    write_audit($pdo,$u['id'],$u['username'],'admin','USER_CREATE','user',(string)$new_uid,"Admin created $role account for \"$fullname\" (username: $username).",$tid);
+                    $success_msg = ucfirst($role)." account for \"$fullname\" created!";
+                    $active_page = 'users';
+                }
             }
         } else { $error_msg = 'Fill in all required fields.'; }
     }
@@ -309,9 +357,32 @@ tr:hover td{background:#f8fafc;}
       <span class="tenant-chip"><?=htmlspecialchars($tenant['business_name']??'Branch')?></span>
     </div>
     <?php if($active_page==='users'):?>
-    <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.78rem;padding:6px 13px;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Staff / Cashier
-    </button>
+    <?php
+    $tplan = $pdo->prepare("SELECT plan FROM tenants WHERE id=?"); $tplan->execute([$tid]); $tplan=$tplan->fetch();
+    $plimits2 = getPlanLimits($pdo, $tplan['plan']??'Starter');
+    $sc_count = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE tenant_id=$tid AND role IN ('staff','cashier') AND is_suspended=0")->fetchColumn();
+    $sl2 = $plimits2['staff'];
+    $at_limit = $sl2 > 0 && $sc_count >= $sl2;
+    ?>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:.74rem;color:var(--text-dim);background:#f1f5f9;padding:4px 10px;border-radius:100px;border:1px solid var(--border);">
+        <?php if($sl2 > 0): ?>
+          Staff: <?=$sc_count?>/<?=$sl2?> <?php if($at_limit): ?><span style="color:#dc2626;font-weight:700;">(Limit reached)</span><?php endif; ?>
+        <?php else: ?>
+          Staff: <?=$sc_count?> / <span style="color:#16a34a;">Unlimited</span>
+        <?php endif; ?>
+        &nbsp;·&nbsp; Plan: <strong><?=htmlspecialchars($tplan['plan']??'Starter')?></strong>
+      </span>
+      <?php if(!$at_limit): ?>
+      <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.78rem;padding:6px 13px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Staff / Cashier
+      </button>
+      <?php else: ?>
+      <button class="btn-sm" style="font-size:.78rem;padding:6px 13px;opacity:.5;cursor:not-allowed;" disabled title="Upgrade your plan to add more staff">
+        🔒 Limit Reached
+      </button>
+      <?php endif; ?>
+    </div>
     <?php endif;?>
   </header>
 
