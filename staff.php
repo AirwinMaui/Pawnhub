@@ -3,9 +3,12 @@ session_start();
 require 'db.php';
 require 'theme_helper.php';
 
-// ── Audit Helper ─────────────────────────────────────────────
-function write_audit(PDO $pdo, $aid, $aun, $ar, string $action, string $et='', string $ei='', string $msg='', $tid=null): void {
-    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")->execute([$tid,$aid,$aun,$ar,$action,$et,$ei,$msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+// ── Audit Log Helper ─────────────────────────────────────────
+function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type = '', string $entity_id = '', string $message = '', $tenant_id = null): void {
+    try {
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
+            ->execute([$tenant_id,$actor_id,$actor_username,$actor_role,$action,$entity_type,$entity_id,$message,$_SERVER['REMOTE_ADDR']??'::1']);
+    } catch (PDOException $e) {}
 }
 
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
@@ -54,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($full_name && $contact) {
             $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                 ->execute([$tid,$full_name,$contact,$email,$birthdate?:null,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
+            write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$pdo->lastInsertId(),"Registered customer: $full_name.",$tid);
             $success_msg = "Customer \"$full_name\" registered successfully!";
             $active_page = 'customers';
         } else {
@@ -138,11 +142,9 @@ $today = date('Y-m-d');
 $my_tickets_today = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND created_by=? AND DATE(created_at)=?"); $my_tickets_today->execute([$tid,$u['id'],$today]); $my_tickets_today=$my_tickets_today->fetchColumn();
 $active_count     = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored'"); $active_count->execute([$tid,$u['id']]); $active_count=$active_count->fetchColumn();
 
-
 $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $all_tickets->execute([$tid]); $all_tickets=$all_tickets->fetchAll();
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
 $customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
-
 $my_void_reqs = $pdo->prepare("SELECT * FROM pawn_void_requests WHERE tenant_id=? AND requested_by=? ORDER BY requested_at DESC"); $my_void_reqs->execute([$tid,$u['id']]); $my_void_reqs=$my_void_reqs->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -284,12 +286,10 @@ tr:hover td{background:#fafbfc;}
     <div class="sb-section">Main</div>
     <a href="?page=dashboard"         class="sb-item <?=$active_page==='dashboard'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
     <a href="?page=create_ticket"     class="sb-item <?=$active_page==='create_ticket'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Create Pawn Ticket</a>
-
     <div class="sb-section">Records</div>
     <a href="?page=tickets"           class="sb-item <?=$active_page==='tickets'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>All Tickets</a>
     <a href="?page=customers"         class="sb-item <?=$active_page==='customers'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Customers</a>
     <a href="?page=register_customer" class="sb-item <?=$active_page==='register_customer'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>Register Customer</a>
-
     <a href="?page=void_requests"     class="sb-item <?=$active_page==='void_requests'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>My Void Requests</a>
   </nav>
   <div class="sb-footer">
@@ -300,7 +300,7 @@ tr:hover td{background:#fafbfc;}
 <div class="main">
   <header class="topbar">
     <div class="topbar-left">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Staff Dashboard','create_ticket'=>'Create Pawn Ticket','tickets'=>'All Tickets','customers'=>'Customers','register_customer'=>'Register Customer','payments'=>'My Payments','void_requests'=>'My Void Requests'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Staff Dashboard','create_ticket'=>'Create Pawn Ticket','tickets'=>'All Tickets','customers'=>'Customers','register_customer'=>'Register Customer','void_requests'=>'My Void Requests'];echo $titles[$active_page]??'Dashboard';?></span>
       <?php if($tenant): ?><span class="tenant-badge"><?=htmlspecialchars($tenant['business_name'])?> · Tenant #<?=$tid?></span><?php endif;?>
     </div>
     <span style="font-size:.76rem;color:var(--text-dim);">📅 <?=date('M d, Y')?></span>
@@ -343,7 +343,7 @@ tr:hover td{background:#fafbfc;}
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#fce7f3;"><svg viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div></div><div class="stat-value"><?=$active_count?></div><div class="stat-label">My Active Tickets</div></div>
       <?php $cust_today=(int)$pdo->query("SELECT COUNT(*) FROM customers WHERE tenant_id=$tid AND created_by={$u['id']} AND DATE(registered_at)='$today'")->fetchColumn(); ?>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#d1fae5;"><svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div></div><div class="stat-value"><?=$cust_today?></div><div class="stat-label">Customers Today</div></div>
-      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#fce7f3;"><svg viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div></div><div class="stat-value"><?=count($my_void_reqs)?></div><div class="stat-label">My Void Requests</div></div>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#ede9fe;"><svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/></svg></div></div><div class="stat-value"><?=count($my_void_reqs)?></div><div class="stat-label">Void Requests</div></div>
     </div>
 
     <div class="main-grid">
@@ -351,8 +351,7 @@ tr:hover td{background:#fafbfc;}
         <div class="card" style="margin-bottom:12px;">
           <div class="card-title">⚡ Quick Actions</div>
           <a href="?page=create_ticket"     class="qa-btn qa-primary"><div class="qa-icon" style="background:rgba(255,255,255,.2);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>New Pawn Ticket</a>
-
-          <a href="?page=register_customer" class="qa-btn qa-secondary"><div class="qa-icon" style="background:#f0fdf4;"><svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>Register Customer</a>
+                <a href="?page=register_customer" class="qa-btn qa-secondary"><div class="qa-icon" style="background:#f0fdf4;"><svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>Register Customer</a>
         </div>
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:13px;">
           <div style="font-size:.77rem;font-weight:700;color:#92400e;margin-bottom:5px;">📋 Branch Note</div>
@@ -438,13 +437,7 @@ tr:hover td{background:#fafbfc;}
       <?php else: ?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Action</th></tr></thead><tbody>
       <?php foreach($all_tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
       <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;"><?=htmlspecialchars($t['customer_name'])?></td><td style="font-family:monospace;font-size:.76rem;"><?=htmlspecialchars($t['contact_number'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-weight:700;">₱<?=number_format($t['total_redeem'],2)?></td><td style="font-size:.74rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'var(--danger)':'var(--text-dim)'?>;"><?=$t['maturity_date']?></td><td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td>
-      <td>
-        <?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?>
-          <button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">🚫 Void Req</button>
-        <?php elseif($t['status']==='Stored'):?>
-          <span style="font-size:.72rem;color:var(--text-dim);">View only</span>
-        <?php else:?>—<?php endif;?>
-      </td></tr>
+      <td><?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?><button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">Void Req</button><?php else:?>—<?php endif;?></td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 

@@ -3,14 +3,10 @@ session_start();
 require 'db.php';
 
 $error = '';
-$ip = $_SERVER['REMOTE_ADDR'] ?? '::1';
 
-// ── Audit log helper (inline — no extra file needed) ──────────
-function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type, string $entity_id, string $message, $tenant_id = null): void {
-    try {
-        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
-            ->execute([$tenant_id, $actor_id, $actor_username, $actor_role, $action, $entity_type, $entity_id, $message, $_SERVER['REMOTE_ADDR'] ?? '::1']);
-    } catch (PDOException $e) { /* never crash on log failure */ }
+// Inline audit helper for login
+function write_login_audit(PDO $pdo, $uid, $uname, $role, string $action, string $msg, $tid=null): void {
+    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,'user',?,?,?,NOW())")->execute([$tid,$uid,$uname,$role,$action,(string)$uid,$msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -20,7 +16,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($username === '' || $password === '') {
         $error = 'Please fill in all fields.';
     } else {
-        // Fetch user + tenant status
         $stmt = $pdo->prepare("
             SELECT u.*, t.business_name AS tenant_name, t.status AS tenant_status
             FROM users u
@@ -33,12 +28,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
 
-            // ── Block checks ─────────────────────────────────
             if ((int)$user['is_suspended'] === 1) {
                 $error = 'Your account has been suspended. Please contact your administrator.';
-                write_audit($pdo, $user['id'], $user['username'], $user['role'],
-                    'LOGIN_BLOCKED', 'user', (string)$user['id'],
-                    'Login blocked — account is suspended.', $user['tenant_id']);
+                write_login_audit($pdo, $user['id'], $user['username'], $user['role'], 'LOGIN_BLOCKED', 'Login blocked — account suspended.', $user['tenant_id']);
 
             } elseif ($user['status'] === 'pending') {
                 $error = 'Your account is pending approval.';
@@ -50,15 +42,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = ($user['tenant_status'] === 'inactive')
                     ? 'Your account has been deactivated. Please contact PawnHub support to reactivate your subscription.'
                     : 'Your business account is not active. Please contact PawnHub support.';
-                write_audit($pdo, $user['id'], $user['username'], $user['role'],
-                    'LOGIN_BLOCKED', 'tenant', (string)$user['tenant_id'],
-                    'Login blocked — tenant is ' . ($user['tenant_status'] ?? 'unknown') . '.', $user['tenant_id']);
+                write_login_audit($pdo, $user['id'], $user['username'], $user['role'], 'LOGIN_BLOCKED', 'Login blocked — tenant is ' . ($user['tenant_status'] ?? 'unknown') . '.', $user['tenant_id']);
 
             } elseif ($user['status'] !== 'approved') {
                 $error = 'Your account is not approved.';
 
             } else {
-                // ── Login success ─────────────────────────────
                 session_regenerate_id(true);
                 $_SESSION['user'] = [
                     'id'          => $user['id'],
@@ -68,35 +57,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'tenant_id'   => $user['tenant_id'],
                     'tenant_name' => $user['tenant_name'],
                 ];
-
-                // ── Log successful login ──────────────────────
-                write_audit($pdo, $user['id'], $user['username'], $user['role'],
-                    'USER_LOGIN', 'user', (string)$user['id'],
-                    $user['fullname'] . ' (' . $user['role'] . ') logged in successfully.', $user['tenant_id']);
+                write_login_audit($pdo, $user['id'], $user['username'], $user['role'], 'USER_LOGIN', $user['fullname'] . ' logged in.', $user['tenant_id']);
 
                 if ($user['role'] === 'super_admin') { header('Location: superadmin.php'); exit; }
                 if ($user['role'] === 'admin')        { header('Location: tenant.php');     exit; }
                 if ($user['role'] === 'staff')        { header('Location: staff.php');      exit; }
                 if ($user['role'] === 'cashier')      { header('Location: cashier.php');    exit; }
-
                 session_unset(); session_destroy();
                 $error = 'Unknown user role.';
             }
-
         } else {
-            // ── Wrong credentials ─────────────────────────────
             if (!$user) {
                 $error = 'Username not found.';
             } else {
                 $error = 'Incorrect password.';
-                write_audit($pdo, $user['id'], $user['username'], $user['role'] ?? 'unknown',
-                    'LOGIN_FAILED', 'user', (string)$user['id'],
-                    'Failed login attempt for username: ' . $username . '.', $user['tenant_id'] ?? null);
+                write_login_audit($pdo, $user['id'], $user['username'], $user['role'] ?? 'unknown', 'LOGIN_FAILED', 'Failed login attempt.', $user['tenant_id'] ?? null);
             }
         }
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>

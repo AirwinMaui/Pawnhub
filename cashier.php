@@ -2,6 +2,15 @@
 session_start();
 require 'db.php';
 require 'theme_helper.php';
+
+// ── Audit Log Helper ─────────────────────────────────────────
+function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type = '', string $entity_id = '', string $message = '', $tenant_id = null): void {
+    try {
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
+            ->execute([$tenant_id,$actor_id,$actor_username,$actor_role,$action,$entity_type,$entity_id,$message,$_SERVER['REMOTE_ADDR']??'::1',date('Y-m-d H:i:s')]);
+    } catch (PDOException $e) {}
+}
+
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'cashier') { header('Location: login.php'); exit; }
@@ -44,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ->execute([$new_status,$ticket_no,$tid]);
             $pdo->prepare("UPDATE item_inventory SET status=? WHERE ticket_no=? AND tenant_id=?")
                 ->execute([$pay_action==='release'?'redeemed':'pawned',$ticket_no,$tid]);
-            $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?)")
+            $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?)")
                 ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
             $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
             $active_page = 'tickets';
