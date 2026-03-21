@@ -11,66 +11,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($username === '' || $password === '') {
         $error = 'Please fill in all fields.';
     } else {
+        // Fetch user + tenant status
         $stmt = $pdo->prepare("
-            SELECT u.*, t.business_name AS tenant_name
+            SELECT u.*, 
+                   t.business_name AS tenant_name,
+                   t.status AS tenant_status
             FROM users u
             LEFT JOIN tenants t ON u.tenant_id = t.id
-            WHERE u.username = ? 
-              AND u.status = 'approved' 
-              AND u.is_suspended = 0
+            WHERE u.username = ?
             LIMIT 1
         ");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
-            session_regenerate_id(true);
 
-            $_SESSION['user'] = [
-                'id'          => $user['id'],
-                'name'        => $user['fullname'],
-                'username'    => $user['username'],
-                'role'        => $user['role'],
-                'tenant_id'   => $user['tenant_id'],
-                'tenant_name' => $user['tenant_name'],
-            ];
+            // ── Block checks (in order of priority) ──────────────
+            if ((int)$user['is_suspended'] === 1) {
+                $error = 'Your account has been suspended. Please contact your administrator.';
 
-            if ($user['role'] === 'super_admin') {
-                header('Location: superadmin.php');
-                exit;
-            }
-
-            if ($user['role'] === 'admin') {
-                header('Location: tenant.php');
-                exit;
-            }
-
-            if ($user['role'] === 'staff') {
-                header('Location: staff.php');
-                exit;
-            }
-
-            if ($user['role'] === 'cashier') {
-                header('Location: cashier.php');
-                exit;
-            }
-
-            session_unset();
-            session_destroy();
-            $error = 'Unknown user role.';
-        } else {
-            $chk = $pdo->prepare("SELECT status, is_suspended FROM users WHERE username = ? LIMIT 1");
-            $chk->execute([$username]);
-            $chk = $chk->fetch();
-
-            if (!$chk) {
-                $error = 'Username not found.';
-            } elseif ((int)$chk['is_suspended'] === 1) {
-                $error = 'Your account has been suspended.';
-            } elseif ($chk['status'] === 'pending') {
+            } elseif ($user['status'] === 'pending') {
                 $error = 'Your account is pending approval.';
-            } elseif ($chk['status'] === 'rejected') {
-                $error = 'Your account was rejected.';
+
+            } elseif ($user['status'] === 'rejected') {
+                $error = 'Your account application was rejected.';
+
+            } elseif (
+                $user['role'] !== 'super_admin' &&
+                $user['tenant_status'] !== 'active'
+            ) {
+                // Tenant is deactivated or inactive — block all tenant users
+                if ($user['tenant_status'] === 'inactive') {
+                    $error = 'Your account has been deactivated. Please contact PawnHub support to reactivate your subscription.';
+                } else {
+                    $error = 'Your business account is not active. Please contact PawnHub support.';
+                }
+
+            } elseif ($user['status'] !== 'approved') {
+                $error = 'Your account is not approved.';
+
+            } else {
+                // ── All checks passed — allow login ──────────────
+                session_regenerate_id(true);
+
+                $_SESSION['user'] = [
+                    'id'          => $user['id'],
+                    'name'        => $user['fullname'],
+                    'username'    => $user['username'],
+                    'role'        => $user['role'],
+                    'tenant_id'   => $user['tenant_id'],
+                    'tenant_name' => $user['tenant_name'],
+                ];
+
+                if ($user['role'] === 'super_admin') {
+                    header('Location: superadmin.php');
+                    exit;
+                }
+                if ($user['role'] === 'admin') {
+                    header('Location: tenant.php');
+                    exit;
+                }
+                if ($user['role'] === 'staff') {
+                    header('Location: staff.php');
+                    exit;
+                }
+                if ($user['role'] === 'cashier') {
+                    header('Location: cashier.php');
+                    exit;
+                }
+
+                session_unset();
+                session_destroy();
+                $error = 'Unknown user role.';
+            }
+
+        } else {
+            // Wrong password or username not found
+            if (!$user) {
+                $error = 'Username not found.';
             } else {
                 $error = 'Incorrect password.';
             }
