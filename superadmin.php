@@ -56,8 +56,6 @@ try {
         SELECT t.*,
             (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id AND u.role != 'super_admin') AS user_count,
             (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id AND u.status='pending') AS pending_users,
-            (SELECT COUNT(*) FROM pawn_transactions pt WHERE pt.tenant_id=t.id) AS ticket_count,
-            (SELECT COALESCE(SUM(pt.principal_amount),0) FROM pawn_transactions pt WHERE pt.tenant_id=t.id) AS total_loans,
             (SELECT u.fullname FROM users u WHERE u.tenant_id=t.id AND u.role='admin' AND u.status='approved' LIMIT 1) AS admin_name,
             (SELECT u.id FROM users u WHERE u.tenant_id=t.id AND u.role='admin' LIMIT 1) AS admin_uid
         FROM tenants t ORDER BY t.created_at DESC
@@ -79,13 +77,6 @@ try {
     $inactive_users = $total_users - $active_users;
 } catch (PDOException $e) {
     $total_users = $active_users = $inactive_users = 0;
-}
-
-try {
-    $total_tickets = (int)$pdo->query("SELECT COUNT(*) FROM pawn_transactions")->fetchColumn();
-    $total_loans   = (float)$pdo->query("SELECT COALESCE(SUM(principal_amount),0) FROM pawn_transactions")->fetchColumn();
-} catch (PDOException $e) {
-    $total_tickets = 0; $total_loans = 0;
 }
 
 // Monthly user registrations (last 6 months)
@@ -115,16 +106,6 @@ try {
     ")->fetchAll();
 } catch (PDOException $e) { $monthly_tenants = []; }
 
-// Daily activity last 30 days (transactions)
-try {
-    $daily_activity = $pdo->query("
-        SELECT DATE(created_at) AS day, COUNT(*) AS count
-        FROM pawn_transactions
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        GROUP BY day ORDER BY day ASC
-    ")->fetchAll();
-} catch (PDOException $e) { $daily_activity = []; }
-
 // Plan distribution
 $plan_dist = ['Starter' => 0, 'Pro' => 0, 'Enterprise' => 0];
 foreach ($tenants as $t) {
@@ -138,58 +119,58 @@ $filter_date_to   = $_GET['date_to']     ?? date('Y-m-d');
 $filter_tenant    = intval($_GET['filter_tenant'] ?? 0);
 $filter_status    = $_GET['filter_status'] ?? '';
 
-// Report data
+// Report data — Super Admin only queries (users & tenants tables only)
 $report_data = [];
 if ($active_page === 'reports') {
     try {
         if ($report_type === 'tenant_activity') {
-            $q = "SELECT t.id, t.business_name, t.owner_name, t.plan, t.status, t.created_at,
+            // Tenant list with user counts — no pawn_transactions
+            $q = "SELECT t.id, t.business_name, t.owner_name, t.email, t.phone,
+                    t.plan, t.status, t.branches, t.created_at,
                     COUNT(DISTINCT u.id) AS user_count,
-                    COUNT(DISTINCT pt.id) AS ticket_count,
-                    COALESCE(SUM(pt.principal_amount),0) AS total_loans
+                    COUNT(DISTINCT CASE WHEN u.role='admin'   THEN u.id END) AS admin_count,
+                    COUNT(DISTINCT CASE WHEN u.role='staff'   THEN u.id END) AS staff_count,
+                    COUNT(DISTINCT CASE WHEN u.role='cashier' THEN u.id END) AS cashier_count
                   FROM tenants t
-                  LEFT JOIN users u ON u.tenant_id=t.id
-                  LEFT JOIN pawn_transactions pt ON pt.tenant_id=t.id
-                    AND DATE(pt.created_at) BETWEEN ? AND ?
-                  WHERE DATE(t.created_at) <= ?";
-            $params = [$filter_date_from, $filter_date_to, $filter_date_to];
+                  LEFT JOIN users u ON u.tenant_id=t.id AND u.role != 'super_admin'
+                  WHERE DATE(t.created_at) BETWEEN ? AND ?";
+            $params = [$filter_date_from, $filter_date_to];
             if ($filter_status) { $q .= " AND t.status=?"; $params[] = $filter_status; }
-            if ($filter_tenant) { $q .= " AND t.id=?"; $params[] = $filter_tenant; }
-            $q .= " GROUP BY t.id ORDER BY ticket_count DESC";
+            if ($filter_tenant) { $q .= " AND t.id=?";     $params[] = $filter_tenant; }
+            $q .= " GROUP BY t.id ORDER BY t.created_at DESC";
             $s = $pdo->prepare($q); $s->execute($params);
             $report_data = $s->fetchAll();
 
         } elseif ($report_type === 'user_registration') {
-            $q = "SELECT u.id, u.fullname, u.username, u.email, u.role, u.status, u.is_suspended,
-                    u.created_at, t.business_name
+            // All registered users — no pawn_transactions
+            $q = "SELECT u.id, u.fullname, u.username, u.email, u.role,
+                    u.status, u.is_suspended, u.created_at, t.business_name
                   FROM users u
                   LEFT JOIN tenants t ON u.tenant_id=t.id
                   WHERE u.role != 'super_admin'
                     AND DATE(u.created_at) BETWEEN ? AND ?";
             $params = [$filter_date_from, $filter_date_to];
-            if ($filter_status) { $q .= " AND u.status=?"; $params[] = $filter_status; }
+            if ($filter_status) { $q .= " AND u.status=?";    $params[] = $filter_status; }
             if ($filter_tenant) { $q .= " AND u.tenant_id=?"; $params[] = $filter_tenant; }
             $q .= " ORDER BY u.created_at DESC";
             $s = $pdo->prepare($q); $s->execute($params);
             $report_data = $s->fetchAll();
 
         } elseif ($report_type === 'usage_statistics') {
-            $q = "SELECT t.id, t.business_name, t.plan, t.status,
+            // Per-tenant user breakdown — no pawn_transactions
+            $q = "SELECT t.id, t.business_name, t.plan, t.status, t.branches,
                     COUNT(DISTINCT u.id) AS total_users,
-                    COUNT(DISTINCT CASE WHEN u.role='staff' THEN u.id END) AS staff_count,
-                    COUNT(DISTINCT CASE WHEN u.role='cashier' THEN u.id END) AS cashier_count,
-                    COUNT(DISTINCT pt.id) AS total_tickets,
-                    COUNT(DISTINCT CASE WHEN pt.status='active' THEN pt.id END) AS active_tickets,
-                    COUNT(DISTINCT CASE WHEN pt.status='redeemed' THEN pt.id END) AS redeemed_tickets,
-                    COALESCE(SUM(pt.principal_amount),0) AS total_loan_amount
+                    COUNT(DISTINCT CASE WHEN u.role='admin'    THEN u.id END) AS admin_count,
+                    COUNT(DISTINCT CASE WHEN u.role='staff'    THEN u.id END) AS staff_count,
+                    COUNT(DISTINCT CASE WHEN u.role='cashier'  THEN u.id END) AS cashier_count,
+                    COUNT(DISTINCT CASE WHEN u.status='approved' AND u.is_suspended=0 THEN u.id END) AS active_users,
+                    COUNT(DISTINCT CASE WHEN u.is_suspended=1  THEN u.id END) AS suspended_users
                   FROM tenants t
                   LEFT JOIN users u ON u.tenant_id=t.id AND u.role != 'super_admin'
-                  LEFT JOIN pawn_transactions pt ON pt.tenant_id=t.id
-                    AND DATE(pt.created_at) BETWEEN ? AND ?
                   WHERE 1=1";
-            $params = [$filter_date_from, $filter_date_to];
+            $params = [];
             if ($filter_tenant) { $q .= " AND t.id=?"; $params[] = $filter_tenant; }
-            $q .= " GROUP BY t.id ORDER BY total_tickets DESC";
+            $q .= " GROUP BY t.id ORDER BY total_users DESC";
             $s = $pdo->prepare($q); $s->execute($params);
             $report_data = $s->fetchAll();
         }
@@ -432,22 +413,27 @@ select.finput{cursor:pointer;}
         </div>
         <div class="stat-card">
           <div class="stat-icon" style="background:#fef3c7;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           </div>
           <div>
-            <div class="stat-label">Total Tickets</div>
-            <div class="stat-value"><?= number_format($total_tickets) ?></div>
-            <div class="stat-sub">Across all tenants</div>
+            <div class="stat-label">Pending Approvals</div>
+            <div class="stat-value" style="color:var(--warning);"><?= $pending_tenants ?></div>
+            <div class="stat-sub">Tenants awaiting review</div>
           </div>
         </div>
+        <?php
+        try {
+            $suspended_count = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_suspended=1 AND role != 'super_admin'")->fetchColumn();
+        } catch (PDOException $e) { $suspended_count = 0; }
+        ?>
         <div class="stat-card">
-          <div class="stat-icon" style="background:#f3e8ff;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <div class="stat-icon" style="background:#fee2e2;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg>
           </div>
           <div>
-            <div class="stat-label">Total Loans</div>
-            <div class="stat-value" style="font-size:1.15rem;">₱<?= number_format($total_loans, 0) ?></div>
-            <div class="stat-sub">Principal amount</div>
+            <div class="stat-label">Suspended Users</div>
+            <div class="stat-value" style="color:var(--danger);"><?= $suspended_count ?></div>
+            <div class="stat-sub">Across all tenants</div>
           </div>
         </div>
       </div>
@@ -474,15 +460,38 @@ select.finput{cursor:pointer;}
         </div>
       </div>
 
-      <!-- Sales Trend + Plan Distribution -->
+      <!-- User Role Distribution + Plan Distribution -->
       <div class="two-col">
-        <!-- Daily Activity -->
+        <!-- User Role Distribution -->
         <div class="card">
           <div class="card-hdr">
-            <span class="card-title">📈 Daily Ticket Activity (30 Days)</span>
+            <span class="card-title">👤 User Role Distribution</span>
           </div>
-          <div class="chart-wrap">
-            <canvas id="dailyActivityChart"></canvas>
+          <?php
+          try {
+              $role_counts = $pdo->query("
+                  SELECT role, COUNT(*) AS cnt
+                  FROM users
+                  WHERE role != 'super_admin'
+                  GROUP BY role
+              ")->fetchAll(PDO::FETCH_KEY_PAIR);
+          } catch (PDOException $e) { $role_counts = []; }
+          $rc_admin   = (int)($role_counts['admin']   ?? 0);
+          $rc_staff   = (int)($role_counts['staff']   ?? 0);
+          $rc_cashier = (int)($role_counts['cashier'] ?? 0);
+          ?>
+          <div style="display:flex;align-items:center;gap:24px;">
+            <div class="donut-wrap" style="flex:1;">
+              <canvas id="roleDonutChart"></canvas>
+            </div>
+            <div style="flex-shrink:0;">
+              <div class="legend-row"><span class="legend-dot" style="background:#2563eb;"></span>Admin — <?= $rc_admin ?></div>
+              <div class="legend-row"><span class="legend-dot" style="background:#16a34a;"></span>Staff — <?= $rc_staff ?></div>
+              <div class="legend-row"><span class="legend-dot" style="background:#d97706;"></span>Cashier — <?= $rc_cashier ?></div>
+              <div style="margin-top:10px;font-size:.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;">
+                <div>Total: <?= $rc_admin + $rc_staff + $rc_cashier ?> users</div>
+              </div>
+            </div>
           </div>
         </div>
         <!-- Plan Distribution Donut -->
@@ -602,23 +611,24 @@ select.finput{cursor:pointer;}
         options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
       });
 
-      // Daily Activity
-      new Chart(document.getElementById('dailyActivityChart'), {
-        type: 'line',
+      // Role Donut
+      new Chart(document.getElementById('roleDonutChart'), {
+        type: 'doughnut',
         data: {
-          labels: <?= json_encode(array_column($daily_activity, 'day')) ?>,
+          labels: ['Admin', 'Staff', 'Cashier'],
           datasets: [{
-            label: 'Tickets',
-            data: <?= json_encode(array_column($daily_activity, 'count')) ?>,
-            borderColor: '#7c3aed',
-            backgroundColor: 'rgba(124,58,237,0.08)',
-            borderWidth: 2,
-            tension: 0.4,
-            fill: true,
-            pointRadius: 2,
+            data: [<?= $rc_admin ?>, <?= $rc_staff ?>, <?= $rc_cashier ?>],
+            backgroundColor: ['#2563eb','#16a34a','#d97706'],
+            borderWidth: 0,
+            hoverOffset: 4,
           }]
         },
-        options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: { legend: { display: false } }
+        }
       });
 
       // Plan Donut
@@ -720,8 +730,8 @@ select.finput{cursor:pointer;}
             <thead>
               <tr>
                 <th>ID</th><th>Business Name</th><th>Owner</th><th>Email</th>
-                <th>Plan</th><th>Status</th><th>Users</th><th>Tickets</th>
-                <th>Total Loans</th><th>Registered</th><th>Actions</th>
+                <th>Plan</th><th>Status</th><th>Users</th>
+                <th>Registered</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -738,8 +748,6 @@ select.finput{cursor:pointer;}
                   </span>
                 </td>
                 <td><?= $t['user_count'] ?></td>
-                <td><?= number_format($t['ticket_count']) ?></td>
-                <td style="font-size:.78rem;font-weight:600;color:var(--success);">₱<?= number_format($t['total_loans'], 0) ?></td>
                 <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($t['created_at'])) ?></td>
                 <td>
                   <?php if ($t['status'] === 'active'): ?>
@@ -830,15 +838,14 @@ select.finput{cursor:pointer;}
       <!-- Report: Tenant Activity -->
       <?php if ($report_type === 'tenant_activity'): ?>
         <?php
-        $rpt_total   = count($report_data);
-        $rpt_tickets = array_sum(array_column($report_data, 'ticket_count'));
-        $rpt_loans   = array_sum(array_column($report_data, 'total_loans'));
-        $rpt_users   = array_sum(array_column($report_data, 'user_count'));
+        $rpt_total = count($report_data);
+        $rpt_users = array_sum(array_column($report_data, 'user_count'));
+        $rpt_active_t = count(array_filter($report_data, fn($r) => $r['status'] === 'active'));
         ?>
         <div class="summary-grid">
           <div class="summary-item"><div class="summary-num"><?= $rpt_total ?></div><div class="summary-lbl">Tenants</div></div>
+          <div class="summary-item"><div class="summary-num" style="color:var(--success);"><?= $rpt_active_t ?></div><div class="summary-lbl">Active Tenants</div></div>
           <div class="summary-item"><div class="summary-num"><?= $rpt_users ?></div><div class="summary-lbl">Total Users</div></div>
-          <div class="summary-item"><div class="summary-num"><?= number_format($rpt_tickets) ?></div><div class="summary-lbl">Tickets Issued</div></div>
         </div>
         <div class="card" style="overflow-x:auto;">
           <div class="card-hdr">
@@ -849,27 +856,34 @@ select.finput{cursor:pointer;}
             <div class="empty-state"><p>No data found for the selected filters.</p></div>
           <?php else: ?>
             <table>
-              <thead><tr><th>#</th><th>Business Name</th><th>Owner</th><th>Plan</th><th>Status</th><th>Users</th><th>Tickets</th><th>Total Loans (₱)</th><th>Registered</th></tr></thead>
+              <thead>
+                <tr><th>#</th><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr>
+              </thead>
               <tbody>
                 <?php foreach ($report_data as $i => $r): ?>
                 <tr>
                   <td style="color:var(--text-dim);font-size:.73rem;"><?= $i+1 ?></td>
                   <td style="font-weight:600;"><?= htmlspecialchars($r['business_name']) ?></td>
                   <td><?= htmlspecialchars($r['owner_name']) ?></td>
+                  <td style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($r['email']) ?></td>
                   <td><span class="badge <?= $r['plan'] === 'Enterprise' ? 'plan-ent' : ($r['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $r['plan'] ?></span></td>
                   <td><span class="badge <?= $r['status'] === 'active' ? 'b-green' : ($r['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><span class="b-dot"></span><?= ucfirst($r['status']) ?></span></td>
-                  <td><?= $r['user_count'] ?></td>
-                  <td style="font-weight:700;"><?= number_format($r['ticket_count']) ?></td>
-                  <td style="font-weight:700;color:var(--success);">₱<?= number_format($r['total_loans'], 2) ?></td>
+                  <td><?= $r['branches'] ?></td>
+                  <td style="font-weight:700;"><?= $r['user_count'] ?></td>
+                  <td><?= $r['admin_count'] ?></td>
+                  <td><?= $r['staff_count'] ?></td>
+                  <td><?= $r['cashier_count'] ?></td>
                   <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
               <tfoot>
                 <tr style="background:#f8fafc;">
-                  <td colspan="6" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td>
-                  <td style="font-weight:800;"><?= number_format($rpt_tickets) ?></td>
-                  <td style="font-weight:800;color:var(--success);">₱<?= number_format($rpt_loans, 2) ?></td>
+                  <td colspan="7" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td>
+                  <td style="font-weight:800;"><?= $rpt_users ?></td>
+                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'admin_count')) ?></td>
+                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'staff_count')) ?></td>
+                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'cashier_count')) ?></td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -906,11 +920,7 @@ select.finput{cursor:pointer;}
                   <td style="font-weight:600;"><?= htmlspecialchars($r['fullname']) ?></td>
                   <td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?= htmlspecialchars($r['username']) ?></td>
                   <td style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($r['email']) ?></td>
-                  <td>
-                    <span class="badge <?= ['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']] ?? 'b-gray' ?>">
-                      <?= ucfirst($r['role']) ?>
-                    </span>
-                  </td>
+                  <td><span class="badge <?= ['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']] ?? 'b-gray' ?>"><?= ucfirst($r['role']) ?></span></td>
                   <td style="font-size:.78rem;"><?= htmlspecialchars($r['business_name'] ?? '—') ?></td>
                   <td><span class="badge <?= $r['status'] === 'approved' ? 'b-green' : ($r['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><?= ucfirst($r['status']) ?></span></td>
                   <td><?= $r['is_suspended'] ? '<span class="badge b-red">Yes</span>' : '<span class="badge b-green">No</span>' ?></td>
@@ -922,28 +932,29 @@ select.finput{cursor:pointer;}
           <?php endif; ?>
         </div>
 
-      <!-- Report: Usage Statistics -->
+      <!-- Report: Usage Statistics (User Breakdown per Tenant — no pawn data) -->
       <?php elseif ($report_type === 'usage_statistics'): ?>
         <?php
-        $rpt_total_tickets   = array_sum(array_column($report_data, 'total_tickets'));
-        $rpt_active_tickets  = array_sum(array_column($report_data, 'active_tickets'));
-        $rpt_loan_amount     = array_sum(array_column($report_data, 'total_loan_amount'));
+        $rpt_total_users     = array_sum(array_column($report_data, 'total_users'));
+        $rpt_active_users    = array_sum(array_column($report_data, 'active_users'));
+        $rpt_suspended_users = array_sum(array_column($report_data, 'suspended_users'));
         ?>
         <div class="summary-grid">
-          <div class="summary-item"><div class="summary-num"><?= number_format($rpt_total_tickets) ?></div><div class="summary-lbl">Total Tickets</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:var(--success);"><?= number_format($rpt_active_tickets) ?></div><div class="summary-lbl">Active Tickets</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:#7c3aed;">₱<?= number_format($rpt_loan_amount, 0) ?></div><div class="summary-lbl">Total Loan Amount</div></div>
+          <div class="summary-item"><div class="summary-num"><?= $rpt_total_users ?></div><div class="summary-lbl">Total Users</div></div>
+          <div class="summary-item"><div class="summary-num" style="color:var(--success);"><?= $rpt_active_users ?></div><div class="summary-lbl">Active Users</div></div>
+          <div class="summary-item"><div class="summary-num" style="color:var(--danger);"><?= $rpt_suspended_users ?></div><div class="summary-lbl">Suspended Users</div></div>
         </div>
         <div class="card" style="overflow-x:auto;">
           <div class="card-hdr">
-            <span class="card-title">📊 Usage Statistics</span>
-            <span style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($filter_date_from) ?> — <?= htmlspecialchars($filter_date_to) ?></span>
+            <span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span>
           </div>
           <?php if (empty($report_data)): ?>
-            <div class="empty-state"><p>No data found for the selected filters.</p></div>
+            <div class="empty-state"><p>No data found.</p></div>
           <?php else: ?>
             <table>
-              <thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Total Users</th><th>Staff</th><th>Cashiers</th><th>Total Tickets</th><th>Active</th><th>Redeemed</th><th>Loan Amount (₱)</th></tr></thead>
+              <thead>
+                <tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr>
+              </thead>
               <tbody>
                 <?php foreach ($report_data as $i => $r): ?>
                 <tr>
@@ -951,23 +962,25 @@ select.finput{cursor:pointer;}
                   <td style="font-weight:600;"><?= htmlspecialchars($r['business_name']) ?></td>
                   <td><span class="badge <?= $r['plan'] === 'Enterprise' ? 'plan-ent' : ($r['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $r['plan'] ?></span></td>
                   <td><span class="badge <?= $r['status'] === 'active' ? 'b-green' : ($r['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><span class="b-dot"></span><?= ucfirst($r['status']) ?></span></td>
-                  <td><?= $r['total_users'] ?></td>
+                  <td><?= $r['branches'] ?></td>
+                  <td style="font-weight:700;"><?= $r['total_users'] ?></td>
+                  <td><?= $r['admin_count'] ?></td>
                   <td><?= $r['staff_count'] ?></td>
                   <td><?= $r['cashier_count'] ?></td>
-                  <td style="font-weight:700;"><?= number_format($r['total_tickets']) ?></td>
-                  <td><span class="badge b-green"><?= $r['active_tickets'] ?></span></td>
-                  <td><span class="badge b-blue"><?= $r['redeemed_tickets'] ?></span></td>
-                  <td style="font-weight:700;color:var(--success);">₱<?= number_format($r['total_loan_amount'], 2) ?></td>
+                  <td><span class="badge b-green"><?= $r['active_users'] ?></span></td>
+                  <td><span class="badge <?= $r['suspended_users'] > 0 ? 'b-red' : 'b-gray' ?>"><?= $r['suspended_users'] ?></span></td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
               <tfoot>
                 <tr style="background:#f8fafc;">
-                  <td colspan="7" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td>
-                  <td style="font-weight:800;"><?= number_format($rpt_total_tickets) ?></td>
-                  <td style="font-weight:800;color:var(--success);"><?= number_format($rpt_active_tickets) ?></td>
-                  <td></td>
-                  <td style="font-weight:800;color:var(--success);">₱<?= number_format($rpt_loan_amount, 2) ?></td>
+                  <td colspan="5" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td>
+                  <td style="font-weight:800;"><?= $rpt_total_users ?></td>
+                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'admin_count')) ?></td>
+                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'staff_count')) ?></td>
+                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'cashier_count')) ?></td>
+                  <td style="font-weight:800;color:var(--success);"><?= $rpt_active_users ?></td>
+                  <td style="font-weight:800;color:var(--danger);"><?= $rpt_suspended_users ?></td>
                 </tr>
               </tfoot>
             </table>
