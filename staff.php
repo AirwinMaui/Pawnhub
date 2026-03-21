@@ -2,6 +2,12 @@
 session_start();
 require 'db.php';
 require 'theme_helper.php';
+
+// ── Audit Helper ─────────────────────────────────────────────
+function write_audit(PDO $pdo, $aid, $aun, $ar, string $action, string $et='', string $ei='', string $msg='', $tid=null): void {
+    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")->execute([$tid,$aid,$aun,$ar,$action,$et,$ei,$msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+}
+
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'staff') { header('Location: login.php'); exit; }
@@ -48,8 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($full_name && $contact) {
             $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                 ->execute([$tid,$full_name,$contact,$email,$birthdate?:null,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
-            $new_cid = $pdo->lastInsertId();
-            write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$new_cid,"Staff registered new customer: $full_name.",$tid);
             $success_msg = "Customer \"$full_name\" registered successfully!";
             $active_page = 'customers';
         } else {
@@ -127,40 +131,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
-    // Process payment
-    if ($_POST['action'] === 'process_payment') {
-        $ticket_no  = trim($_POST['ticket_no']     ?? '');
-        $pay_action = trim($_POST['pay_action']    ?? 'release');
-        $amount_due = floatval($_POST['amount_due']     ?? 0);
-        $cash_recv  = floatval($_POST['cash_received']  ?? 0);
-        $or_no      = trim($_POST['or_no']         ?? '');
-        $change     = max(0, $cash_recv - $amount_due);
-
-        if ($ticket_no && $amount_due > 0 && $cash_recv > 0) {
-            $pdo->prepare("INSERT INTO payment_transactions (tenant_id,ticket_no,action,or_no,amount_due,cash_received,change_amount,staff_user_id,staff_username,staff_role) VALUES (?,?,?,?,?,?,?,?,?,'staff')")
-                ->execute([$tid,$ticket_no,$pay_action,$or_no,$amount_due,$cash_recv,$change,$u['id'],$u['username']]);
-            $new_status = $pay_action === 'release' ? 'Released' : 'Renewed';
-            $pdo->prepare("UPDATE pawn_transactions SET status=? WHERE ticket_no=? AND tenant_id=?")->execute([$new_status,$ticket_no,$tid]);
-            $pdo->prepare("UPDATE item_inventory SET status=? WHERE ticket_no=? AND tenant_id=?")->execute([$pay_action==='release'?'redeemed':'pawned',$ticket_no,$tid]);
-            $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
-            $active_page = 'tickets';
-        } else {
-            $error_msg = 'Please fill all payment fields.';
-        }
-    }
 }
 
 // ── Fetch Data (tenant-scoped) ────────────────────────────────
 $today = date('Y-m-d');
 $my_tickets_today = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND created_by=? AND DATE(created_at)=?"); $my_tickets_today->execute([$tid,$u['id'],$today]); $my_tickets_today=$my_tickets_today->fetchColumn();
 $active_count     = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored'"); $active_count->execute([$tid,$u['id']]); $active_count=$active_count->fetchColumn();
-$my_payments_today= $pdo->prepare("SELECT COUNT(*) FROM payment_transactions WHERE tenant_id=? AND staff_user_id=? AND DATE(created_at)=?"); $my_payments_today->execute([$tid,$u['id'],$today]); $my_payments_today=$my_payments_today->fetchColumn();
-$my_revenue_today = $pdo->prepare("SELECT COALESCE(SUM(amount_due),0) FROM payment_transactions WHERE tenant_id=? AND staff_user_id=? AND DATE(created_at)=?"); $my_revenue_today->execute([$tid,$u['id'],$today]); $my_revenue_today=$my_revenue_today->fetchColumn();
+
 
 $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $all_tickets->execute([$tid]); $all_tickets=$all_tickets->fetchAll();
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
 $customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
-$my_payments  = $pdo->prepare("SELECT * FROM payment_transactions WHERE tenant_id=? AND staff_user_id=? ORDER BY created_at DESC LIMIT 30"); $my_payments->execute([$tid,$u['id']]); $my_payments=$my_payments->fetchAll();
+
 $my_void_reqs = $pdo->prepare("SELECT * FROM pawn_void_requests WHERE tenant_id=? AND requested_by=? ORDER BY requested_at DESC"); $my_void_reqs->execute([$tid,$u['id']]); $my_void_reqs=$my_void_reqs->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -302,12 +284,12 @@ tr:hover td{background:#fafbfc;}
     <div class="sb-section">Main</div>
     <a href="?page=dashboard"         class="sb-item <?=$active_page==='dashboard'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
     <a href="?page=create_ticket"     class="sb-item <?=$active_page==='create_ticket'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Create Pawn Ticket</a>
-    <a href="?page=process_payment"   class="sb-item <?=$active_page==='process_payment'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Process Payment</a>
+
     <div class="sb-section">Records</div>
     <a href="?page=tickets"           class="sb-item <?=$active_page==='tickets'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>All Tickets</a>
     <a href="?page=customers"         class="sb-item <?=$active_page==='customers'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Customers</a>
     <a href="?page=register_customer" class="sb-item <?=$active_page==='register_customer'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>Register Customer</a>
-    <a href="?page=payments"          class="sb-item <?=$active_page==='payments'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>My Payments</a>
+
     <a href="?page=void_requests"     class="sb-item <?=$active_page==='void_requests'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>My Void Requests</a>
   </nav>
   <div class="sb-footer">
@@ -318,7 +300,7 @@ tr:hover td{background:#fafbfc;}
 <div class="main">
   <header class="topbar">
     <div class="topbar-left">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Staff Dashboard','create_ticket'=>'Create Pawn Ticket','process_payment'=>'Process Payment','tickets'=>'All Tickets','customers'=>'Customers','register_customer'=>'Register Customer','payments'=>'My Payments','void_requests'=>'My Void Requests'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Staff Dashboard','create_ticket'=>'Create Pawn Ticket','tickets'=>'All Tickets','customers'=>'Customers','register_customer'=>'Register Customer','payments'=>'My Payments','void_requests'=>'My Void Requests'];echo $titles[$active_page]??'Dashboard';?></span>
       <?php if($tenant): ?><span class="tenant-badge"><?=htmlspecialchars($tenant['business_name'])?> · Tenant #<?=$tid?></span><?php endif;?>
     </div>
     <span style="font-size:.76rem;color:var(--text-dim);">📅 <?=date('M d, Y')?></span>
@@ -359,8 +341,9 @@ tr:hover td{background:#fafbfc;}
     <div class="stats-row">
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#dbeafe;"><svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg></div></div><div class="stat-value"><?=$my_tickets_today?></div><div class="stat-label">Tickets Today</div></div>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#fce7f3;"><svg viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div></div><div class="stat-value"><?=$active_count?></div><div class="stat-label">My Active Tickets</div></div>
-      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#d1fae5;"><svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div></div><div class="stat-value">₱<?=number_format($my_revenue_today,0)?></div><div class="stat-label">Collections Today</div></div>
-      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#ede9fe;"><svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div></div><div class="stat-value"><?=$my_payments_today?></div><div class="stat-label">Payments Today</div></div>
+      <?php $cust_today=(int)$pdo->query("SELECT COUNT(*) FROM customers WHERE tenant_id=$tid AND created_by={$u['id']} AND DATE(registered_at)='$today'")->fetchColumn(); ?>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#d1fae5;"><svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div></div><div class="stat-value"><?=$cust_today?></div><div class="stat-label">Customers Today</div></div>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:#fce7f3;"><svg viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div></div><div class="stat-value"><?=count($my_void_reqs)?></div><div class="stat-label">My Void Requests</div></div>
     </div>
 
     <div class="main-grid">
@@ -368,7 +351,7 @@ tr:hover td{background:#fafbfc;}
         <div class="card" style="margin-bottom:12px;">
           <div class="card-title">⚡ Quick Actions</div>
           <a href="?page=create_ticket"     class="qa-btn qa-primary"><div class="qa-icon" style="background:rgba(255,255,255,.2);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>New Pawn Ticket</a>
-          <a href="?page=process_payment"   class="qa-btn qa-secondary"><div class="qa-icon" style="background:#eff6ff;"><svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>Process Payment</a>
+
           <a href="?page=register_customer" class="qa-btn qa-secondary"><div class="qa-icon" style="background:#f0fdf4;"><svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>Register Customer</a>
         </div>
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:13px;">
@@ -448,54 +431,6 @@ tr:hover td{background:#fafbfc;}
       </div>
     </form>
 
-  <?php elseif($active_page==='process_payment'): ?>
-    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:16px;max-width:900px;">
-      <div class="card">
-        <div class="card-title">Payment Form</div>
-        <?php if(empty($my_active)): ?><div class="empty-state"><p>No active tickets assigned to you.</p></div>
-        <?php else: ?>
-        <form method="POST">
-          <input type="hidden" name="action" value="process_payment">
-          <div class="fgroup"><label class="flabel">Select Ticket *</label>
-            <select name="ticket_no" class="finput" required onchange="fillPayment(this)">
-              <option value="">-- Select Active Ticket --</option>
-              <?php foreach($my_active as $t): ?>
-              <option value="<?=htmlspecialchars($t['ticket_no'])?>" data-loan="<?=$t['loan_amount']?>" data-interest="<?=$t['interest_amount']?>" data-total="<?=$t['total_redeem']?>" data-customer="<?=htmlspecialchars($t['customer_name'])?>" data-item="<?=htmlspecialchars($t['item_category'])?> - <?=htmlspecialchars(substr($t['item_description'],0,25))?>">
-                <?=$t['ticket_no']?> — <?=htmlspecialchars($t['customer_name'])?> (₱<?=number_format($t['total_redeem'],2)?>)
-              </option>
-              <?php endforeach;?>
-            </select>
-          </div>
-          <div class="fgroup"><label class="flabel">Action *</label><select name="pay_action" class="finput" required><option value="release">Release (Full Redemption)</option><option value="renew">Renew / Extension</option></select></div>
-          <div class="fgroup"><label class="flabel">OR Number</label><input type="text" name="or_no" class="finput" placeholder="OR-YYYYMMDD-XXXXX"></div>
-          <div class="fgroup"><label class="flabel">Amount Due (₱)</label><input type="number" name="amount_due" id="p_due" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" required></div>
-          <div class="fgroup"><label class="flabel">Cash Received (₱) *</label><input type="number" name="cash_received" id="p_cash" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" required></div>
-          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;font-size:.8rem;margin-bottom:12px;display:flex;justify-content:space-between;"><span style="color:#166534;">Change:</span><span id="p_change" style="font-weight:800;font-size:.95rem;color:#15803d;">₱0.00</span></div>
-          <button type="submit" style="width:100%;background:#059669;color:#fff;border:none;border-radius:9px;padding:12px;font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer;">Process Payment</button>
-        </form>
-        <?php endif;?>
-      </div>
-      <div class="card" style="background:#f8fafc;">
-        <div class="card-title">Receipt Preview</div>
-        <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;font-size:.78rem;">
-          <div style="text-align:center;margin-bottom:10px;"><div style="font-weight:800;font-size:.92rem;">PawnHub</div><div style="font-size:.71rem;color:var(--text-dim);"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div><div style="font-size:.71rem;color:var(--text-dim);">Tenant #<?=$tid?></div><div style="font-size:.71rem;color:var(--text-dim);"><?=date('M d, Y h:i A')?></div></div>
-          <hr style="border:none;border-top:1px dashed var(--border);margin:9px 0;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-dim);">Ticket</span><span id="r_ticket" style="font-weight:600;">—</span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-dim);">Customer</span><span id="r_customer" style="font-weight:600;">—</span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-dim);">Item</span><span id="r_item" style="font-weight:600;">—</span></div>
-          <hr style="border:none;border-top:1px dashed var(--border);margin:9px 0;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-dim);">Principal</span><span id="r_loan">₱0.00</span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-dim);">Interest</span><span id="r_interest">₱0.00</span></div>
-          <div style="display:flex;justify-content:space-between;font-weight:700;"><span>Total Due</span><span id="r_total">₱0.00</span></div>
-          <hr style="border:none;border-top:1px dashed var(--border);margin:9px 0;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text-dim);">Tendered</span><span id="r_cash">₱0.00</span></div>
-          <div style="display:flex;justify-content:space-between;font-weight:700;color:#059669;"><span>Change</span><span id="r_change2">₱0.00</span></div>
-          <hr style="border:none;border-top:1px dashed var(--border);margin:9px 0;">
-          <div style="text-align:center;font-size:.7rem;color:var(--text-dim);">Staff: <?=htmlspecialchars($u['name'])?></div>
-        </div>
-      </div>
-    </div>
-
   <?php elseif($active_page==='tickets'): ?>
     <div class="page-hdr"><div><h2>All Tickets</h2><p><?=count($all_tickets)?> records under Tenant #<?=$tid?></p></div><a href="?page=create_ticket" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ New Ticket</a></div>
     <div class="card" style="overflow-x:auto;">
@@ -503,7 +438,13 @@ tr:hover td{background:#fafbfc;}
       <?php else: ?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Action</th></tr></thead><tbody>
       <?php foreach($all_tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
       <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;"><?=htmlspecialchars($t['customer_name'])?></td><td style="font-family:monospace;font-size:.76rem;"><?=htmlspecialchars($t['contact_number'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-weight:700;">₱<?=number_format($t['total_redeem'],2)?></td><td style="font-size:.74rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'var(--danger)':'var(--text-dim)'?>;"><?=$t['maturity_date']?></td><td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td>
-      <td><?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?><button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">Void Req</button><?php else:?>—<?php endif;?></td></tr>
+      <td>
+        <?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?>
+          <button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">🚫 Void Req</button>
+        <?php elseif($t['status']==='Stored'):?>
+          <span style="font-size:.72rem;color:var(--text-dim);">View only</span>
+        <?php else:?>—<?php endif;?>
+      </td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
@@ -547,16 +488,6 @@ tr:hover td{background:#fafbfc;}
       </div>
     </div>
 
-  <?php elseif($active_page==='payments'): ?>
-    <div class="page-hdr"><div><h2>My Payments</h2><p>Transactions processed by you</p></div></div>
-    <div class="card" style="overflow-x:auto;">
-      <?php if(empty($my_payments)):?><div class="empty-state"><p>No payments yet.</p></div>
-      <?php else:?><table><thead><tr><th>Date</th><th>Ticket</th><th>OR No.</th><th>Action</th><th>Amount Due</th><th>Cash Received</th><th>Change</th></tr></thead><tbody>
-      <?php foreach($my_payments as $p):?>
-      <tr><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($p['created_at']))?></td><td><span class="ticket-tag"><?=htmlspecialchars($p['ticket_no'])?></span></td><td style="font-family:monospace;font-size:.76rem;"><?=htmlspecialchars($p['or_no']??'—')?></td><td><span class="badge <?=$p['action']==='release'?'b-green':'b-yellow'?>"><?=ucfirst($p['action'])?></span></td><td style="font-weight:700;">₱<?=number_format($p['amount_due'],2)?></td><td>₱<?=number_format($p['cash_received'],2)?></td><td style="color:#059669;">₱<?=number_format($p['change_amount'],2)?></td></tr>
-      <?php endforeach;?></tbody></table><?php endif;?>
-    </div>
-
   <?php elseif($active_page==='void_requests'): ?>
     <div class="page-hdr"><div><h2>My Void Requests</h2><p>Void requests you've submitted</p></div></div>
     <div class="card" style="overflow-x:auto;">
@@ -595,9 +526,7 @@ function openVoid(tn){document.getElementById('void_ticket_no').value=tn;documen
 document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
 function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
-let cTotal=0;
-function fillPayment(sel){const o=sel.options[sel.selectedIndex];cTotal=parseFloat(o.dataset.total)||0;document.getElementById('p_due').value=cTotal.toFixed(2);document.getElementById('r_ticket').textContent=o.value||'—';document.getElementById('r_customer').textContent=o.dataset.customer||'—';document.getElementById('r_item').textContent=o.dataset.item||'—';document.getElementById('r_loan').textContent='₱'+(parseFloat(o.dataset.loan)||0).toFixed(2);document.getElementById('r_interest').textContent='₱'+(parseFloat(o.dataset.interest)||0).toFixed(2);document.getElementById('r_total').textContent='₱'+cTotal.toFixed(2);calcChange();}
-function calcChange(){const due=parseFloat(document.getElementById('p_due')?.value)||0;const cash=parseFloat(document.getElementById('p_cash')?.value)||0;const ch=Math.max(0,cash-due);document.getElementById('p_change').textContent='₱'+ch.toFixed(2);document.getElementById('r_cash').textContent='₱'+cash.toFixed(2);document.getElementById('r_change2').textContent='₱'+ch.toFixed(2);}
+
 </script>
 </body>
 </html>

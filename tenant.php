@@ -3,36 +3,11 @@ session_start();
 require 'db.php';
 require 'theme_helper.php';
 
-// ── Audit Log Helper ─────────────────────────────────────────
-function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type = '', string $entity_id = '', string $message = '', $tenant_id = null): void {
-    try {
-        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
-            ->execute([$tenant_id, $actor_id, $actor_username, $actor_role, $action, $entity_type, $entity_id, $message, $_SERVER['REMOTE_ADDR'] ?? '::1']);
-    } catch (PDOException $e) {}
+// ── Audit Helper ─────────────────────────────────────────────
+function write_audit(PDO $pdo, $aid, $aun, $ar, string $action, string $et='', string $ei='', string $msg='', $tid=null): void {
+    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")->execute([$tid,$aid,$aun,$ar,$action,$et,$ei,$msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
 }
 
-// ── Plan Limit Helper ─────────────────────────────────────────
-function getPlanLimits(PDO $pdo, string $plan): array {
-    // Default limits per plan
-    $defaults = [
-        'Starter'    => ['staff' => 3,  'branches' => 1],
-        'Pro'        => ['staff' => 0,  'branches' => 3],
-        'Enterprise' => ['staff' => 0,  'branches' => 10],
-    ];
-    // Try to get super-admin-configured limits from system_settings
-    try {
-        $sk = $plan === 'Starter' ? 'starter_staff' : ($plan === 'Pro' ? 'pro_staff' : 'ent_staff');
-        $bk = $plan === 'Starter' ? 'starter_branches' : ($plan === 'Pro' ? 'pro_branches' : 'ent_branches');
-        $rows = $pdo->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('$sk','$bk')")->fetchAll(PDO::FETCH_KEY_PAIR);
-        if (!empty($rows)) {
-            return [
-                'staff'    => isset($rows[$sk]) ? (int)$rows[$sk] : ($defaults[$plan]['staff'] ?? 0),
-                'branches' => isset($rows[$bk]) ? (int)$rows[$bk] : ($defaults[$plan]['branches'] ?? 1),
-            ];
-        }
-    } catch (PDOException $e) {}
-    return $defaults[$plan] ?? ['staff' => 3, 'branches' => 1];
-}
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'admin') { header('Location: login.php'); exit; }
@@ -54,32 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $password = trim($_POST['password']  ?? '');
         $role     = in_array($_POST['role'], ['staff','cashier']) ? $_POST['role'] : 'staff';
         if ($fullname && $username && $password) {
-
-            // ── Plan limit enforcement ────────────────────────
-            $tenant_row  = $pdo->prepare("SELECT plan FROM tenants WHERE id=?");
-            $tenant_row->execute([$tid]);
-            $tenant_row  = $tenant_row->fetch();
-            $plan_limits = getPlanLimits($pdo, $tenant_row['plan'] ?? 'Starter');
-            $staff_limit = $plan_limits['staff']; // 0 = unlimited
-
-            $current_count = (int)$pdo->query(
-                "SELECT COUNT(*) FROM users WHERE tenant_id=$tid AND role IN ('staff','cashier') AND is_suspended=0"
-            )->fetchColumn();
-
-            if ($staff_limit > 0 && $current_count >= $staff_limit) {
-                $plan_name = $tenant_row['plan'] ?? 'Starter';
-                $error_msg = "⚠️ Staff limit reached for your <strong>$plan_name</strong> plan ($staff_limit max). Please ask the Super Admin to upgrade your subscription to add more staff.";
-            } else {
-                $chk = $pdo->prepare("SELECT id FROM users WHERE username=?"); $chk->execute([$username]);
-                if ($chk->fetch()) { $error_msg = 'Username already taken.'; }
-                else {
-                    $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,?,'approved',?,NOW())")
-                        ->execute([$tid,$fullname,$email,$username,password_hash($password,PASSWORD_BCRYPT),$role,$u['id']]);
-                    $new_uid = $pdo->lastInsertId();
-                    write_audit($pdo,$u['id'],$u['username'],'admin','USER_CREATE','user',(string)$new_uid,"Admin created $role account for \"$fullname\" (username: $username).",$tid);
-                    $success_msg = ucfirst($role)." account for \"$fullname\" created!";
-                    $active_page = 'users';
-                }
+            $chk = $pdo->prepare("SELECT id FROM users WHERE username=?"); $chk->execute([$username]);
+            if ($chk->fetch()) { $error_msg = 'Username already taken.'; }
+            else {
+                $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,?,'approved',?,NOW())")
+                    ->execute([$tid,$fullname,$email,$username,password_hash($password,PASSWORD_BCRYPT),$role,$u['id']]);
+                write_audit($pdo,$u['id'],$u['username'],'admin','USER_CREATE','user',(string)$pdo->lastInsertId(),"Admin created $role account for \"$fullname\".",$tid);
+                $success_msg = ucfirst($role)." account for \"$fullname\" created!";
+                $active_page = 'users';
             }
         } else { $error_msg = 'Fill in all required fields.'; }
     }
@@ -106,13 +63,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE pawn_void_requests SET status='approved',decided_by=?,decided_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$vrid,$tid]);
         $pdo->prepare("UPDATE pawn_transactions SET status='Voided' WHERE ticket_no=? AND tenant_id=?")->execute([$ticket_no,$tid]);
         $pdo->prepare("UPDATE item_inventory SET status='voided' WHERE ticket_no=? AND tenant_id=?")->execute([$ticket_no,$tid]);
-        write_audit($pdo,$u['id'],$u['username'],'admin','VOID_APPROVED','pawn_transaction',$ticket_no,"Admin approved void for ticket $ticket_no.",$tid);
+        write_audit($pdo,$u['id'],$u['username'],'admin','VOID_APPROVED','pawn_transaction',$ticket_no,"Void approved for $ticket_no.",$tid);
         $success_msg = 'Void approved.'; $active_page = 'void_requests';
     }
     if ($_POST['action'] === 'reject_void') {
         $vrid = intval($_POST['void_id']);
         $pdo->prepare("UPDATE pawn_void_requests SET status='rejected',decided_by=?,decided_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$vrid,$tid]);
-        write_audit($pdo,$u['id'],$u['username'],'admin','VOID_REJECTED','pawn_void_request',(string)$vrid,"Admin rejected void request ID $vrid.",$tid);
+        write_audit($pdo,$u['id'],$u['username'],'admin','VOID_REJECTED','pawn_void_request',(string)$vrid,"Void rejected ID $vrid.",$tid);
         $success_msg = 'Void rejected.'; $active_page = 'void_requests';
     }
 
@@ -120,13 +77,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'approve_renewal') {
         $rrid = intval($_POST['renewal_id']);
         $pdo->prepare("UPDATE renewal_requests SET verification_status='verified',verified_by_admin_id=?,verified_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$rrid,$tid]);
-        write_audit($pdo,$u['id'],$u['username'],'admin','RENEWAL_APPROVED','renewal_request',(string)$rrid,"Admin approved renewal request ID $rrid.",$tid);
+        write_audit($pdo,$u['id'],$u['username'],'admin','RENEWAL_APPROVED','renewal_request',(string)$rrid,"Renewal approved ID $rrid.",$tid);
         $success_msg = 'Renewal approved.'; $active_page = 'renewals';
     }
     if ($_POST['action'] === 'reject_renewal') {
         $rrid = intval($_POST['renewal_id']);
         $pdo->prepare("UPDATE renewal_requests SET verification_status='rejected',verified_by_admin_id=?,verified_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$rrid,$tid]);
-        write_audit($pdo,$u['id'],$u['username'],'admin','RENEWAL_REJECTED','renewal_request',(string)$rrid,"Admin rejected renewal request ID $rrid.",$tid);
+        write_audit($pdo,$u['id'],$u['username'],'admin','RENEWAL_REJECTED','renewal_request',(string)$rrid,"Renewal rejected ID $rrid.",$tid);
         $success_msg = 'Renewal rejected.'; $active_page = 'renewals';
     }
 
@@ -195,7 +152,6 @@ $my_users     = $pdo->prepare("SELECT * FROM users WHERE tenant_id=? AND role IN
 $tickets      = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $tickets->execute([$tid]); $tickets=$tickets->fetchAll();
 $customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
 $inventory    = $pdo->prepare("SELECT * FROM item_inventory WHERE tenant_id=? ORDER BY received_at DESC"); $inventory->execute([$tid]); $inventory=$inventory->fetchAll();
-$payments     = $pdo->prepare("SELECT * FROM payment_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 50"); $payments->execute([$tid]); $payments=$payments->fetchAll();
 $void_reqs    = $pdo->prepare("SELECT v.*,u.fullname as req_name FROM pawn_void_requests v JOIN users u ON v.requested_by=u.id WHERE v.tenant_id=? ORDER BY v.requested_at DESC"); $void_reqs->execute([$tid]); $void_reqs=$void_reqs->fetchAll();
 $renewals     = $pdo->prepare("SELECT * FROM renewal_requests WHERE tenant_id=? ORDER BY created_at DESC"); $renewals->execute([$tid]); $renewals=$renewals->fetchAll();
 $audit        = $pdo->prepare("SELECT * FROM audit_logs WHERE tenant_id=? ORDER BY created_at DESC LIMIT 50"); $audit->execute([$tid]); $audit=$audit->fetchAll();
@@ -204,7 +160,6 @@ $pending_voids    = array_filter($void_reqs, fn($v)=>$v['status']==='pending');
 $pending_renewals = array_filter($renewals,  fn($r)=>$r['verification_status']==='pending');
 $total_tickets    = count($tickets);
 $active_tickets   = count(array_filter($tickets, fn($t)=>$t['status']==='Stored'));
-$total_revenue    = array_sum(array_column($payments,'amount_due'));
 $total_customers  = count($customers);
 
 $sys_name = $theme['system_name'] ?? 'PawnHub';
@@ -327,11 +282,10 @@ tr:hover td{background:#f8fafc;}
   <nav class="sb-nav">
     <div class="sb-section">Overview</div>
     <a href="?page=dashboard"     class="sb-item <?=$active_page==='dashboard'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
-    <div class="sb-section">Operations</div>
+    <div class="sb-section">Branch Records (View Only)</div>
     <a href="?page=tickets"       class="sb-item <?=$active_page==='tickets'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>Pawn Tickets</a>
     <a href="?page=customers"     class="sb-item <?=$active_page==='customers'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Customers</a>
     <a href="?page=inventory"     class="sb-item <?=$active_page==='inventory'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>Inventory</a>
-    <a href="?page=payments"      class="sb-item <?=$active_page==='payments'?'active':''?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Payments</a>
     <div class="sb-section">Approvals</div>
     <a href="?page=void_requests" class="sb-item <?=$active_page==='void_requests'?'active':''?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/></svg>Void Requests
@@ -353,36 +307,13 @@ tr:hover td{background:#f8fafc;}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:9px;">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','payments'=>'Payments','void_requests'=>'Void Requests','renewals'=>'Renewal Requests','users'=>'Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','void_requests'=>'Void Requests','renewals'=>'Renewal Requests','users'=>'Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="tenant-chip"><?=htmlspecialchars($tenant['business_name']??'Branch')?></span>
     </div>
     <?php if($active_page==='users'):?>
-    <?php
-    $tplan = $pdo->prepare("SELECT plan FROM tenants WHERE id=?"); $tplan->execute([$tid]); $tplan=$tplan->fetch();
-    $plimits2 = getPlanLimits($pdo, $tplan['plan']??'Starter');
-    $sc_count = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE tenant_id=$tid AND role IN ('staff','cashier') AND is_suspended=0")->fetchColumn();
-    $sl2 = $plimits2['staff'];
-    $at_limit = $sl2 > 0 && $sc_count >= $sl2;
-    ?>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <span style="font-size:.74rem;color:var(--text-dim);background:#f1f5f9;padding:4px 10px;border-radius:100px;border:1px solid var(--border);">
-        <?php if($sl2 > 0): ?>
-          Staff: <?=$sc_count?>/<?=$sl2?> <?php if($at_limit): ?><span style="color:#dc2626;font-weight:700;">(Limit reached)</span><?php endif; ?>
-        <?php else: ?>
-          Staff: <?=$sc_count?> / <span style="color:#16a34a;">Unlimited</span>
-        <?php endif; ?>
-        &nbsp;·&nbsp; Plan: <strong><?=htmlspecialchars($tplan['plan']??'Starter')?></strong>
-      </span>
-      <?php if(!$at_limit): ?>
-      <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.78rem;padding:6px 13px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Staff / Cashier
-      </button>
-      <?php else: ?>
-      <button class="btn-sm" style="font-size:.78rem;padding:6px 13px;opacity:.5;cursor:not-allowed;" disabled title="Upgrade your plan to add more staff">
-        🔒 Limit Reached
-      </button>
-      <?php endif; ?>
-    </div>
+    <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.78rem;padding:6px 13px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Staff / Cashier
+    </button>
     <?php endif;?>
   </header>
 
@@ -391,9 +322,15 @@ tr:hover td{background:#f8fafc;}
   <?php if($error_msg):?><div class="alert alert-error">⚠ <?=htmlspecialchars($error_msg)?></div><?php endif;?>
 
   <?php if($active_page==='dashboard'): ?>
+    <?php
+    // Admin dashboard stats — manager view only
+    $total_revenue_val = (float)$pdo->query("SELECT COALESCE(SUM(amount_due),0) FROM payment_transactions WHERE tenant_id=$tid")->fetchColumn();
+    $pending_voids_count = count($pending_voids);
+    $pending_renewals_count = count($pending_renewals);
+    ?>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-icon" style="background:#dbeafe;"><svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg></div><div><div class="stat-label">Total Tickets</div><div class="stat-value"><?=$total_tickets?></div><div style="font-size:.71rem;color:var(--text-dim);margin-top:2px;"><?=$active_tickets?> active</div></div></div>
-      <div class="stat-card"><div class="stat-icon" style="background:#dcfce7;"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="stat-label">Revenue</div><div class="stat-value">₱<?=number_format($total_revenue,0)?></div></div></div>
+      <div class="stat-card"><div class="stat-icon" style="background:#dcfce7;"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="stat-label">Total Revenue</div><div class="stat-value" style="font-size:1.2rem;">₱<?=number_format($total_revenue_val,0)?></div><div style="font-size:.71rem;color:var(--text-dim);margin-top:2px;">From all payments</div></div></div>
       <div class="stat-card"><div class="stat-icon" style="background:#f3e8ff;"><svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div><div class="stat-label">Customers</div><div class="stat-value"><?=$total_customers?></div></div></div>
       <div class="stat-card"><div class="stat-icon" style="background:#fef3c7;"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div><div class="stat-label">Team Members</div><div class="stat-value"><?=count($my_users)?></div></div></div>
     </div>
@@ -406,6 +343,25 @@ tr:hover td{background:#f8fafc;}
       </div>
     </div>
     <?php endif;?>
+    <!-- Reports Summary Card -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;margin-bottom:15px;">
+      <a href="?page=tickets" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:12px;padding:16px;text-decoration:none;display:flex;flex-direction:column;gap:4px;">
+        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.6);">Pawn Tickets</div>
+        <div style="font-size:1.5rem;font-weight:800;color:#fff;"><?=$total_tickets?></div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.7);"><?=$active_tickets?> active · <?=count(array_filter($tickets,fn($t)=>$t['status']==='Released'))?> released</div>
+      </a>
+      <a href="?page=void_requests" style="background:<?=count($pending_voids)>0?'linear-gradient(135deg,#92400e,#d97706)':'linear-gradient(135deg,#374151,#4b5563)'?>;border-radius:12px;padding:16px;text-decoration:none;display:flex;flex-direction:column;gap:4px;">
+        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.6);">Void Requests</div>
+        <div style="font-size:1.5rem;font-weight:800;color:#fff;"><?=count($pending_voids)?></div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.7);">Pending approval</div>
+      </a>
+      <a href="?page=renewals" style="background:<?=count($pending_renewals)>0?'linear-gradient(135deg,#1e4d2b,#16a34a)':'linear-gradient(135deg,#374151,#4b5563)'?>;border-radius:12px;padding:16px;text-decoration:none;display:flex;flex-direction:column;gap:4px;">
+        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.6);">Renewals</div>
+        <div style="font-size:1.5rem;font-weight:800;color:#fff;"><?=count($pending_renewals)?></div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.7);">Pending verification</div>
+      </a>
+    </div>
+
     <div class="card">
       <div class="card-hdr"><span class="card-title">Recent Tickets</span><a href="?page=tickets" style="font-size:.74rem;color:var(--t-primary,#2563eb);font-weight:600;text-decoration:none;">View All</a></div>
       <?php if(empty($tickets)):?><div class="empty-state"><p>No tickets yet.</p></div>
@@ -439,15 +395,6 @@ tr:hover td{background:#f8fafc;}
       <?php else:?><table><thead><tr><th>Ticket</th><th>Item</th><th>Category</th><th>Appraisal</th><th>Loan</th><th>Status</th><th>Received</th></tr></thead><tbody>
       <?php foreach($inventory as $i): $sc=['pawned'=>'b-blue','redeemed'=>'b-green','voided'=>'b-red','auctioned'=>'b-purple','sold'=>'b-yellow'];?>
       <tr><td><span class="ticket-tag"><?=htmlspecialchars($i['ticket_no'])?></span></td><td><?=htmlspecialchars($i['item_name']??'—')?></td><td><?=htmlspecialchars($i['item_category']??'—')?></td><td>₱<?=number_format($i['appraisal_value']??0,2)?></td><td>₱<?=number_format($i['loan_amount']??0,2)?></td><td><span class="badge <?=$sc[$i['status']]??'b-gray'?>"><?=ucfirst($i['status'])?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($i['received_at']))?></td></tr>
-      <?php endforeach;?></tbody></table><?php endif;?>
-    </div>
-
-  <?php elseif($active_page==='payments'): ?>
-    <div class="card" style="overflow-x:auto;">
-      <?php if(empty($payments)):?><div class="empty-state"><p>No payments yet.</p></div>
-      <?php else:?><table><thead><tr><th>Date</th><th>Ticket</th><th>OR No.</th><th>Action</th><th>Amount Due</th><th>Cash Received</th><th>Change</th><th>Staff</th></tr></thead><tbody>
-      <?php foreach($payments as $p):?>
-      <tr><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($p['created_at']))?></td><td><span class="ticket-tag"><?=htmlspecialchars($p['ticket_no'])?></span></td><td style="font-family:monospace;font-size:.76rem;"><?=htmlspecialchars($p['or_no']??'—')?></td><td><span class="badge <?=$p['action']==='release'?'b-green':'b-yellow'?>"><?=ucfirst($p['action'])?></span></td><td style="font-weight:700;">₱<?=number_format($p['amount_due'],2)?></td><td>₱<?=number_format($p['cash_received'],2)?></td><td style="color:#059669;">₱<?=number_format($p['change_amount'],2)?></td><td style="font-size:.76rem;"><?=htmlspecialchars($p['staff_username'])?></td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
