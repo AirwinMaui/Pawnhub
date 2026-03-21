@@ -12,39 +12,39 @@ $success_msg = $error_msg = '';
 // ── POST ACTIONS ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-    // Approve pending tenant signup
     if ($_POST['action'] === 'approve_tenant') {
         $tid = intval($_POST['tenant_id']);
         $uid = intval($_POST['user_id']);
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
         $success_msg = 'Tenant approved successfully. They can now login.';
         $active_page = 'tenants';
     }
 
-    // Reject pending tenant signup
     if ($_POST['action'] === 'reject_tenant') {
         $tid    = intval($_POST['tenant_id']);
         $uid    = intval($_POST['user_id']);
         $reason = trim($_POST['reject_reason'] ?? 'Application rejected.');
         $pdo->prepare("UPDATE tenants SET status='rejected' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='rejected', rejected_reason=? WHERE id=?")->execute([$reason, $uid]);
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'REJECT_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Rejected tenant ID $tid. Reason: $reason"]); } catch(PDOException $e){}
         $success_msg = 'Tenant application rejected.';
         $active_page = 'tenants';
     }
 
-    // Deactivate tenant
     if ($_POST['action'] === 'deactivate_tenant') {
         $tid = intval($_POST['tenant_id']);
         $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")->execute([$tid]);
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'DEACTIVATE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Deactivated tenant ID $tid"]); } catch(PDOException $e){}
         $success_msg = 'Tenant deactivated.';
         $active_page = 'tenants';
     }
 
-    // Activate tenant
     if ($_POST['action'] === 'activate_tenant') {
         $tid = intval($_POST['tenant_id']);
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'ACTIVATE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Activated tenant ID $tid"]); } catch(PDOException $e){}
         $success_msg = 'Tenant activated.';
         $active_page = 'tenants';
     }
@@ -65,138 +65,193 @@ try {
     $error_msg = 'Error loading tenants: ' . $e->getMessage();
 }
 
-// Counts
 $total_tenants    = count($tenants);
 $active_tenants   = count(array_filter($tenants, fn($t) => $t['status'] === 'active'));
 $inactive_tenants = count(array_filter($tenants, fn($t) => $t['status'] === 'inactive'));
 $pending_tenants  = count(array_filter($tenants, fn($t) => $t['status'] === 'pending'));
 
 try {
-    $total_users   = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role != 'super_admin'")->fetchColumn();
-    $active_users  = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status='approved' AND is_suspended=0 AND role != 'super_admin'")->fetchColumn();
+    $total_users    = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role != 'super_admin'")->fetchColumn();
+    $active_users   = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status='approved' AND is_suspended=0 AND role != 'super_admin'")->fetchColumn();
     $inactive_users = $total_users - $active_users;
-} catch (PDOException $e) {
-    $total_users = $active_users = $inactive_users = 0;
-}
+} catch (PDOException $e) { $total_users = $active_users = $inactive_users = 0; }
 
-// Monthly user registrations (last 6 months)
 try {
     $monthly_regs = $pdo->query("
         SELECT DATE_FORMAT(created_at,'%b %Y') AS month_label,
-               DATE_FORMAT(created_at,'%Y-%m') AS month_key,
-               COUNT(*) AS count
-        FROM users
-        WHERE role != 'super_admin'
+               DATE_FORMAT(created_at,'%Y-%m') AS month_key, COUNT(*) AS count
+        FROM users WHERE role != 'super_admin'
           AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-        GROUP BY month_key, month_label
-        ORDER BY month_key ASC
+        GROUP BY month_key, month_label ORDER BY month_key ASC
     ")->fetchAll();
 } catch (PDOException $e) { $monthly_regs = []; }
 
-// Monthly tenant registrations (last 6 months)
 try {
     $monthly_tenants = $pdo->query("
         SELECT DATE_FORMAT(created_at,'%b %Y') AS month_label,
-               DATE_FORMAT(created_at,'%Y-%m') AS month_key,
-               COUNT(*) AS count
-        FROM tenants
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-        GROUP BY month_key, month_label
-        ORDER BY month_key ASC
+               DATE_FORMAT(created_at,'%Y-%m') AS month_key, COUNT(*) AS count
+        FROM tenants WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        GROUP BY month_key, month_label ORDER BY month_key ASC
     ")->fetchAll();
 } catch (PDOException $e) { $monthly_tenants = []; }
 
-// Plan distribution
 $plan_dist = ['Starter' => 0, 'Pro' => 0, 'Enterprise' => 0];
-foreach ($tenants as $t) {
-    if (isset($plan_dist[$t['plan']])) $plan_dist[$t['plan']]++;
-}
+foreach ($tenants as $t) { if (isset($plan_dist[$t['plan']])) $plan_dist[$t['plan']]++; }
 
-// Reports filters
-$report_type    = $_GET['report_type']    ?? 'tenant_activity';
-$filter_date_from = $_GET['date_from']   ?? date('Y-m-01');
-$filter_date_to   = $_GET['date_to']     ?? date('Y-m-d');
+// ── FILTERS ──────────────────────────────────────────────────
+$report_type      = $_GET['report_type']    ?? 'tenant_activity';
+$filter_date_from = $_GET['date_from']      ?? date('Y-m-01');
+$filter_date_to   = $_GET['date_to']        ?? date('Y-m-d');
 $filter_tenant    = intval($_GET['filter_tenant'] ?? 0);
-$filter_status    = $_GET['filter_status'] ?? '';
+$filter_status    = $_GET['filter_status']  ?? '';
 
-// Report data — Super Admin only queries (users & tenants tables only)
+$sales_period     = $_GET['sales_period']   ?? 'monthly';
+$sales_date_from  = $_GET['sales_from']     ?? date('Y-m-01');
+$sales_date_to    = $_GET['sales_to']       ?? date('Y-m-d');
+$sales_tenant     = intval($_GET['sales_tenant'] ?? 0);
+
+$audit_date_from  = $_GET['audit_from']     ?? date('Y-m-01');
+$audit_date_to    = $_GET['audit_to']       ?? date('Y-m-d');
+$audit_action     = $_GET['audit_action']   ?? '';
+$audit_actor      = trim($_GET['audit_actor'] ?? '');
+$audit_page       = max(1, intval($_GET['audit_page'] ?? 1));
+$audit_per_page   = 50;
+
+// ── REPORT DATA ───────────────────────────────────────────────
 $report_data = [];
 if ($active_page === 'reports') {
     try {
         if ($report_type === 'tenant_activity') {
-            // Tenant list with user counts — no pawn_transactions
             $q = "SELECT t.id, t.business_name, t.owner_name, t.email, t.phone,
                     t.plan, t.status, t.branches, t.created_at,
                     COUNT(DISTINCT u.id) AS user_count,
                     COUNT(DISTINCT CASE WHEN u.role='admin'   THEN u.id END) AS admin_count,
                     COUNT(DISTINCT CASE WHEN u.role='staff'   THEN u.id END) AS staff_count,
                     COUNT(DISTINCT CASE WHEN u.role='cashier' THEN u.id END) AS cashier_count
-                  FROM tenants t
-                  LEFT JOIN users u ON u.tenant_id=t.id AND u.role != 'super_admin'
+                  FROM tenants t LEFT JOIN users u ON u.tenant_id=t.id AND u.role != 'super_admin'
                   WHERE DATE(t.created_at) BETWEEN ? AND ?";
             $params = [$filter_date_from, $filter_date_to];
             if ($filter_status) { $q .= " AND t.status=?"; $params[] = $filter_status; }
             if ($filter_tenant) { $q .= " AND t.id=?";     $params[] = $filter_tenant; }
             $q .= " GROUP BY t.id ORDER BY t.created_at DESC";
-            $s = $pdo->prepare($q); $s->execute($params);
-            $report_data = $s->fetchAll();
+            $s = $pdo->prepare($q); $s->execute($params); $report_data = $s->fetchAll();
 
         } elseif ($report_type === 'user_registration') {
-            // All registered users — no pawn_transactions
             $q = "SELECT u.id, u.fullname, u.username, u.email, u.role,
                     u.status, u.is_suspended, u.created_at, t.business_name
-                  FROM users u
-                  LEFT JOIN tenants t ON u.tenant_id=t.id
-                  WHERE u.role != 'super_admin'
-                    AND DATE(u.created_at) BETWEEN ? AND ?";
+                  FROM users u LEFT JOIN tenants t ON u.tenant_id=t.id
+                  WHERE u.role != 'super_admin' AND DATE(u.created_at) BETWEEN ? AND ?";
             $params = [$filter_date_from, $filter_date_to];
             if ($filter_status) { $q .= " AND u.status=?";    $params[] = $filter_status; }
             if ($filter_tenant) { $q .= " AND u.tenant_id=?"; $params[] = $filter_tenant; }
             $q .= " ORDER BY u.created_at DESC";
-            $s = $pdo->prepare($q); $s->execute($params);
-            $report_data = $s->fetchAll();
+            $s = $pdo->prepare($q); $s->execute($params); $report_data = $s->fetchAll();
 
         } elseif ($report_type === 'usage_statistics') {
-            // Per-tenant user breakdown — no pawn_transactions
             $q = "SELECT t.id, t.business_name, t.plan, t.status, t.branches,
                     COUNT(DISTINCT u.id) AS total_users,
-                    COUNT(DISTINCT CASE WHEN u.role='admin'    THEN u.id END) AS admin_count,
-                    COUNT(DISTINCT CASE WHEN u.role='staff'    THEN u.id END) AS staff_count,
-                    COUNT(DISTINCT CASE WHEN u.role='cashier'  THEN u.id END) AS cashier_count,
+                    COUNT(DISTINCT CASE WHEN u.role='admin'   THEN u.id END) AS admin_count,
+                    COUNT(DISTINCT CASE WHEN u.role='staff'   THEN u.id END) AS staff_count,
+                    COUNT(DISTINCT CASE WHEN u.role='cashier' THEN u.id END) AS cashier_count,
                     COUNT(DISTINCT CASE WHEN u.status='approved' AND u.is_suspended=0 THEN u.id END) AS active_users,
-                    COUNT(DISTINCT CASE WHEN u.is_suspended=1  THEN u.id END) AS suspended_users
-                  FROM tenants t
-                  LEFT JOIN users u ON u.tenant_id=t.id AND u.role != 'super_admin'
+                    COUNT(DISTINCT CASE WHEN u.is_suspended=1 THEN u.id END) AS suspended_users
+                  FROM tenants t LEFT JOIN users u ON u.tenant_id=t.id AND u.role != 'super_admin'
                   WHERE 1=1";
             $params = [];
             if ($filter_tenant) { $q .= " AND t.id=?"; $params[] = $filter_tenant; }
             $q .= " GROUP BY t.id ORDER BY total_users DESC";
-            $s = $pdo->prepare($q); $s->execute($params);
-            $report_data = $s->fetchAll();
+            $s = $pdo->prepare($q); $s->execute($params); $report_data = $s->fetchAll();
         }
+    } catch (PDOException $e) { $error_msg = 'Report error: ' . $e->getMessage(); }
+}
+
+// ── SALES REPORT DATA ─────────────────────────────────────────
+$sales_data = $sales_summary = $sales_per_tenant = $top_tenants = $tx_history = [];
+$sales_chart_labels = $sales_chart_data = [];
+
+if ($active_page === 'sales_report') {
+    try {
+        $sq = "SELECT COUNT(*) AS total_transactions, COUNT(DISTINCT tenant_id) AS active_tenants,
+                 COALESCE(SUM(principal_amount),0) AS total_revenue,
+                 COALESCE(AVG(principal_amount),0) AS avg_transaction
+               FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+        $sp = [$sales_date_from, $sales_date_to];
+        if ($sales_tenant) { $sq .= " AND tenant_id=?"; $sp[] = $sales_tenant; }
+        $s = $pdo->prepare($sq); $s->execute($sp); $sales_summary = $s->fetch();
+
+        if ($sales_period === 'daily') {
+            $tq = "SELECT DATE(created_at) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(principal_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+        } elseif ($sales_period === 'weekly') {
+            $tq = "SELECT CONCAT(YEAR(created_at),'-W',LPAD(WEEK(created_at),2,'0')) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(principal_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+        } else {
+            $tq = "SELECT DATE_FORMAT(created_at,'%b %Y') AS period_label, DATE_FORMAT(created_at,'%Y-%m') AS sort_key, COUNT(*) AS tx_count, COALESCE(SUM(principal_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+        }
+        $tp = [$sales_date_from, $sales_date_to];
+        if ($sales_tenant) { $tq .= " AND tenant_id=?"; $tp[] = $sales_tenant; }
+        $tq .= $sales_period === 'monthly' ? " GROUP BY sort_key, period_label ORDER BY sort_key ASC" : " GROUP BY period_label ORDER BY period_label ASC";
+        $ts = $pdo->prepare($tq); $ts->execute($tp); $sales_data = $ts->fetchAll();
+        $sales_chart_labels = array_column($sales_data, 'period_label');
+        $sales_chart_data   = array_column($sales_data, 'revenue');
+
+        $ptq = "SELECT t.business_name, t.plan,
+                  COUNT(pt.id) AS tx_count, COALESCE(SUM(pt.principal_amount),0) AS revenue,
+                  COALESCE(AVG(pt.principal_amount),0) AS avg_tx, MAX(pt.created_at) AS last_tx
+                FROM tenants t LEFT JOIN pawn_transactions pt ON pt.tenant_id=t.id
+                  AND DATE(pt.created_at) BETWEEN ? AND ?
+                WHERE t.status='active'";
+        $ptp = [$sales_date_from, $sales_date_to];
+        if ($sales_tenant) { $ptq .= " AND t.id=?"; $ptp[] = $sales_tenant; }
+        $ptq .= " GROUP BY t.id ORDER BY revenue DESC";
+        $pts = $pdo->prepare($ptq); $pts->execute($ptp);
+        $sales_per_tenant = $pts->fetchAll();
+        $top_tenants      = array_slice($sales_per_tenant, 0, 5);
+
+        $thq = "SELECT pt.*, t.business_name FROM pawn_transactions pt LEFT JOIN tenants t ON t.id=pt.tenant_id WHERE DATE(pt.created_at) BETWEEN ? AND ?";
+        $thp = [$sales_date_from, $sales_date_to];
+        if ($sales_tenant) { $thq .= " AND pt.tenant_id=?"; $thp[] = $sales_tenant; }
+        $thq .= " ORDER BY pt.created_at DESC LIMIT 100";
+        $ths = $pdo->prepare($thq); $ths->execute($thp); $tx_history = $ths->fetchAll();
+
     } catch (PDOException $e) {
-        $error_msg = 'Report error: ' . $e->getMessage();
+        $error_msg = 'Sales report error: ' . $e->getMessage();
+        $sales_summary = ['total_transactions'=>0,'active_tenants'=>0,'total_revenue'=>0,'avg_transaction'=>0];
     }
 }
+
+// ── AUDIT LOG DATA ────────────────────────────────────────────
+$audit_logs = []; $audit_total = 0; $audit_total_pages = 1;
+
+if ($active_page === 'audit_logs') {
+    try {
+        $aq = "SELECT * FROM audit_logs WHERE DATE(created_at) BETWEEN ? AND ?";
+        $ap = [$audit_date_from, $audit_date_to];
+        if ($audit_action) { $aq .= " AND action=?";              $ap[] = $audit_action; }
+        if ($audit_actor)  { $aq .= " AND actor_username LIKE ?"; $ap[] = "%$audit_actor%"; }
+        $count_q = str_replace("SELECT *", "SELECT COUNT(*)", $aq);
+        $cs = $pdo->prepare($count_q); $cs->execute($ap);
+        $audit_total       = (int)$cs->fetchColumn();
+        $audit_total_pages = max(1, ceil($audit_total / $audit_per_page));
+        $audit_page        = min($audit_page, $audit_total_pages);
+        $offset            = ($audit_page - 1) * $audit_per_page;
+        $aq .= " ORDER BY created_at DESC LIMIT $audit_per_page OFFSET $offset";
+        $as = $pdo->prepare($aq); $as->execute($ap); $audit_logs = $as->fetchAll();
+    } catch (PDOException $e) { $error_msg = 'Audit log error: ' . $e->getMessage(); }
+}
+
+$audit_actions_list = [];
+try { $audit_actions_list = $pdo->query("SELECT DISTINCT action FROM audit_logs ORDER BY action ASC")->fetchAll(PDO::FETCH_COLUMN); } catch(PDOException $e){}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PawnHub — Super Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-:root{
-  --sw:252px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;
-  --card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;
-  --text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;
-}
+:root{--sw:252px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;--text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;}
 body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;}
-
-/* ── SIDEBAR ── */
 .sidebar{width:var(--sw);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;}
 .sb-brand{padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;}
 .sb-logo{width:36px;height:36px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -205,121 +260,81 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .sb-badge{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;padding:2px 7px;border-radius:100px;display:inline-block;margin-top:2px;}
 .sb-user{padding:12px 18px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:9px;}
 .sb-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1d4ed8,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0;}
-.sb-uname{font-size:.78rem;font-weight:600;color:#fff;}
-.sb-urole{font-size:.62rem;color:rgba(255,255,255,.35);}
+.sb-uname{font-size:.78rem;font-weight:600;color:#fff;} .sb-urole{font-size:.62rem;color:rgba(255,255,255,.35);}
 .sb-nav{flex:1;padding:10px 0;}
 .sb-section{font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25);padding:10px 16px 4px;}
 .sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .15s;}
-.sb-item:hover{background:rgba(255,255,255,.08);color:#fff;}
-.sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;}
-.sb-item svg{width:15px;height:15px;flex-shrink:0;}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff;} .sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;} .sb-item svg{width:15px;height:15px;flex-shrink:0;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:100px;}
 .sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);}
 .sb-logout{display:flex;align-items:center;gap:8px;font-size:.8rem;color:rgba(255,255,255,.35);text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
-.sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);}
-.sb-logout svg{width:14px;height:14px;}
-
-/* ── MAIN ── */
+.sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);} .sb-logout svg{width:14px;height:14px;}
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
 .topbar{height:58px;padding:0 26px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
 .topbar-title{font-size:1rem;font-weight:700;}
 .super-chip{font-size:.7rem;font-weight:700;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;padding:3px 10px;border-radius:100px;}
 .content{padding:22px 26px;flex:1;}
-
-/* ── STAT CARDS ── */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
 .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:flex-start;gap:12px;}
-.stat-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.stat-icon svg{width:18px;height:18px;}
+.stat-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;} .stat-icon svg{width:18px;height:18px;}
 .stat-label{font-size:.7rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
-.stat-value{font-size:1.5rem;font-weight:800;color:var(--text);line-height:1;}
-.stat-sub{font-size:.71rem;color:var(--text-dim);margin-top:2px;}
-
-/* ── CARDS ── */
+.stat-value{font-size:1.5rem;font-weight:800;color:var(--text);line-height:1;} .stat-sub{font-size:.71rem;color:var(--text-dim);margin-top:2px;}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;}
 .card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
 .card-title{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text);}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
-.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
-
-/* ── TABLE ── */
 table{width:100%;border-collapse:collapse;}
 th{font-size:.67rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);padding:7px 11px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
 td{padding:10px 11px;font-size:.81rem;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:#f8fafc;}
-
-/* ── BADGES ── */
+tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 .badge{display:inline-flex;align-items:center;gap:3px;font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:100px;}
-.b-blue{background:#dbeafe;color:#1d4ed8;}
-.b-green{background:#dcfce7;color:#15803d;}
-.b-red{background:#fee2e2;color:#dc2626;}
-.b-yellow{background:#fef3c7;color:#b45309;}
-.b-purple{background:#f3e8ff;color:#7c3aed;}
-.b-gray{background:#f1f5f9;color:#475569;}
-.b-orange{background:#ffedd5;color:#c2410c;}
-.plan-ent{background:linear-gradient(135deg,#dbeafe,#ede9fe);color:#4338ca;border:1px solid #c7d2fe;}
-.plan-pro{background:#fef3c7;color:#b45309;}
-.plan-starter{background:#f1f5f9;color:#475569;}
+.b-blue{background:#dbeafe;color:#1d4ed8;} .b-green{background:#dcfce7;color:#15803d;} .b-red{background:#fee2e2;color:#dc2626;} .b-yellow{background:#fef3c7;color:#b45309;} .b-purple{background:#f3e8ff;color:#7c3aed;} .b-gray{background:#f1f5f9;color:#475569;} .b-orange{background:#ffedd5;color:#c2410c;} .b-teal{background:#ccfbf1;color:#0f766e;}
+.plan-ent{background:linear-gradient(135deg,#dbeafe,#ede9fe);color:#4338ca;border:1px solid #c7d2fe;} .plan-pro{background:#fef3c7;color:#b45309;} .plan-starter{background:#f1f5f9;color:#475569;}
 .b-dot{width:4px;height:4px;border-radius:50%;background:currentColor;}
-
-/* ── BUTTONS ── */
 .btn-sm{padding:5px 12px;border-radius:7px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text-m);text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:all .15s;margin-right:4px;}
-.btn-sm:hover{background:var(--bg);}
-.btn-primary{background:var(--blue-acc);color:#fff;border-color:var(--blue-acc);}
-.btn-success{background:var(--success);color:#fff;border-color:var(--success);}
-.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger);}
-.btn-warning{background:var(--warning);color:#fff;border-color:var(--warning);}
-
-/* ── ALERTS ── */
+.btn-sm:hover{background:var(--bg);} .btn-primary{background:var(--blue-acc);color:#fff;border-color:var(--blue-acc);} .btn-success{background:var(--success);color:#fff;border-color:var(--success);} .btn-danger{background:var(--danger);color:#fff;border-color:var(--danger);} .btn-warning{background:var(--warning);color:#fff;border-color:var(--warning);}
 .alert{padding:10px 16px;border-radius:10px;font-size:.82rem;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
-.alert-success{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;}
-.alert-error{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;}
-
-/* ── EMPTY ── */
+.alert-success{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;} .alert-error{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;}
 .empty-state{text-align:center;padding:40px 20px;color:var(--text-dim);}
-.empty-state svg{width:34px;height:34px;margin:0 auto 9px;display:block;opacity:.3;}
-.empty-state p{font-size:.83rem;}
-
-/* ── MISC ── */
+.empty-state svg{width:34px;height:34px;margin:0 auto 9px;display:block;opacity:.3;} .empty-state p{font-size:.83rem;}
 .ticket-tag{font-family:monospace;font-size:.77rem;color:var(--blue-acc);font-weight:700;}
 .chart-wrap{position:relative;height:220px;}
 .donut-wrap{position:relative;height:200px;display:flex;align-items:center;justify-content:center;}
 .legend-row{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--text-m);margin-bottom:4px;}
 .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-.section-hdr{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:14px;}
-
-/* ── MODAL ── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
 .modal-overlay.open{display:flex;}
 .modal{background:#fff;border-radius:16px;width:480px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);animation:mIn .22s ease both;}
 @keyframes mIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .mhdr{padding:20px 22px 0;display:flex;align-items:center;justify-content:space-between;}
-.mtitle{font-size:1rem;font-weight:800;}
-.msub{font-size:.78rem;color:var(--text-dim);margin-top:2px;}
+.mtitle{font-size:1rem;font-weight:800;} .msub{font-size:.78rem;color:var(--text-dim);margin-top:2px;}
 .mclose{width:28px;height:28px;border-radius:7px;border:1.5px solid var(--border);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-dim);}
-.mclose svg{width:13px;height:13px;}
-.mbody{padding:18px 22px 22px;}
+.mclose svg{width:13px;height:13px;} .mbody{padding:18px 22px 22px;}
 .flabel{display:block;font-size:.74rem;font-weight:600;color:var(--text-m);margin-bottom:4px;}
 .finput{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 11px;font-family:inherit;font-size:.85rem;color:var(--text);outline:none;background:#fff;transition:border .2s;}
-.finput:focus{border-color:var(--blue-acc);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-.finput::placeholder{color:#c8d0db;}
-select.finput{cursor:pointer;}
-
-/* ── FILTERS ── */
+.finput:focus{border-color:var(--blue-acc);box-shadow:0 0 0 3px rgba(37,99,235,.1);} .finput::placeholder{color:#c8d0db;} select.finput{cursor:pointer;}
 .filter-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;}
 .filter-bar label{font-size:.74rem;font-weight:600;color:var(--text-dim);white-space:nowrap;}
 .filter-select,.filter-input{border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:.81rem;color:var(--text);outline:none;background:#fff;transition:border .2s;}
 .filter-select:focus,.filter-input:focus{border-color:var(--blue-acc);}
-
-/* ── REPORT SUMMARY CARDS ── */
-.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.summary-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
 .summary-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;}
-.summary-num{font-size:1.4rem;font-weight:800;color:var(--text);}
-.summary-lbl{font-size:.7rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
-
-@media(max-width:1200px){.stats-grid{grid-template-columns:repeat(2,1fr)}.two-col,.three-col{grid-template-columns:1fr;}}
-@media(max-width:600px){.stats-grid{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}}
+.summary-num{font-size:1.3rem;font-weight:800;color:var(--text);} .summary-lbl{font-size:.7rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+/* Audit action badge colors */
+.act-approve,.act-activate{background:#dcfce7;color:#15803d;} .act-reject,.act-deactivate,.act-delete{background:#fee2e2;color:#dc2626;}
+.act-login{background:#f3e8ff;color:#7c3aed;} .act-logout{background:#f1f5f9;color:#475569;}
+.act-create,.act-add{background:#ccfbf1;color:#0f766e;} .act-update,.act-edit{background:#fef3c7;color:#b45309;} .act-other{background:#f1f5f9;color:#475569;}
+/* Rank badges */
+.rank-1{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e;border:1px solid #fcd34d;}
+.rank-2{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;}
+.rank-3{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;}
+/* Pagination */
+.pagination{display:flex;align-items:center;gap:6px;margin-top:16px;flex-wrap:wrap;}
+.page-btn{padding:5px 11px;border-radius:7px;font-size:.74rem;font-weight:600;border:1.5px solid var(--border);background:#fff;color:var(--text-m);text-decoration:none;transition:all .15s;}
+.page-btn:hover{background:var(--bg);} .page-btn.active{background:var(--blue-acc);color:#fff;border-color:var(--blue-acc);}
+@media(max-width:1200px){.stats-grid,.summary-grid{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr;}}
+@media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}}
 </style>
 </head>
 <body>
@@ -332,33 +347,33 @@ select.finput{cursor:pointer;}
   </div>
   <div class="sb-user">
     <div class="sb-avatar"><?= strtoupper(substr($u['name'], 0, 1)) ?></div>
-    <div>
-      <div class="sb-uname"><?= htmlspecialchars($u['name']) ?></div>
-      <div class="sb-urole">Super Administrator</div>
-    </div>
+    <div><div class="sb-uname"><?= htmlspecialchars($u['name']) ?></div><div class="sb-urole">Super Administrator</div></div>
   </div>
   <nav class="sb-nav">
     <div class="sb-section">Overview</div>
-    <a href="?page=dashboard" class="sb-item <?= $active_page === 'dashboard' ? 'active' : '' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      Dashboard
+    <a href="?page=dashboard" class="sb-item <?= $active_page==='dashboard'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard
     </a>
     <div class="sb-section">Management</div>
-    <a href="?page=tenants" class="sb-item <?= $active_page === 'tenants' ? 'active' : '' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
-      Tenant Management
-      <?php if ($pending_tenants > 0): ?><span class="sb-pill"><?= $pending_tenants ?></span><?php endif; ?>
+    <a href="?page=tenants" class="sb-item <?= $active_page==='tenants'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>Tenant Management
+      <?php if($pending_tenants>0):?><span class="sb-pill"><?=$pending_tenants?></span><?php endif;?>
     </a>
     <div class="sb-section">Analytics</div>
-    <a href="?page=reports" class="sb-item <?= $active_page === 'reports' ? 'active' : '' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      Reports
+    <a href="?page=reports" class="sb-item <?= $active_page==='reports'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports
+    </a>
+    <a href="?page=sales_report" class="sb-item <?= $active_page==='sales_report'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Sales Report
+    </a>
+    <div class="sb-section">System</div>
+    <a href="?page=audit_logs" class="sb-item <?= $active_page==='audit_logs'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Audit Logs
     </a>
   </nav>
   <div class="sb-footer">
     <a href="logout.php" class="sb-logout">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      Sign Out
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out
     </a>
   </div>
 </aside>
@@ -368,8 +383,8 @@ select.finput{cursor:pointer;}
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <span class="topbar-title">
-        <?php $titles = ['dashboard' => 'System Dashboard', 'tenants' => 'Tenant Management', 'reports' => 'Reports'];
-        echo $titles[$active_page] ?? 'Dashboard'; ?>
+        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs'];
+        echo $titles[$active_page]??'Dashboard'; ?>
       </span>
       <span class="super-chip">SUPER ADMIN</span>
     </div>
@@ -377,642 +392,350 @@ select.finput{cursor:pointer;}
   </header>
 
   <div class="content">
-    <?php if ($success_msg): ?>
-      <div class="alert alert-success">✅ <?= htmlspecialchars($success_msg) ?></div>
-    <?php endif; ?>
-    <?php if ($error_msg): ?>
-      <div class="alert alert-error">⚠ <?= htmlspecialchars($error_msg) ?></div>
-    <?php endif; ?>
+    <?php if($success_msg):?><div class="alert alert-success">✅ <?=htmlspecialchars($success_msg)?></div><?php endif;?>
+    <?php if($error_msg):?><div class="alert alert-error">⚠ <?=htmlspecialchars($error_msg)?></div><?php endif;?>
 
-    <!-- ══════════════════════════════════════════════════════════
-         PAGE: DASHBOARD
-    ══════════════════════════════════════════════════════════════ -->
-    <?php if ($active_page === 'dashboard'): ?>
-
-      <!-- Stat Cards -->
+    <!-- ══ DASHBOARD ═══════════════════════════════════════════ -->
+    <?php if($active_page==='dashboard'): ?>
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon" style="background:#dbeafe;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
-          </div>
-          <div>
-            <div class="stat-label">Total Tenants</div>
-            <div class="stat-value"><?= $total_tenants ?></div>
-            <div class="stat-sub"><?= $active_tenants ?> active · <?= $pending_tenants ?> pending</div>
-          </div>
+          <div class="stat-icon" style="background:#dbeafe;"><svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div>
+          <div><div class="stat-label">Total Tenants</div><div class="stat-value"><?=$total_tenants?></div><div class="stat-sub"><?=$active_tenants?> active · <?=$pending_tenants?> pending</div></div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:#dcfce7;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div>
-            <div class="stat-label">Total Users</div>
-            <div class="stat-value"><?= $total_users ?></div>
-            <div class="stat-sub"><?= $active_users ?> active · <?= $inactive_users ?> inactive</div>
-          </div>
+          <div class="stat-icon" style="background:#dcfce7;"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div><div class="stat-label">Total Users</div><div class="stat-value"><?=$total_users?></div><div class="stat-sub"><?=$active_users?> active · <?=$inactive_users?> inactive</div></div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:#fef3c7;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </div>
-          <div>
-            <div class="stat-label">Pending Approvals</div>
-            <div class="stat-value" style="color:var(--warning);"><?= $pending_tenants ?></div>
-            <div class="stat-sub">Tenants awaiting review</div>
-          </div>
+          <div class="stat-icon" style="background:#fef3c7;"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <div><div class="stat-label">Pending Approvals</div><div class="stat-value" style="color:var(--warning);"><?=$pending_tenants?></div><div class="stat-sub">Tenants awaiting review</div></div>
         </div>
-        <?php
-        try {
-            $suspended_count = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_suspended=1 AND role != 'super_admin'")->fetchColumn();
-        } catch (PDOException $e) { $suspended_count = 0; }
-        ?>
+        <?php try{$sc=(int)$pdo->query("SELECT COUNT(*) FROM users WHERE is_suspended=1 AND role!='super_admin'")->fetchColumn();}catch(PDOException $e){$sc=0;}?>
         <div class="stat-card">
-          <div class="stat-icon" style="background:#fee2e2;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg>
-          </div>
-          <div>
-            <div class="stat-label">Suspended Users</div>
-            <div class="stat-value" style="color:var(--danger);"><?= $suspended_count ?></div>
-            <div class="stat-sub">Across all tenants</div>
-          </div>
+          <div class="stat-icon" style="background:#fee2e2;"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg></div>
+          <div><div class="stat-label">Suspended Users</div><div class="stat-value" style="color:var(--danger);"><?=$sc?></div><div class="stat-sub">Across all tenants</div></div>
         </div>
       </div>
 
-      <!-- Charts Row -->
       <div class="two-col">
-        <!-- User Growth Chart -->
-        <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">👥 User Growth (6 Months)</span>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="userGrowthChart"></canvas>
-          </div>
-        </div>
-        <!-- Tenant Activity Chart -->
-        <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">🏢 New Tenants (6 Months)</span>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="tenantActivityChart"></canvas>
-          </div>
-        </div>
+        <div class="card"><div class="card-hdr"><span class="card-title">👥 User Growth (6 Months)</span></div><div class="chart-wrap"><canvas id="userGrowthChart"></canvas></div></div>
+        <div class="card"><div class="card-hdr"><span class="card-title">🏢 New Tenants (6 Months)</span></div><div class="chart-wrap"><canvas id="tenantActivityChart"></canvas></div></div>
       </div>
 
-      <!-- User Role Distribution + Plan Distribution -->
       <div class="two-col">
-        <!-- User Role Distribution -->
         <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">👤 User Role Distribution</span>
-          </div>
-          <?php
-          try {
-              $role_counts = $pdo->query("
-                  SELECT role, COUNT(*) AS cnt
-                  FROM users
-                  WHERE role != 'super_admin'
-                  GROUP BY role
-              ")->fetchAll(PDO::FETCH_KEY_PAIR);
-          } catch (PDOException $e) { $role_counts = []; }
-          $rc_admin   = (int)($role_counts['admin']   ?? 0);
-          $rc_staff   = (int)($role_counts['staff']   ?? 0);
-          $rc_cashier = (int)($role_counts['cashier'] ?? 0);
-          ?>
+          <div class="card-hdr"><span class="card-title">👤 User Role Distribution</span></div>
+          <?php try{$rc=$pdo->query("SELECT role,COUNT(*) AS cnt FROM users WHERE role!='super_admin' GROUP BY role")->fetchAll(PDO::FETCH_KEY_PAIR);}catch(PDOException $e){$rc=[];}
+          $rca=(int)($rc['admin']??0);$rcs=(int)($rc['staff']??0);$rcc=(int)($rc['cashier']??0);?>
           <div style="display:flex;align-items:center;gap:24px;">
-            <div class="donut-wrap" style="flex:1;">
-              <canvas id="roleDonutChart"></canvas>
-            </div>
+            <div class="donut-wrap" style="flex:1;"><canvas id="roleDonutChart"></canvas></div>
             <div style="flex-shrink:0;">
-              <div class="legend-row"><span class="legend-dot" style="background:#2563eb;"></span>Admin — <?= $rc_admin ?></div>
-              <div class="legend-row"><span class="legend-dot" style="background:#16a34a;"></span>Staff — <?= $rc_staff ?></div>
-              <div class="legend-row"><span class="legend-dot" style="background:#d97706;"></span>Cashier — <?= $rc_cashier ?></div>
-              <div style="margin-top:10px;font-size:.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;">
-                <div>Total: <?= $rc_admin + $rc_staff + $rc_cashier ?> users</div>
-              </div>
+              <div class="legend-row"><span class="legend-dot" style="background:#2563eb;"></span>Admin — <?=$rca?></div>
+              <div class="legend-row"><span class="legend-dot" style="background:#16a34a;"></span>Staff — <?=$rcs?></div>
+              <div class="legend-row"><span class="legend-dot" style="background:#d97706;"></span>Cashier — <?=$rcc?></div>
+              <div style="margin-top:10px;font-size:.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;">Total: <?=$rca+$rcs+$rcc?> users</div>
             </div>
           </div>
         </div>
-        <!-- Plan Distribution Donut -->
         <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">⭐ Plan Distribution</span>
-          </div>
+          <div class="card-hdr"><span class="card-title">⭐ Plan Distribution</span></div>
           <div style="display:flex;align-items:center;gap:24px;">
-            <div class="donut-wrap" style="flex:1;">
-              <canvas id="planDonutChart"></canvas>
-            </div>
+            <div class="donut-wrap" style="flex:1;"><canvas id="planDonutChart"></canvas></div>
             <div style="flex-shrink:0;">
-              <div class="legend-row"><span class="legend-dot" style="background:#475569;"></span>Starter — <?= $plan_dist['Starter'] ?></div>
-              <div class="legend-row"><span class="legend-dot" style="background:#b45309;"></span>Pro — <?= $plan_dist['Pro'] ?></div>
-              <div class="legend-row"><span class="legend-dot" style="background:#4338ca;"></span>Enterprise — <?= $plan_dist['Enterprise'] ?></div>
-              <div style="margin-top:10px;font-size:.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;">
-                <div>Total: <?= $total_tenants ?> tenants</div>
-              </div>
+              <div class="legend-row"><span class="legend-dot" style="background:#475569;"></span>Starter — <?=$plan_dist['Starter']?></div>
+              <div class="legend-row"><span class="legend-dot" style="background:#b45309;"></span>Pro — <?=$plan_dist['Pro']?></div>
+              <div class="legend-row"><span class="legend-dot" style="background:#4338ca;"></span>Enterprise — <?=$plan_dist['Enterprise']?></div>
+              <div style="margin-top:10px;font-size:.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:8px;">Total: <?=$total_tenants?> tenants</div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Tenant Status Overview + Recent Tenants -->
       <div class="two-col">
         <div class="card">
           <div class="card-hdr"><span class="card-title">📊 Tenant Status Overview</span></div>
           <div style="display:flex;flex-direction:column;gap:10px;">
-            <?php foreach ([
-              ['Active',   $active_tenants,   $total_tenants, '#16a34a', '#dcfce7'],
-              ['Pending',  $pending_tenants,  $total_tenants, '#d97706', '#fef3c7'],
-              ['Inactive', $inactive_tenants, $total_tenants, '#dc2626', '#fee2e2'],
-            ] as [$lbl, $val, $tot, $color, $bg]): ?>
-            <div>
-              <div style="display:flex;justify-content:space-between;font-size:.78rem;font-weight:600;margin-bottom:4px;">
-                <span><?= $lbl ?></span>
-                <span style="color:<?= $color ?>;"><?= $val ?> / <?= $tot ?></span>
-              </div>
-              <div style="height:7px;background:#f1f5f9;border-radius:100px;overflow:hidden;">
-                <?php $pct = $tot > 0 ? round($val / $tot * 100) : 0; ?>
-                <div style="height:100%;width:<?= $pct ?>%;background:<?= $color ?>;border-radius:100px;transition:width .5s;"></div>
-              </div>
-            </div>
-            <?php endforeach; ?>
+            <?php foreach([['Active',$active_tenants,$total_tenants,'#16a34a'],['Pending',$pending_tenants,$total_tenants,'#d97706'],['Inactive',$inactive_tenants,$total_tenants,'#dc2626']] as [$lbl,$val,$tot,$color]):?>
+            <div><div style="display:flex;justify-content:space-between;font-size:.78rem;font-weight:600;margin-bottom:4px;"><span><?=$lbl?></span><span style="color:<?=$color?>;"><?=$val?>/<?=$tot?></span></div><div style="height:7px;background:#f1f5f9;border-radius:100px;overflow:hidden;"><?php $pct=$tot>0?round($val/$tot*100):0;?><div style="height:100%;width:<?=$pct?>%;background:<?=$color?>;border-radius:100px;"></div></div></div>
+            <?php endforeach;?>
           </div>
         </div>
-
         <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">🕐 Recent Tenants</span>
-            <a href="?page=tenants" style="font-size:.74rem;color:var(--blue-acc);font-weight:600;text-decoration:none;">View All →</a>
-          </div>
-          <?php if (empty($tenants)): ?>
-            <div class="empty-state"><p>No tenants yet.</p></div>
-          <?php else: ?>
-            <div style="overflow-x:auto;">
-              <table>
-                <thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Users</th><th>Date</th></tr></thead>
-                <tbody>
-                  <?php foreach (array_slice($tenants, 0, 6) as $t): ?>
-                  <tr>
-                    <td style="font-weight:600;"><?= htmlspecialchars($t['business_name']) ?></td>
-                    <td><span class="badge <?= $t['plan'] === 'Enterprise' ? 'plan-ent' : ($t['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $t['plan'] ?></span></td>
-                    <td><span class="badge <?= $t['status'] === 'active' ? 'b-green' : ($t['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><span class="b-dot"></span><?= ucfirst($t['status']) ?></span></td>
-                    <td><?= $t['user_count'] ?></td>
-                    <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($t['created_at'])) ?></td>
-                  </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
-          <?php endif; ?>
+          <div class="card-hdr"><span class="card-title">🕐 Recent Tenants</span><a href="?page=tenants" style="font-size:.74rem;color:var(--blue-acc);font-weight:600;text-decoration:none;">View All →</a></div>
+          <?php if(empty($tenants)):?><div class="empty-state"><p>No tenants yet.</p></div>
+          <?php else:?><div style="overflow-x:auto;"><table><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Users</th><th>Date</th></tr></thead><tbody>
+          <?php foreach(array_slice($tenants,0,6) as $t):?>
+          <tr><td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td><td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td><td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td><td><?=$t['user_count']?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td></tr>
+          <?php endforeach;?></tbody></table></div><?php endif;?>
         </div>
       </div>
 
-      <!-- Charts JS -->
       <script>
-      const chartDefaults = {
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
-          y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 }, color: '#94a3b8' }, beginAtZero: true }
-        }
-      };
-
-      // User Growth
-      new Chart(document.getElementById('userGrowthChart'), {
-        type: 'bar',
-        data: {
-          labels: <?= json_encode(array_column($monthly_regs, 'month_label')) ?>,
-          datasets: [{
-            label: 'Users',
-            data: <?= json_encode(array_column($monthly_regs, 'count')) ?>,
-            backgroundColor: 'rgba(37,99,235,0.15)',
-            borderColor: '#2563eb',
-            borderWidth: 2,
-            borderRadius: 6,
-          }]
-        },
-        options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
-      });
-
-      // Tenant Activity
-      new Chart(document.getElementById('tenantActivityChart'), {
-        type: 'bar',
-        data: {
-          labels: <?= json_encode(array_column($monthly_tenants, 'month_label')) ?>,
-          datasets: [{
-            label: 'Tenants',
-            data: <?= json_encode(array_column($monthly_tenants, 'count')) ?>,
-            backgroundColor: 'rgba(16,185,129,0.15)',
-            borderColor: '#10b981',
-            borderWidth: 2,
-            borderRadius: 6,
-          }]
-        },
-        options: { ...chartDefaults, responsive: true, maintainAspectRatio: false }
-      });
-
-      // Role Donut
-      new Chart(document.getElementById('roleDonutChart'), {
-        type: 'doughnut',
-        data: {
-          labels: ['Admin', 'Staff', 'Cashier'],
-          datasets: [{
-            data: [<?= $rc_admin ?>, <?= $rc_staff ?>, <?= $rc_cashier ?>],
-            backgroundColor: ['#2563eb','#16a34a','#d97706'],
-            borderWidth: 0,
-            hoverOffset: 4,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: '68%',
-          plugins: { legend: { display: false } }
-        }
-      });
-
-      // Plan Donut
-      new Chart(document.getElementById('planDonutChart'), {
-        type: 'doughnut',
-        data: {
-          labels: ['Starter', 'Pro', 'Enterprise'],
-          datasets: [{
-            data: [<?= $plan_dist['Starter'] ?>, <?= $plan_dist['Pro'] ?>, <?= $plan_dist['Enterprise'] ?>],
-            backgroundColor: ['#94a3b8','#d97706','#4338ca'],
-            borderWidth: 0,
-            hoverOffset: 4,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: '68%',
-          plugins: { legend: { display: false } }
-        }
-      });
+      const cd={plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94a3b8'}},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:10},color:'#94a3b8'},beginAtZero:true}}};
+      new Chart(document.getElementById('userGrowthChart'),{type:'bar',data:{labels:<?=json_encode(array_column($monthly_regs,'month_label'))?>,datasets:[{data:<?=json_encode(array_column($monthly_regs,'count'))?>,backgroundColor:'rgba(37,99,235,0.15)',borderColor:'#2563eb',borderWidth:2,borderRadius:6}]},options:{...cd,responsive:true,maintainAspectRatio:false}});
+      new Chart(document.getElementById('tenantActivityChart'),{type:'bar',data:{labels:<?=json_encode(array_column($monthly_tenants,'month_label'))?>,datasets:[{data:<?=json_encode(array_column($monthly_tenants,'count'))?>,backgroundColor:'rgba(16,185,129,0.15)',borderColor:'#10b981',borderWidth:2,borderRadius:6}]},options:{...cd,responsive:true,maintainAspectRatio:false}});
+      new Chart(document.getElementById('roleDonutChart'),{type:'doughnut',data:{labels:['Admin','Staff','Cashier'],datasets:[{data:[<?=$rca?>,<?=$rcs?>,<?=$rcc?>],backgroundColor:['#2563eb','#16a34a','#d97706'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false}}}});
+      new Chart(document.getElementById('planDonutChart'),{type:'doughnut',data:{labels:['Starter','Pro','Enterprise'],datasets:[{data:[<?=$plan_dist['Starter']?>,<?=$plan_dist['Pro']?>,<?=$plan_dist['Enterprise']?>],backgroundColor:['#94a3b8','#d97706','#4338ca'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false}}}});
       </script>
 
-    <!-- ══════════════════════════════════════════════════════════
-         PAGE: TENANT MANAGEMENT
-    ══════════════════════════════════════════════════════════════ -->
-    <?php elseif ($active_page === 'tenants'): ?>
-
-      <!-- Tenant Stats -->
+    <!-- ══ TENANT MANAGEMENT ════════════════════════════════════ -->
+    <?php elseif($active_page==='tenants'): ?>
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#dbeafe;"><svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div>
-          <div><div class="stat-label">Total Tenants</div><div class="stat-value"><?= $total_tenants ?></div></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#dcfce7;"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg></div>
-          <div><div class="stat-label">Active</div><div class="stat-value" style="color:var(--success);"><?= $active_tenants ?></div></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#fef3c7;"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-          <div><div class="stat-label">Pending</div><div class="stat-value" style="color:var(--warning);"><?= $pending_tenants ?></div></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon" style="background:#fee2e2;"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div>
-          <div><div class="stat-label">Inactive</div><div class="stat-value" style="color:var(--danger);"><?= $inactive_tenants ?></div></div>
-        </div>
+        <div class="stat-card"><div class="stat-icon" style="background:#dbeafe;"><svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div><div><div class="stat-label">Total</div><div class="stat-value"><?=$total_tenants?></div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#dcfce7;"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg></div><div><div class="stat-label">Active</div><div class="stat-value" style="color:var(--success);"><?=$active_tenants?></div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#fef3c7;"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="stat-label">Pending</div><div class="stat-value" style="color:var(--warning);"><?=$pending_tenants?></div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#fee2e2;"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div><div><div class="stat-label">Inactive</div><div class="stat-value" style="color:var(--danger);"><?=$inactive_tenants?></div></div></div>
       </div>
 
-      <!-- Pending Signups Block -->
-      <?php
-      $pending_signup_tenants = array_filter($tenants, fn($t) => $t['status'] === 'pending');
-      if (!empty($pending_signup_tenants)):
-      ?>
+      <?php $pts=array_filter($tenants,fn($t)=>$t['status']==='pending');if(!empty($pts)):?>
       <div class="card" style="border-color:#fde68a;">
-        <div class="card-hdr">
-          <span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?= count($pending_signup_tenants) ?>)</span>
-          <span style="font-size:.75rem;color:var(--text-dim);">These tenants registered via signup and are awaiting review.</span>
-        </div>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead>
-              <tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Applied</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              <?php foreach ($pending_signup_tenants as $t): ?>
-              <tr>
-                <td style="font-weight:600;"><?= htmlspecialchars($t['business_name']) ?></td>
-                <td><?= htmlspecialchars($t['owner_name']) ?></td>
-                <td style="font-size:.76rem;color:var(--text-dim);"><?= htmlspecialchars($t['email']) ?></td>
-                <td><span class="badge <?= $t['plan'] === 'Enterprise' ? 'plan-ent' : ($t['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $t['plan'] ?></span></td>
-                <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($t['created_at'])) ?></td>
-                <td>
-                  <button onclick="openApproveModal(<?= $t['id'] ?>, <?= (int)$t['admin_uid'] ?>, '<?= htmlspecialchars($t['business_name'], ENT_QUOTES) ?>')"
-                          class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
-                  <button onclick="openRejectModal(<?= $t['id'] ?>, <?= (int)$t['admin_uid'] ?>, '<?= htmlspecialchars($t['business_name'], ENT_QUOTES) ?>')"
-                          class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
-                </td>
-              </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
+        <div class="card-hdr"><span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?=count($pts)?>)</span></div>
+        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
+        <?php foreach($pts as $t):?>
+        <tr><td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td><td><?=htmlspecialchars($t['owner_name'])?></td><td style="font-size:.76rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td><td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
+        <td><button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button><button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button></td></tr>
+        <?php endforeach;?></tbody></table></div>
       </div>
-      <?php endif; ?>
+      <?php endif;?>
 
-      <!-- All Tenants Table -->
       <div class="card" style="overflow-x:auto;">
-        <div class="card-hdr">
-          <span class="card-title">🏢 All Tenants</span>
-          <span style="font-size:.75rem;color:var(--text-dim);"><?= $total_tenants ?> total</span>
-        </div>
-        <?php if (empty($tenants)): ?>
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
-            <p>No tenants registered yet.</p>
-          </div>
-        <?php else: ?>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th><th>Business Name</th><th>Owner</th><th>Email</th>
-                <th>Plan</th><th>Status</th><th>Users</th>
-                <th>Registered</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($tenants as $t): ?>
-              <tr>
-                <td style="color:var(--text-dim);font-size:.74rem;">#<?= $t['id'] ?></td>
-                <td style="font-weight:600;"><?= htmlspecialchars($t['business_name']) ?></td>
-                <td style="font-size:.79rem;"><?= htmlspecialchars($t['owner_name']) ?></td>
-                <td style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($t['email']) ?></td>
-                <td><span class="badge <?= $t['plan'] === 'Enterprise' ? 'plan-ent' : ($t['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $t['plan'] ?></span></td>
-                <td>
-                  <span class="badge <?= $t['status'] === 'active' ? 'b-green' : ($t['status'] === 'pending' ? 'b-yellow' : ($t['status'] === 'inactive' ? 'b-red' : 'b-gray')) ?>">
-                    <span class="b-dot"></span><?= ucfirst($t['status']) ?>
-                  </span>
-                </td>
-                <td><?= $t['user_count'] ?></td>
-                <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($t['created_at'])) ?></td>
-                <td>
-                  <?php if ($t['status'] === 'active'): ?>
-                    <form method="POST" style="display:inline;" onsubmit="return confirm('Deactivate this tenant?')">
-                      <input type="hidden" name="action" value="deactivate_tenant">
-                      <input type="hidden" name="tenant_id" value="<?= $t['id'] ?>">
-                      <button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">Deactivate</button>
-                    </form>
-                  <?php elseif ($t['status'] === 'inactive'): ?>
-                    <form method="POST" style="display:inline;">
-                      <input type="hidden" name="action" value="activate_tenant">
-                      <input type="hidden" name="tenant_id" value="<?= $t['id'] ?>">
-                      <button type="submit" class="btn-sm btn-success" style="font-size:.7rem;">Activate</button>
-                    </form>
-                  <?php elseif ($t['status'] === 'pending'): ?>
-                    <button onclick="openApproveModal(<?= $t['id'] ?>, <?= (int)$t['admin_uid'] ?>, '<?= htmlspecialchars($t['business_name'], ENT_QUOTES) ?>')"
-                            class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
-                    <button onclick="openRejectModal(<?= $t['id'] ?>, <?= (int)$t['admin_uid'] ?>, '<?= htmlspecialchars($t['business_name'], ENT_QUOTES) ?>')"
-                            class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
-                  <?php else: ?>
-                    <span style="font-size:.73rem;color:var(--text-dim);">—</span>
-                  <?php endif; ?>
-                </td>
-              </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        <?php endif; ?>
+        <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
+        <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
+        <?php else:?><table><thead><tr><th>ID</th><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Users</th><th>Registered</th><th>Actions</th></tr></thead><tbody>
+        <?php foreach($tenants as $t):?>
+        <tr>
+          <td style="color:var(--text-dim);font-size:.74rem;">#<?=$t['id']?></td>
+          <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
+          <td style="font-size:.79rem;"><?=htmlspecialchars($t['owner_name'])?></td>
+          <td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
+          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td>
+          <td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':($t['status']==='inactive'?'b-red':'b-gray'))?>"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td>
+          <td><?=$t['user_count']?></td>
+          <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
+          <td>
+            <?php if($t['status']==='active'):?><form method="POST" style="display:inline;" onsubmit="return confirm('Deactivate? Their users cannot login until reactivated.')"><input type="hidden" name="action" value="deactivate_tenant"><input type="hidden" name="tenant_id" value="<?=$t['id']?>"><button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">Deactivate</button></form>
+            <?php elseif($t['status']==='inactive'):?><form method="POST" style="display:inline;"><input type="hidden" name="action" value="activate_tenant"><input type="hidden" name="tenant_id" value="<?=$t['id']?>"><button type="submit" class="btn-sm btn-success" style="font-size:.7rem;">Activate</button></form>
+            <?php elseif($t['status']==='pending'):?><button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button><button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
+            <?php else:?><span style="font-size:.73rem;color:var(--text-dim);">—</span><?php endif;?>
+          </td>
+        </tr>
+        <?php endforeach;?></tbody></table><?php endif;?>
       </div>
 
-    <!-- ══════════════════════════════════════════════════════════
-         PAGE: REPORTS
-    ══════════════════════════════════════════════════════════════ -->
-    <?php elseif ($active_page === 'reports'): ?>
-
-      <!-- Report Type Tabs -->
+    <!-- ══ REPORTS ══════════════════════════════════════════════ -->
+    <?php elseif($active_page==='reports'): ?>
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <?php
-        $report_types = [
-          'tenant_activity'  => ['🏢 Tenant Activity Report', '#2563eb', '#eff6ff'],
-          'user_registration'=> ['👤 User Registration Report', '#16a34a', '#f0fdf4'],
-          'usage_statistics' => ['📊 Usage Statistics', '#7c3aed', '#f3e8ff'],
-        ];
-        foreach ($report_types as $rkey => [$rlbl, $rc, $rbg]): ?>
-        <a href="?page=reports&report_type=<?= $rkey ?>&date_from=<?= $filter_date_from ?>&date_to=<?= $filter_date_to ?>"
-           style="padding:8px 16px;border-radius:9px;font-size:.8rem;font-weight:700;text-decoration:none;border:2px solid <?= $report_type === $rkey ? $rc : 'var(--border)' ?>;background:<?= $report_type === $rkey ? $rbg : '#fff' ?>;color:<?= $report_type === $rkey ? $rc : 'var(--text-m)' ?>;">
-          <?= $rlbl ?>
-        </a>
-        <?php endforeach; ?>
+        <?php foreach(['tenant_activity'=>['🏢 Tenant Activity','#2563eb','#eff6ff'],'user_registration'=>['👤 User Registration','#16a34a','#f0fdf4'],'usage_statistics'=>['📊 Usage Statistics','#7c3aed','#f3e8ff']] as $rk=>[$rl,$rc2,$rb]):?>
+        <a href="?page=reports&report_type=<?=$rk?>&date_from=<?=$filter_date_from?>&date_to=<?=$filter_date_to?>" style="padding:8px 16px;border-radius:9px;font-size:.8rem;font-weight:700;text-decoration:none;border:2px solid <?=$report_type===$rk?$rc2:'var(--border)'?>;background:<?=$report_type===$rk?$rb:'#fff'?>;color:<?=$report_type===$rk?$rc2:'var(--text-m)'?>;"><?=$rl?></a>
+        <?php endforeach;?>
       </div>
-
-      <!-- Filters -->
-      <form method="GET" action="">
-        <input type="hidden" name="page" value="reports">
-        <input type="hidden" name="report_type" value="<?= htmlspecialchars($report_type) ?>">
+      <form method="GET"><input type="hidden" name="page" value="reports"><input type="hidden" name="report_type" value="<?=htmlspecialchars($report_type)?>">
         <div class="filter-bar">
-          <label>Date From:</label>
-          <input type="date" name="date_from" class="filter-input" value="<?= htmlspecialchars($filter_date_from) ?>">
-          <label>Date To:</label>
-          <input type="date" name="date_to" class="filter-input" value="<?= htmlspecialchars($filter_date_to) ?>">
-          <?php if ($report_type === 'tenant_activity' || $report_type === 'user_registration'): ?>
-          <label>Status:</label>
-          <select name="filter_status" class="filter-select">
-            <option value="">All Status</option>
-            <?php if ($report_type === 'user_registration'): ?>
-            <option value="approved" <?= $filter_status === 'approved' ? 'selected' : '' ?>>Approved</option>
-            <option value="pending"  <?= $filter_status === 'pending'  ? 'selected' : '' ?>>Pending</option>
-            <option value="rejected" <?= $filter_status === 'rejected' ? 'selected' : '' ?>>Rejected</option>
-            <?php else: ?>
-            <option value="active"   <?= $filter_status === 'active'   ? 'selected' : '' ?>>Active</option>
-            <option value="inactive" <?= $filter_status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
-            <option value="pending"  <?= $filter_status === 'pending'  ? 'selected' : '' ?>>Pending</option>
-            <?php endif; ?>
-          </select>
-          <?php endif; ?>
-          <label>Tenant:</label>
-          <select name="filter_tenant" class="filter-select">
-            <option value="0">All Tenants</option>
-            <?php foreach ($tenants as $t): ?>
-            <option value="<?= $t['id'] ?>" <?= $filter_tenant === (int)$t['id'] ? 'selected' : '' ?>><?= htmlspecialchars($t['business_name']) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <button type="submit" class="btn-sm btn-primary">Apply Filter</button>
-          <a href="?page=reports&report_type=<?= $report_type ?>" class="btn-sm">Reset</a>
+          <label>From:</label><input type="date" name="date_from" class="filter-input" value="<?=htmlspecialchars($filter_date_from)?>">
+          <label>To:</label><input type="date" name="date_to" class="filter-input" value="<?=htmlspecialchars($filter_date_to)?>">
+          <?php if(in_array($report_type,['tenant_activity','user_registration'])):?>
+          <label>Status:</label><select name="filter_status" class="filter-select"><option value="">All</option>
+            <?php if($report_type==='user_registration'):?><option value="approved" <?=$filter_status==='approved'?'selected':''?>>Approved</option><option value="pending" <?=$filter_status==='pending'?'selected':''?>>Pending</option><option value="rejected" <?=$filter_status==='rejected'?'selected':''?>>Rejected</option>
+            <?php else:?><option value="active" <?=$filter_status==='active'?'selected':''?>>Active</option><option value="inactive" <?=$filter_status==='inactive'?'selected':''?>>Inactive</option><option value="pending" <?=$filter_status==='pending'?'selected':''?>>Pending</option><?php endif;?></select>
+          <?php endif;?>
+          <label>Tenant:</label><select name="filter_tenant" class="filter-select"><option value="0">All</option><?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$filter_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?></select>
+          <button type="submit" class="btn-sm btn-primary">Apply</button><a href="?page=reports&report_type=<?=$report_type?>" class="btn-sm">Reset</a>
         </div>
       </form>
 
-      <!-- Report: Tenant Activity -->
-      <?php if ($report_type === 'tenant_activity'): ?>
-        <?php
-        $rpt_total = count($report_data);
-        $rpt_users = array_sum(array_column($report_data, 'user_count'));
-        $rpt_active_t = count(array_filter($report_data, fn($r) => $r['status'] === 'active'));
-        ?>
-        <div class="summary-grid">
-          <div class="summary-item"><div class="summary-num"><?= $rpt_total ?></div><div class="summary-lbl">Tenants</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:var(--success);"><?= $rpt_active_t ?></div><div class="summary-lbl">Active Tenants</div></div>
-          <div class="summary-item"><div class="summary-num"><?= $rpt_users ?></div><div class="summary-lbl">Total Users</div></div>
+      <?php if($report_type==='tenant_activity'):
+        $rt=count($report_data);$ru=array_sum(array_column($report_data,'user_count'));$rat=count(array_filter($report_data,fn($r)=>$r['status']==='active'));?>
+        <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Tenants</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rat?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num"><?=$ru?></div><div class="summary-lbl">Total Users</div></div></div>
+        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">🏢 Tenant Activity Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
+        <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
+        <?php else:?><table><thead><tr><th>#</th><th>Business</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr></thead><tbody>
+        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><?=htmlspecialchars($r['owner_name'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['user_count']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
+        </tbody><tfoot><tr style="background:#f8fafc;"><td colspan="7" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=$ru?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'admin_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'staff_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'cashier_count'))?></td><td></td></tr></tfoot></table><?php endif;?></div>
+
+      <?php elseif($report_type==='user_registration'):
+        $rt=count($report_data);$ra=count(array_filter($report_data,fn($r)=>$r['status']==='approved'));$rp=count(array_filter($report_data,fn($r)=>$r['status']==='pending'));?>
+        <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Registrations</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$ra?></div><div class="summary-lbl">Approved</div></div><div class="summary-item"><div class="summary-num" style="color:var(--warning);"><?=$rp?></div><div class="summary-lbl">Pending</div></div></div>
+        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">👤 User Registration Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
+        <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
+        <?php else:?><table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Tenant</th><th>Status</th><th>Suspended</th><th>Registered</th></tr></thead><tbody>
+        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['fullname'])?></td><td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?=htmlspecialchars($r['username'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']]??'b-gray'?>"><?=ucfirst($r['role'])?></span></td><td style="font-size:.78rem;"><?=htmlspecialchars($r['business_name']??'—')?></td><td><span class="badge <?=$r['status']==='approved'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($r['status'])?></span></td><td><?=$r['is_suspended']?'<span class="badge b-red">Yes</span>':'<span class="badge b-green">No</span>'?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
+        </tbody></table><?php endif;?></div>
+
+      <?php elseif($report_type==='usage_statistics'):
+        $rtu=array_sum(array_column($report_data,'total_users'));$rau=array_sum(array_column($report_data,'active_users'));$rsu=array_sum(array_column($report_data,'suspended_users'));?>
+        <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rtu?></div><div class="summary-lbl">Total Users</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rau?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num" style="color:var(--danger);"><?=$rsu?></div><div class="summary-lbl">Suspended</div></div></div>
+        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span></div>
+        <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
+        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr></thead><tbody>
+        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['total_users']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td><span class="badge b-green"><?=$r['active_users']?></span></td><td><span class="badge <?=$r['suspended_users']>0?'b-red':'b-gray'?>"><?=$r['suspended_users']?></span></td></tr><?php endforeach;?>
+        </tbody><tfoot><tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=$rtu?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'admin_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'staff_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'cashier_count'))?></td><td style="font-weight:800;color:var(--success);"><?=$rau?></td><td style="font-weight:800;color:var(--danger);"><?=$rsu?></td></tr></tfoot></table><?php endif;?></div>
+      <?php endif;?>
+
+    <!-- ══ SALES REPORT ═════════════════════════════════════════ -->
+    <?php elseif($active_page==='sales_report'): ?>
+
+      <form method="GET"><input type="hidden" name="page" value="sales_report">
+        <div class="filter-bar">
+          <label>Period:</label>
+          <select name="sales_period" class="filter-select">
+            <option value="daily"   <?=$sales_period==='daily'  ?'selected':''?>>Daily</option>
+            <option value="weekly"  <?=$sales_period==='weekly' ?'selected':''?>>Weekly</option>
+            <option value="monthly" <?=$sales_period==='monthly'?'selected':''?>>Monthly</option>
+          </select>
+          <label>From:</label><input type="date" name="sales_from" class="filter-input" value="<?=htmlspecialchars($sales_date_from)?>">
+          <label>To:</label><input type="date" name="sales_to" class="filter-input" value="<?=htmlspecialchars($sales_date_to)?>">
+          <label>Tenant:</label>
+          <select name="sales_tenant" class="filter-select"><option value="0">All Tenants</option>
+            <?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$sales_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?>
+          </select>
+          <button type="submit" class="btn-sm btn-primary">Apply</button>
+          <a href="?page=sales_report" class="btn-sm">Reset</a>
         </div>
+      </form>
+
+      <!-- Summary Cards -->
+      <div class="summary-grid">
+        <div class="summary-item"><div class="summary-num" style="color:var(--success);">₱<?=number_format($sales_summary['total_revenue']??0,2)?></div><div class="summary-lbl">Total Revenue</div></div>
+        <div class="summary-item"><div class="summary-num" style="color:var(--blue-acc);"><?=number_format($sales_summary['total_transactions']??0)?></div><div class="summary-lbl">Total Transactions</div></div>
+        <div class="summary-item"><div class="summary-num"><?=$sales_summary['active_tenants']??0?></div><div class="summary-lbl">Active Tenants</div></div>
+        <div class="summary-item"><div class="summary-num" style="color:#7c3aed;">₱<?=number_format($sales_summary['avg_transaction']??0,2)?></div><div class="summary-lbl">Avg. Transaction</div></div>
+      </div>
+
+      <!-- Revenue Trend Chart -->
+      <div class="card">
+        <div class="card-hdr"><span class="card-title">📈 Revenue Trend — <?=ucfirst($sales_period)?></span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
+        <?php if(empty($sales_data)):?><div class="empty-state"><p>No transaction data for the selected period.</p></div>
+        <?php else:?><div class="chart-wrap" style="height:260px;"><canvas id="salesTrendChart"></canvas></div>
+        <script>
+        new Chart(document.getElementById('salesTrendChart'),{type:'line',data:{labels:<?=json_encode($sales_chart_labels)?>,datasets:[{label:'Revenue (₱)',data:<?=json_encode(array_map('floatval',$sales_chart_data))?>,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#2563eb'},{label:'Transactions',data:<?=json_encode(array_map('intval',array_column($sales_data,'tx_count')))?>,borderColor:'#10b981',backgroundColor:'transparent',borderWidth:2,tension:0.4,pointRadius:3,pointBackgroundColor:'#10b981',yAxisID:'y2'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94a3b8'}},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:10},color:'#94a3b8'},beginAtZero:true,title:{display:true,text:'Revenue (₱)',font:{size:10},color:'#94a3b8'}},y2:{position:'right',grid:{display:false},ticks:{font:{size:10},color:'#10b981'},beginAtZero:true,title:{display:true,text:'Transactions',font:{size:10},color:'#10b981'}}}}});
+        </script><?php endif;?>
+      </div>
+
+      <div class="two-col">
+        <!-- Sales Per Tenant Table -->
         <div class="card" style="overflow-x:auto;">
-          <div class="card-hdr">
-            <span class="card-title">🏢 Tenant Activity Report</span>
-            <span style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($filter_date_from) ?> — <?= htmlspecialchars($filter_date_to) ?></span>
-          </div>
-          <?php if (empty($report_data)): ?>
-            <div class="empty-state"><p>No data found for the selected filters.</p></div>
-          <?php else: ?>
-            <table>
-              <thead>
-                <tr><th>#</th><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr>
-              </thead>
-              <tbody>
-                <?php foreach ($report_data as $i => $r): ?>
-                <tr>
-                  <td style="color:var(--text-dim);font-size:.73rem;"><?= $i+1 ?></td>
-                  <td style="font-weight:600;"><?= htmlspecialchars($r['business_name']) ?></td>
-                  <td><?= htmlspecialchars($r['owner_name']) ?></td>
-                  <td style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($r['email']) ?></td>
-                  <td><span class="badge <?= $r['plan'] === 'Enterprise' ? 'plan-ent' : ($r['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $r['plan'] ?></span></td>
-                  <td><span class="badge <?= $r['status'] === 'active' ? 'b-green' : ($r['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><span class="b-dot"></span><?= ucfirst($r['status']) ?></span></td>
-                  <td><?= $r['branches'] ?></td>
-                  <td style="font-weight:700;"><?= $r['user_count'] ?></td>
-                  <td><?= $r['admin_count'] ?></td>
-                  <td><?= $r['staff_count'] ?></td>
-                  <td><?= $r['cashier_count'] ?></td>
-                  <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-              <tfoot>
-                <tr style="background:#f8fafc;">
-                  <td colspan="7" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td>
-                  <td style="font-weight:800;"><?= $rpt_users ?></td>
-                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'admin_count')) ?></td>
-                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'staff_count')) ?></td>
-                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'cashier_count')) ?></td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          <?php endif; ?>
+          <div class="card-hdr"><span class="card-title">🏢 Sales Per Tenant</span></div>
+          <?php if(empty($sales_per_tenant)):?><div class="empty-state"><p>No data.</p></div>
+          <?php else:?><table><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Tx Count</th><th>Revenue (₱)</th><th>Avg (₱)</th><th>Last Tx</th></tr></thead><tbody>
+          <?php foreach($sales_per_tenant as $i=>$r):?>
+          <tr><td><span class="badge <?=$i===0?'rank-1':($i===1?'rank-2':($i===2?'rank-3':'b-gray'))?>">#<?=$i+1?></span></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td style="font-weight:700;"><?=number_format($r['tx_count'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($r['revenue'],2)?></td><td>₱<?=number_format($r['avg_tx'],2)?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=$r['last_tx']?date('M d, Y',strtotime($r['last_tx'])):'—'?></td></tr>
+          <?php endforeach;?></tbody>
+          <tfoot><tr style="background:#f8fafc;"><td colspan="3" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=number_format(array_sum(array_column($sales_per_tenant,'tx_count')))?></td><td style="font-weight:800;color:var(--success);">₱<?=number_format(array_sum(array_column($sales_per_tenant,'revenue')),2)?></td><td colspan="2"></td></tr></tfoot>
+          </table><?php endif;?>
         </div>
 
-      <!-- Report: User Registration -->
-      <?php elseif ($report_type === 'user_registration'): ?>
-        <?php
-        $rpt_total    = count($report_data);
-        $rpt_approved = count(array_filter($report_data, fn($r) => $r['status'] === 'approved'));
-        $rpt_pending  = count(array_filter($report_data, fn($r) => $r['status'] === 'pending'));
-        ?>
-        <div class="summary-grid">
-          <div class="summary-item"><div class="summary-num"><?= $rpt_total ?></div><div class="summary-lbl">Total Registrations</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:var(--success);"><?= $rpt_approved ?></div><div class="summary-lbl">Approved</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:var(--warning);"><?= $rpt_pending ?></div><div class="summary-lbl">Pending</div></div>
-        </div>
-        <div class="card" style="overflow-x:auto;">
-          <div class="card-hdr">
-            <span class="card-title">👤 User Registration Report</span>
-            <span style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($filter_date_from) ?> — <?= htmlspecialchars($filter_date_to) ?></span>
+        <!-- Top 5 Tenants Bar -->
+        <div class="card">
+          <div class="card-hdr"><span class="card-title">🏆 Top Performing Tenants</span></div>
+          <?php if(empty($top_tenants)):?><div class="empty-state"><p>No data.</p></div>
+          <?php else:$mx=max(array_column($top_tenants,'revenue'));$bar_colors=['#2563eb','#10b981','#d97706','#7c3aed','#dc2626'];
+          foreach($top_tenants as $i=>$r):$bp=$mx>0?round($r['revenue']/$mx*100):0;$bc=$bar_colors[$i]??'#94a3b8';?>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:.7rem;font-weight:800;color:<?=$bc?>;background:<?=$bc?>20;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;"><?=$i+1?></span><span style="font-size:.8rem;font-weight:600;"><?=htmlspecialchars($r['business_name'])?></span></div>
+              <span style="font-size:.78rem;font-weight:700;color:var(--success);">₱<?=number_format($r['revenue'],0)?></span>
+            </div>
+            <div style="height:7px;background:#f1f5f9;border-radius:100px;overflow:hidden;"><div style="height:100%;width:<?=$bp?>%;background:<?=$bc?>;border-radius:100px;"></div></div>
+            <div style="font-size:.7rem;color:var(--text-dim);margin-top:2px;"><?=number_format($r['tx_count'])?> transactions</div>
           </div>
-          <?php if (empty($report_data)): ?>
-            <div class="empty-state"><p>No registrations found for the selected filters.</p></div>
-          <?php else: ?>
-            <table>
-              <thead><tr><th>#</th><th>Full Name</th><th>Username</th><th>Email</th><th>Role</th><th>Tenant</th><th>Status</th><th>Suspended</th><th>Registered</th></tr></thead>
-              <tbody>
-                <?php foreach ($report_data as $i => $r): ?>
-                <tr>
-                  <td style="color:var(--text-dim);font-size:.73rem;"><?= $i+1 ?></td>
-                  <td style="font-weight:600;"><?= htmlspecialchars($r['fullname']) ?></td>
-                  <td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?= htmlspecialchars($r['username']) ?></td>
-                  <td style="font-size:.74rem;color:var(--text-dim);"><?= htmlspecialchars($r['email']) ?></td>
-                  <td><span class="badge <?= ['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']] ?? 'b-gray' ?>"><?= ucfirst($r['role']) ?></span></td>
-                  <td style="font-size:.78rem;"><?= htmlspecialchars($r['business_name'] ?? '—') ?></td>
-                  <td><span class="badge <?= $r['status'] === 'approved' ? 'b-green' : ($r['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><?= ucfirst($r['status']) ?></span></td>
-                  <td><?= $r['is_suspended'] ? '<span class="badge b-red">Yes</span>' : '<span class="badge b-green">No</span>' ?></td>
-                  <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($r['created_at'])) ?></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          <?php endif; ?>
+          <?php endforeach;endif;?>
         </div>
+      </div>
 
-      <!-- Report: Usage Statistics (User Breakdown per Tenant — no pawn data) -->
-      <?php elseif ($report_type === 'usage_statistics'): ?>
-        <?php
-        $rpt_total_users     = array_sum(array_column($report_data, 'total_users'));
-        $rpt_active_users    = array_sum(array_column($report_data, 'active_users'));
-        $rpt_suspended_users = array_sum(array_column($report_data, 'suspended_users'));
-        ?>
-        <div class="summary-grid">
-          <div class="summary-item"><div class="summary-num"><?= $rpt_total_users ?></div><div class="summary-lbl">Total Users</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:var(--success);"><?= $rpt_active_users ?></div><div class="summary-lbl">Active Users</div></div>
-          <div class="summary-item"><div class="summary-num" style="color:var(--danger);"><?= $rpt_suspended_users ?></div><div class="summary-lbl">Suspended Users</div></div>
+      <!-- Transaction History -->
+      <div class="card" style="overflow-x:auto;">
+        <div class="card-hdr"><span class="card-title">📋 Transaction History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
+        <?php if(empty($tx_history)):?><div class="empty-state"><p>No transactions found.</p></div>
+        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Ticket No.</th><th>Amount (₱)</th><th>Status</th><th>Date</th></tr></thead><tbody>
+        <?php foreach($tx_history as $i=>$tx):$ts=$tx['status']??'';?>
+        <tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($tx['business_name']??'—')?></td><td class="ticket-tag"><?=htmlspecialchars($tx['ticket_number']??$tx['id'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['principal_amount']??0,2)?></td><td><span class="badge <?=$ts==='active'?'b-green':($ts==='redeemed'?'b-blue':($ts==='forfeited'?'b-red':'b-gray'))?>"><?=ucfirst($ts)?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td></tr>
+        <?php endforeach;?></tbody></table><?php endif;?>
+      </div>
+
+    <!-- ══ AUDIT LOGS ═══════════════════════════════════════════ -->
+    <?php elseif($active_page==='audit_logs'): ?>
+
+      <form method="GET"><input type="hidden" name="page" value="audit_logs">
+        <div class="filter-bar">
+          <label>From:</label><input type="date" name="audit_from" class="filter-input" value="<?=htmlspecialchars($audit_date_from)?>">
+          <label>To:</label><input type="date" name="audit_to" class="filter-input" value="<?=htmlspecialchars($audit_date_to)?>">
+          <label>Action:</label>
+          <select name="audit_action" class="filter-select"><option value="">All Actions</option>
+            <?php foreach($audit_actions_list as $act):?><option value="<?=htmlspecialchars($act)?>" <?=$audit_action===$act?'selected':''?>><?=htmlspecialchars($act)?></option><?php endforeach;?>
+          </select>
+          <label>Actor:</label><input type="text" name="audit_actor" class="filter-input" placeholder="Search username..." value="<?=htmlspecialchars($audit_actor)?>" style="width:150px;">
+          <button type="submit" class="btn-sm btn-primary">Apply</button>
+          <a href="?page=audit_logs" class="btn-sm">Reset</a>
         </div>
-        <div class="card" style="overflow-x:auto;">
-          <div class="card-hdr">
-            <span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span>
+      </form>
+
+      <div class="summary-grid-3">
+        <div class="summary-item"><div class="summary-num"><?=number_format($audit_total)?></div><div class="summary-lbl">Total Entries</div></div>
+        <div class="summary-item"><div class="summary-num" style="color:var(--blue-acc);"><?=$audit_page?>/<?=$audit_total_pages?></div><div class="summary-lbl">Page</div></div>
+        <div class="summary-item"><div class="summary-num" style="font-size:.85rem;color:var(--text-dim);"><?=htmlspecialchars($audit_date_from)?> — <?=htmlspecialchars($audit_date_to)?></div><div class="summary-lbl">Date Range</div></div>
+      </div>
+
+      <div class="card" style="overflow-x:auto;">
+        <div class="card-hdr"><span class="card-title">📋 Audit Logs</span><span style="font-size:.74rem;color:var(--text-dim);">Showing <?=count($audit_logs)?> of <?=number_format($audit_total)?> entries</span></div>
+        <?php if(empty($audit_logs)):?>
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <p>No audit log entries found for the selected filters.</p>
+            <p style="font-size:.75rem;margin-top:4px;color:#b0b8c8;">Logs are recorded automatically as Super Admin actions are performed.</p>
           </div>
-          <?php if (empty($report_data)): ?>
-            <div class="empty-state"><p>No data found.</p></div>
-          <?php else: ?>
-            <table>
-              <thead>
-                <tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr>
-              </thead>
-              <tbody>
-                <?php foreach ($report_data as $i => $r): ?>
-                <tr>
-                  <td style="color:var(--text-dim);font-size:.73rem;"><?= $i+1 ?></td>
-                  <td style="font-weight:600;"><?= htmlspecialchars($r['business_name']) ?></td>
-                  <td><span class="badge <?= $r['plan'] === 'Enterprise' ? 'plan-ent' : ($r['plan'] === 'Pro' ? 'plan-pro' : 'plan-starter') ?>"><?= $r['plan'] ?></span></td>
-                  <td><span class="badge <?= $r['status'] === 'active' ? 'b-green' : ($r['status'] === 'pending' ? 'b-yellow' : 'b-red') ?>"><span class="b-dot"></span><?= ucfirst($r['status']) ?></span></td>
-                  <td><?= $r['branches'] ?></td>
-                  <td style="font-weight:700;"><?= $r['total_users'] ?></td>
-                  <td><?= $r['admin_count'] ?></td>
-                  <td><?= $r['staff_count'] ?></td>
-                  <td><?= $r['cashier_count'] ?></td>
-                  <td><span class="badge b-green"><?= $r['active_users'] ?></span></td>
-                  <td><span class="badge <?= $r['suspended_users'] > 0 ? 'b-red' : 'b-gray' ?>"><?= $r['suspended_users'] ?></span></td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-              <tfoot>
-                <tr style="background:#f8fafc;">
-                  <td colspan="5" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td>
-                  <td style="font-weight:800;"><?= $rpt_total_users ?></td>
-                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'admin_count')) ?></td>
-                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'staff_count')) ?></td>
-                  <td style="font-weight:800;"><?= array_sum(array_column($report_data, 'cashier_count')) ?></td>
-                  <td style="font-weight:800;color:var(--success);"><?= $rpt_active_users ?></td>
-                  <td style="font-weight:800;color:var(--danger);"><?= $rpt_suspended_users ?></td>
-                </tr>
-              </tfoot>
-            </table>
-          <?php endif; ?>
-        </div>
-      <?php endif; ?>
+        <?php else:?>
+          <table>
+            <thead><tr><th>Date & Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Entity</th><th>Message</th></tr></thead>
+            <tbody>
+            <?php foreach($audit_logs as $log):
+              $av=strtoupper($log['action']??'');
+              if(str_contains($av,'APPROVE')||str_contains($av,'ACTIVATE')) $ac='act-activate';
+              elseif(str_contains($av,'REJECT')||str_contains($av,'DELETE')||str_contains($av,'DEACTIVATE')) $ac='act-reject';
+              elseif(str_contains($av,'LOGIN')) $ac='act-login';
+              elseif(str_contains($av,'LOGOUT')) $ac='act-logout';
+              elseif(str_contains($av,'CREATE')||str_contains($av,'ADD')) $ac='act-create';
+              elseif(str_contains($av,'UPDATE')||str_contains($av,'EDIT')) $ac='act-update';
+              else $ac='act-other';
+            ?>
+            <tr>
+              <td style="font-size:.73rem;color:var(--text-dim);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($log['created_at']))?></td>
+              <td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($log['actor_username']??'—')?></td>
+              <td><span class="badge <?=['super_admin'=>'b-purple','admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$log['actor_role']??'']??'b-gray'?>"><?=ucwords(str_replace('_',' ',$log['actor_role']??'—'))?></span></td>
+              <td><span class="badge <?=$ac?>" style="font-size:.65rem;letter-spacing:.03em;"><?=htmlspecialchars($log['action']??'—')?></span></td>
+              <td style="font-size:.74rem;"><?php if(!empty($log['entity_type'])):?><span style="color:var(--text-dim);"><?=htmlspecialchars(ucfirst($log['entity_type']))?></span><?php if(!empty($log['entity_id'])):?> <span class="ticket-tag">#<?=htmlspecialchars($log['entity_id'])?></span><?php endif;?><?php else:?>—<?php endif;?></td>
+              <td style="font-size:.77rem;color:var(--text-m);max-width:280px;"><?=htmlspecialchars($log['message']??'—')?></td>
+            </tr>
+            <?php endforeach;?>
+            </tbody>
+          </table>
 
-    <?php endif; ?>
+          <?php if($audit_total_pages>1):
+            $bu="?page=audit_logs&audit_from=".urlencode($audit_date_from)."&audit_to=".urlencode($audit_date_to)."&audit_action=".urlencode($audit_action)."&audit_actor=".urlencode($audit_actor);?>
+          <div class="pagination">
+            <?php if($audit_page>1):?><a href="<?=$bu?>&audit_page=<?=$audit_page-1?>" class="page-btn">← Prev</a><?php endif;?>
+            <?php $ps=max(1,$audit_page-2);$pe=min($audit_total_pages,$audit_page+2);
+            if($ps>1){echo '<a href="'.$bu.'&audit_page=1" class="page-btn">1</a>';if($ps>2)echo '<span style="color:var(--text-dim);padding:0 4px;">...</span>';}
+            for($p=$ps;$p<=$pe;$p++):?><a href="<?=$bu?>&audit_page=<?=$p?>" class="page-btn <?=$p===$audit_page?'active':''?>"><?=$p?></a><?php endfor;
+            if($pe<$audit_total_pages){if($pe<$audit_total_pages-1)echo '<span style="color:var(--text-dim);padding:0 4px;">...</span>';echo '<a href="'.$bu.'&audit_page='.$audit_total_pages.'" class="page-btn">'.$audit_total_pages.'</a>';}?>
+            <?php if($audit_page<$audit_total_pages):?><a href="<?=$bu?>&audit_page=<?=$audit_page+1?>" class="page-btn">Next →</a><?php endif;?>
+            <span style="font-size:.73rem;color:var(--text-dim);margin-left:6px;">Page <?=$audit_page?> of <?=$audit_total_pages?> · <?=number_format($audit_total)?> total</span>
+          </div>
+          <?php endif;?>
+        <?php endif;?>
+      </div>
+
+    <?php endif;?>
   </div><!-- /content -->
 </div><!-- /main -->
 
 <!-- ══ APPROVE MODAL ══════════════════════════════════════════ -->
 <div class="modal-overlay" id="approveModal">
   <div class="modal">
-    <div class="mhdr">
-      <div><div class="mtitle">✓ Approve Tenant</div><div class="msub" id="approve_sub"></div></div>
-      <button class="mclose" onclick="document.getElementById('approveModal').classList.remove('open')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
+    <div class="mhdr"><div><div class="mtitle">✓ Approve Tenant</div><div class="msub" id="approve_sub"></div></div><button class="mclose" onclick="document.getElementById('approveModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="mbody">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">
-        ✅ Approving this tenant will set their status to <strong>Active</strong> and allow them to login immediately.
-      </div>
-      <form method="POST">
-        <input type="hidden" name="action" value="approve_tenant">
-        <input type="hidden" name="tenant_id" id="approve_tid">
-        <input type="hidden" name="user_id" id="approve_uid">
-        <div style="display:flex;justify-content:flex-end;gap:9px;">
-          <button type="button" class="btn-sm" onclick="document.getElementById('approveModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-sm btn-success">✓ Confirm Approval</button>
-        </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">✅ Approving this tenant will set their status to <strong>Active</strong> and allow them to login immediately.</div>
+      <form method="POST"><input type="hidden" name="action" value="approve_tenant"><input type="hidden" name="tenant_id" id="approve_tid"><input type="hidden" name="user_id" id="approve_uid">
+        <div style="display:flex;justify-content:flex-end;gap:9px;"><button type="button" class="btn-sm" onclick="document.getElementById('approveModal').classList.remove('open')">Cancel</button><button type="submit" class="btn-sm btn-success">✓ Confirm Approval</button></div>
       </form>
     </div>
   </div>
@@ -1021,54 +744,21 @@ select.finput{cursor:pointer;}
 <!-- ══ REJECT MODAL ═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="rejectModal">
   <div class="modal">
-    <div class="mhdr">
-      <div><div class="mtitle">✗ Reject Tenant</div><div class="msub" id="reject_sub"></div></div>
-      <button class="mclose" onclick="document.getElementById('rejectModal').classList.remove('open')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
+    <div class="mhdr"><div><div class="mtitle">✗ Reject Tenant</div><div class="msub" id="reject_sub"></div></div><button class="mclose" onclick="document.getElementById('rejectModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="mbody">
-      <form method="POST">
-        <input type="hidden" name="action" value="reject_tenant">
-        <input type="hidden" name="tenant_id" id="reject_tid">
-        <input type="hidden" name="user_id" id="reject_uid">
-        <div style="margin-bottom:13px;">
-          <label class="flabel">Reason for Rejection</label>
-          <textarea name="reject_reason" class="finput" rows="3" placeholder="e.g. Incomplete information, duplicate account..." style="resize:vertical;"></textarea>
-        </div>
-        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 13px;font-size:.78rem;color:#dc2626;margin-bottom:14px;">
-          ⚠️ This action cannot be undone. The applicant will be notified.
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:9px;">
-          <button type="button" class="btn-sm" onclick="document.getElementById('rejectModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-sm btn-danger">✗ Confirm Rejection</button>
-        </div>
+      <form method="POST"><input type="hidden" name="action" value="reject_tenant"><input type="hidden" name="tenant_id" id="reject_tid"><input type="hidden" name="user_id" id="reject_uid">
+        <div style="margin-bottom:13px;"><label class="flabel">Reason for Rejection</label><textarea name="reject_reason" class="finput" rows="3" placeholder="e.g. Incomplete information, duplicate account..." style="resize:vertical;"></textarea></div>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 13px;font-size:.78rem;color:#dc2626;margin-bottom:14px;">⚠️ This action cannot be undone.</div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;"><button type="button" class="btn-sm" onclick="document.getElementById('rejectModal').classList.remove('open')">Cancel</button><button type="submit" class="btn-sm btn-danger">✗ Confirm Rejection</button></div>
       </form>
     </div>
   </div>
 </div>
 
 <script>
-// Close modals on backdrop click
-['approveModal','rejectModal'].forEach(id => {
-  document.getElementById(id).addEventListener('click', function(e) {
-    if (e.target === this) this.classList.remove('open');
-  });
-});
-
-function openApproveModal(tid, uid, name) {
-  document.getElementById('approve_tid').value = tid;
-  document.getElementById('approve_uid').value = uid;
-  document.getElementById('approve_sub').textContent = 'Business: ' + name;
-  document.getElementById('approveModal').classList.add('open');
-}
-
-function openRejectModal(tid, uid, name) {
-  document.getElementById('reject_tid').value = tid;
-  document.getElementById('reject_uid').value = uid;
-  document.getElementById('reject_sub').textContent = 'Business: ' + name;
-  document.getElementById('rejectModal').classList.add('open');
-}
+['approveModal','rejectModal'].forEach(id=>{document.getElementById(id).addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
+function openApproveModal(tid,uid,name){document.getElementById('approve_tid').value=tid;document.getElementById('approve_uid').value=uid;document.getElementById('approve_sub').textContent='Business: '+name;document.getElementById('approveModal').classList.add('open');}
+function openRejectModal(tid,uid,name){document.getElementById('reject_tid').value=tid;document.getElementById('reject_uid').value=uid;document.getElementById('reject_sub').textContent='Business: '+name;document.getElementById('rejectModal').classList.add('open');}
 </script>
 </body>
 </html>
