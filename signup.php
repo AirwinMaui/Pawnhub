@@ -12,8 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $biz_name   = trim($_POST['business_name'] ?? '');
     $phone      = trim($_POST['phone']         ?? '');
     $address    = trim($_POST['address']       ?? '');
-    $plan       = in_array($_POST['plan']??'', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
-    $branches   = intval($_POST['branches']    ?? 1);
+    $plan       = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
+    $branches   = intval($_POST['branches'] ?? 1);
 
     if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
@@ -22,241 +22,270 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($pass) < 8) {
         $error = 'Password must be at least 8 characters.';
     } else {
-        // Check duplicate username or email
         $chk = $pdo->prepare("SELECT id FROM users WHERE username=? OR email=?");
         $chk->execute([$username, $email]);
         if ($chk->fetch()) {
             $error = 'Username or email already exists.';
         } else {
             $pdo->beginTransaction();
-
-            // 1. Create tenant (pending)
             $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status) VALUES (?,?,?,?,?,?,?,'pending')")
                 ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches]);
             $new_tid = $pdo->lastInsertId();
-
-            // 2. Create admin user for this tenant (pending — needs super admin approval)
             $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                 ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
-
             $pdo->commit();
-
             $success = true;
         }
     }
 }
 
 $plans = [
-    'Starter'    => ['price' => 'Free',    'color' => '#475569', 'bg' => '#f1f5f9', 'border' => '#e2e8f0', 'branches' => 1,  'features' => ['1 Branch','Up to 3 Staff','Basic Reports','Email Support']],
-    'Pro'        => ['price' => '₱999/mo', 'color' => '#1d4ed8', 'bg' => '#eff6ff', 'border' => '#bfdbfe', 'branches' => 3,  'features' => ['Up to 3 Branches','Unlimited Staff','Advanced Reports','Priority Support']],
-    'Enterprise' => ['price' => '₱2,499/mo','color'=> '#7c3aed', 'bg' => '#f3e8ff', 'border' => '#ddd6fe', 'branches' => 10, 'features' => ['Up to 10 Branches','Unlimited Everything','Custom Branding','Dedicated Support']],
+    'Starter'    => ['branches' => 1],
+    'Pro'        => ['branches' => 3],
+    'Enterprise' => ['branches' => 10],
 ];
-$selected_plan = $_POST['plan'] ?? 'Starter';
+$selected_plan = $_POST['plan'] ?? ($_GET['plan'] ?? 'Starter');
+if (!array_key_exists($selected_plan, $plans)) $selected_plan = 'Starter';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>PawnHub — Register Your Pawnshop</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;}
-.wrapper{width:100%;max-width:860px;}
-/* Header */
-.page-header{text-align:center;margin-bottom:28px;}
-.logo{display:inline-flex;align-items:center;gap:10px;margin-bottom:16px;}
-.logo-icon{width:42px;height:42px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:12px;display:flex;align-items:center;justify-content:center;}
-.logo-icon svg{width:22px;height:22px;}
-.logo-name{font-size:1.4rem;font-weight:800;color:#fff;}
-.page-header h1{font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:6px;}
-.page-header p{font-size:.88rem;color:rgba(255,255,255,.6);}
-/* Plan Cards */
-.plans-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px;}
-.plan-card{background:#fff;border-radius:14px;padding:18px;cursor:pointer;border:2.5px solid transparent;transition:all .2s;position:relative;}
-.plan-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.15);}
-.plan-card.selected{border-color:var(--plan-color);box-shadow:0 0 0 4px color-mix(in srgb,var(--plan-color) 15%,transparent);}
-.plan-badge{display:inline-block;font-size:.64rem;font-weight:700;padding:2px 8px;border-radius:100px;margin-bottom:8px;}
-.plan-name{font-size:.95rem;font-weight:800;color:#0f172a;margin-bottom:2px;}
-.plan-price{font-size:1.2rem;font-weight:800;margin-bottom:10px;}
-.plan-features{list-style:none;display:flex;flex-direction:column;gap:5px;}
-.plan-features li{font-size:.76rem;color:#475569;display:flex;align-items:center;gap:6px;}
-.plan-features li::before{content:'✓';font-weight:700;font-size:.72rem;}
-.plan-check{position:absolute;top:12px;right:12px;width:20px;height:20px;border-radius:50%;display:none;align-items:center;justify-content:center;}
-.plan-card.selected .plan-check{display:flex;}
-/* Form Box */
-.form-box{background:#fff;border-radius:18px;padding:28px 32px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
-.section-title{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:14px;}
-.fg{margin-bottom:0;}
-.fg.full{grid-column:1/-1;}
-.fg label{display:block;font-size:.74rem;font-weight:600;color:#374151;margin-bottom:4px;}
-.fg input,.fg select{width:100%;border:1.5px solid #e2e8f0;border-radius:9px;padding:10px 12px;font-family:inherit;font-size:.86rem;color:#0f172a;outline:none;transition:border .2s,box-shadow .2s;background:#fff;}
-.fg input:focus,.fg select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-.fg input::placeholder{color:#c8d0db;}
-.err{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:11px 14px;font-size:.82rem;color:#dc2626;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
-.err svg{width:15px;height:15px;flex-shrink:0;}
-.submit-btn{width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:14px;font-family:inherit;font-size:.96rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,.3);transition:all .2s;margin-top:6px;}
-.submit-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,.4);}
-.footer{text-align:center;font-size:.8rem;color:rgba(255,255,255,.5);margin-top:16px;}
-.footer a{color:#93c5fd;font-weight:600;text-decoration:none;}
-.success-box{background:#fff;border-radius:18px;padding:40px 32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);}
-.success-icon{width:72px;height:72px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;}
-.success-icon svg{width:34px;height:34px;color:#15803d;}
-@media(max-width:700px){.plans-row{grid-template-columns:1fr;}.form-grid{grid-template-columns:1fr;}}
+body { font-family: "Inter", sans-serif; }
+.material-symbols-outlined { font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24; }
+.glass-panel {
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.glass-input {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #fff;
+    font-family: "Inter", sans-serif;
+    font-size: 0.875rem;
+    outline: none;
+    transition: all 0.2s;
+}
+.glass-input:focus {
+    background: rgba(255,255,255,0.13);
+    border-color: rgba(59,130,246,0.6);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.glass-input::placeholder { color: rgba(255,255,255,0.35); }
+.glass-input option { background: #1e293b; color: #fff; }
+.plan-pill {
+    cursor: pointer;
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.06);
+    transition: all 0.2s;
+}
+.plan-pill.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+}
+.hero-bg {
+    background-image: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.65)),
+        url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVdOMy67RcI3OmEXQ5Ob4N9qbUXkHC8UCa3Ni6E2dPvn8N_9Kg_FuGSOcP4mhYkmmhNphJ8vQukLbFjfnVrv-wy716m8LpTRmRrql1K07LpfXVuqMeCMwQRftqZXZWikKdGhSBaHJEhrAn431mN9EQqELqupcBMhVrkknDFPIyVKW_l8bfki8PfvWSkOTQ129Z5jOMGF5My-stQnfPndc_y1X0jUHBEmlH0AVE04q2vpa87PHKNSxAOHabM4n8c9W6UcgA91Cs-1c');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
 </style>
 </head>
-<body>
-<div class="wrapper">
+<body class="min-h-screen flex flex-col text-white hero-bg">
 
-  <!-- Header -->
-  <div class="page-header">
-    <div class="logo">
-      <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div>
-      <span class="logo-name">PawnHub</span>
-    </div>
-    <h1>Register Your Pawnshop</h1>
-    <p>Choose a plan and create your account. Your application will be reviewed by our team.</p>
+<!-- NAV -->
+<header class="w-full sticky top-0 z-50" style="background:rgba(0,0,0,0.3);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,0.07);">
+  <div class="flex justify-between items-center px-8 py-5 max-w-7xl mx-auto">
+    <a href="index.php" class="flex items-center gap-2">
+      <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:16px;height:16px;"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
+      </div>
+      <span class="text-xl font-bold tracking-tight text-white">PawnHub</span>
+    </a>
+    <a href="login.php" class="text-sm font-semibold text-white/70 hover:text-white transition-colors px-5 py-2 rounded-xl border border-white/15 hover:border-white/30" style="background:rgba(255,255,255,0.07);">
+      Sign In
+    </a>
   </div>
+</header>
 
-  <?php if($success): ?>
-  <!-- Success -->
-  <div class="success-box">
-    <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg></div>
-    <div style="font-size:1.3rem;font-weight:800;color:#0f172a;margin-bottom:8px;">Application Submitted! 🎉</div>
-    <p style="font-size:.88rem;color:#64748b;line-height:1.8;margin-bottom:20px;">
-      Your pawnshop registration has been submitted successfully.<br>
-      Our Super Admin will review and approve your account.<br><br>
-      <strong>Once approved, you can login using your username and password.</strong><br>
-      You will be notified via email.
+<main class="flex-grow flex items-center justify-center md:justify-end px-6 py-12 max-w-7xl mx-auto w-full">
+
+  <?php if ($success): ?>
+  <!-- SUCCESS STATE -->
+  <div class="glass-panel w-full max-w-md p-10 rounded-3xl shadow-2xl text-center">
+    <div style="width:72px;height:72px;background:rgba(34,197,94,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+      <span class="material-symbols-outlined" style="color:#22c55e;font-size:36px;">check_circle</span>
+    </div>
+    <h2 class="text-2xl font-extrabold text-white mb-3">Application Submitted! 🎉</h2>
+    <p class="text-white/60 text-sm leading-relaxed mb-6">
+      Your pawnshop registration has been submitted successfully.<br><br>
+      Our Super Admin will review and approve your account.<br>
+      Once approved, you can login using your username and password.
     </p>
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;font-size:.82rem;color:#15803d;margin-bottom:20px;">
+    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;font-size:0.8rem;color:#86efac;margin-bottom:24px;">
       ✅ No need to wait for an invitation link — your account is ready once approved!
     </div>
-    <a href="login.php" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:.92rem;font-weight:700;">Go to Login →</a>
+    <a href="login.php" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:13px 32px;border-radius:12px;font-size:0.92rem;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+      Go to Login →
+    </a>
   </div>
 
   <?php else: ?>
+  <!-- REGISTRATION FORM -->
+  <div class="glass-panel w-full max-w-lg p-8 md:p-10 rounded-3xl shadow-2xl">
 
-  <!-- Plan Selection -->
-  <div class="plans-row">
-    <?php foreach($plans as $pname => $pdata): ?>
-    <div class="plan-card <?=$selected_plan===$pname?'selected':''?>"
-         style="--plan-color:<?=$pdata['color']?>;"
-         onclick="selectPlan('<?=$pname?>')">
-      <span class="plan-badge" style="background:<?=$pdata['bg']?>;color:<?=$pdata['color']?>;border:1px solid <?=$pdata['border']?>;"><?=$pname?></span>
-      <div class="plan-name"><?=$pname?> Plan</div>
-      <div class="plan-price" style="color:<?=$pdata['color']?>"><?=$pdata['price']?></div>
-      <ul class="plan-features">
-        <?php foreach($pdata['features'] as $f): ?>
-        <li style="color:<?=$pdata['color']?>"><?=$f?></li>
-        <?php endforeach; ?>
-      </ul>
-      <div class="plan-check" style="background:<?=$pdata['color']?>;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" style="width:11px;height:11px;"><polyline points="20 6 9 17 4 12"/></svg>
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-extrabold tracking-tight text-white mb-2">PawnHub Partnership</h1>
+      <p class="text-white/60 text-sm leading-relaxed">Register your pawnshop to access the PawnHub ecosystem. Your application will be reviewed by our team.</p>
+    </div>
+
+    <!-- Plan Selector -->
+    <div class="mb-7">
+      <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-3">Select Plan</label>
+      <div class="flex gap-2">
+        <button type="button" onclick="selectPlan('Starter')"   id="pill-Starter"    class="plan-pill <?= $selected_plan==='Starter'    ? 'active' : '' ?>">Starter — Free</button>
+        <button type="button" onclick="selectPlan('Pro')"       id="pill-Pro"        class="plan-pill <?= $selected_plan==='Pro'        ? 'active' : '' ?>">Pro — ₱999/mo</button>
+        <button type="button" onclick="selectPlan('Enterprise')" id="pill-Enterprise" class="plan-pill <?= $selected_plan==='Enterprise' ? 'active' : '' ?>">Enterprise — ₱2,499/mo</button>
       </div>
     </div>
-    <?php endforeach; ?>
-  </div>
 
-  <!-- Registration Form -->
-  <div class="form-box">
-    <?php if($error): ?>
-    <div class="err">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <?=htmlspecialchars($error)?>
+    <!-- Error -->
+    <?php if ($error): ?>
+    <div style="background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:11px 14px;font-size:0.82rem;color:#fca5a5;margin-bottom:18px;display:flex;align-items:center;gap:8px;">
+      <span class="material-symbols-outlined" style="font-size:16px;flex-shrink:0;">error</span>
+      <?= htmlspecialchars($error) ?>
     </div>
     <?php endif; ?>
 
     <form method="POST" id="regForm">
-      <input type="hidden" name="plan" id="plan_input" value="<?=htmlspecialchars($selected_plan)?>">
-      <input type="hidden" name="branches" id="branches_input" value="<?=$plans[$selected_plan]['branches']?>">
+      <input type="hidden" name="plan"     id="plan_input"     value="<?= htmlspecialchars($selected_plan) ?>">
+      <input type="hidden" name="branches" id="branches_input" value="<?= $plans[$selected_plan]['branches'] ?>">
 
-      <!-- Business Info -->
-      <div class="section-title">🏢 Business Information</div>
-      <div class="form-grid">
-        <div class="fg full">
-          <label>Business Name *</label>
-          <input type="text" name="business_name" placeholder="e.g. GoldKing Pawnshop" value="<?=htmlspecialchars($_POST['business_name']??'')?>" required>
-        </div>
-        <div class="fg">
-          <label>Phone Number</label>
-          <input type="text" name="phone" placeholder="09XXXXXXXXX" value="<?=htmlspecialchars($_POST['phone']??'')?>">
-        </div>
-        <div class="fg">
-          <label>Address</label>
-          <input type="text" name="address" placeholder="Street, City, Province" value="<?=htmlspecialchars($_POST['address']??'')?>">
-        </div>
-      </div>
+      <div class="space-y-5">
 
-      <!-- Owner / Account Info -->
-      <div class="section-title" style="margin-top:18px;">👤 Owner / Account Information</div>
-      <div class="form-grid">
-        <div class="fg full">
-          <label>Full Name *</label>
-          <input type="text" name="fullname" placeholder="Juan Dela Cruz" value="<?=htmlspecialchars($_POST['fullname']??'')?>" required>
-        </div>
-        <div class="fg">
-          <label>Email Address *</label>
-          <input type="email" name="email" placeholder="owner@example.com" value="<?=htmlspecialchars($_POST['email']??'')?>" required>
-        </div>
-        <div class="fg">
-          <label>Username *</label>
-          <input type="text" name="username" placeholder="yourUsername" value="<?=htmlspecialchars($_POST['username']??'')?>" required>
-        </div>
-        <div class="fg">
-          <label>Password * (min. 8 characters)</label>
-          <input type="password" name="password" placeholder="Strong password" required>
-        </div>
-        <div class="fg">
-          <label>Confirm Password *</label>
-          <input type="password" name="confirm" placeholder="Repeat password" required>
-        </div>
-      </div>
-
-      <!-- Selected Plan Summary -->
-      <div id="plan_summary" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin:14px 0;display:flex;align-items:center;justify-content:space-between;font-size:.82rem;">
+        <!-- Business Info -->
         <div>
-          <span style="font-weight:700;color:#0f172a;">Selected Plan: </span>
-          <span id="summary_plan" style="font-weight:800;color:#2563eb;"><?=htmlspecialchars($selected_plan)?></span>
+          <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Business Name *</label>
+          <input type="text" name="business_name" class="glass-input" placeholder="e.g. GoldKing Pawnshop"
+            value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>" required>
         </div>
-        <div style="color:#64748b;">
-          <span id="summary_branches"><?=$plans[$selected_plan]['branches']?></span> branch<?=$plans[$selected_plan]['branches']>1?'es':''?>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Phone Number</label>
+            <input type="text" name="phone" class="glass-input" placeholder="09XXXXXXXXX"
+              value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Address</label>
+            <input type="text" name="address" class="glass-input" placeholder="City, Province"
+              value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
+          </div>
         </div>
-      </div>
 
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#1d4ed8;margin-bottom:16px;line-height:1.7;">
-        ℹ️ After submission, the Super Admin will review your application. Once approved, you can login immediately with your username and password — <strong>no invitation email needed!</strong>
-      </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:18px;">
+          <p class="text-xs font-bold uppercase tracking-widest text-white/50 mb-4">Owner / Account Information</p>
 
-      <button type="submit" class="submit-btn">Submit Application →</button>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Full Name *</label>
+              <input type="text" name="fullname" class="glass-input" placeholder="Juan Dela Cruz"
+                value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Email *</label>
+                <input type="email" name="email" class="glass-input" placeholder="owner@example.com"
+                  value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Username *</label>
+                <input type="text" name="username" class="glass-input" placeholder="yourUsername"
+                  value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Password * (min. 8)</label>
+                <input type="password" name="password" class="glass-input" placeholder="••••••••" required>
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-1.5 ml-1">Confirm Password *</label>
+                <input type="password" name="confirm" class="glass-input" placeholder="••••••••" required>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Plan Summary -->
+        <div id="plan_summary" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;font-size:0.82rem;">
+          <div style="color:rgba(255,255,255,0.7);">Selected Plan: <strong style="color:#93c5fd;" id="summary_plan"><?= htmlspecialchars($selected_plan) ?></strong></div>
+          <div style="color:rgba(255,255,255,0.45);" id="summary_branches"><?= $plans[$selected_plan]['branches'] ?> branch<?= $plans[$selected_plan]['branches'] > 1 ? 'es' : '' ?></div>
+        </div>
+
+        <p class="text-xs text-white/35 italic leading-relaxed">
+          ℹ️ After submission, the Super Admin will review your application. Once approved, you can login immediately — no invitation email needed!
+        </p>
+
+        <button type="submit" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;"
+          onmouseover="this.style.background='#2563eb';this.style.transform='translateY(-1px)'"
+          onmouseout="this.style.background='#3b82f6';this.style.transform='translateY(0)'">
+          Submit Application →
+        </button>
+
+      </div>
     </form>
-  </div>
 
+    <div class="mt-8 pt-6 border-t text-center" style="border-color:rgba(255,255,255,0.08);">
+      <p class="text-sm text-white/50">Already have an account? <a href="login.php" class="text-blue-400 font-bold hover:text-blue-300 transition-colors ml-1">Sign In</a></p>
+    </div>
+  </div>
   <?php endif; ?>
 
-  <div class="footer">
-    Already have an account? <a href="login.php">Sign in here</a>
+</main>
+
+<footer class="w-full mt-auto" style="background:rgba(0,0,0,0.3);border-top:1px solid rgba(255,255,255,0.07);">
+  <div class="flex flex-col md:flex-row justify-between items-center px-8 py-6 max-w-7xl mx-auto text-sm">
+    <div class="text-white/80 font-bold text-base mb-3 md:mb-0">PawnHub</div>
+    <div class="flex gap-6 text-white/40">
+      <span>© <?= date('Y') ?> PawnHub. All rights reserved.</span>
+    </div>
   </div>
-</div>
+</footer>
 
 <script>
-const plans = <?=json_encode($plans)?>;
+const planBranches = { Starter: 1, Pro: 3, Enterprise: 10 };
 
 function selectPlan(name) {
-  // Update hidden inputs
   document.getElementById('plan_input').value    = name;
-  document.getElementById('branches_input').value = plans[name].branches;
-
-  // Update plan cards UI
-  document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
-
-  // Update summary
-  document.getElementById('summary_plan').textContent    = name;
-  document.getElementById('summary_plan').style.color    = plans[name].color;
-  const b = plans[name].branches;
+  document.getElementById('branches_input').value = planBranches[name];
+  document.getElementById('summary_plan').textContent = name;
+  const b = planBranches[name];
   document.getElementById('summary_branches').textContent = b + ' branch' + (b > 1 ? 'es' : '');
+  ['Starter','Pro','Enterprise'].forEach(p => {
+    document.getElementById('pill-' + p).classList.toggle('active', p === name);
+  });
 }
 </script>
 </body>
