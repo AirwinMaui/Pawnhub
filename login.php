@@ -4,11 +4,6 @@ require 'db.php';
 
 $error = '';
 
-// Inline audit helper for login
-function write_login_audit(PDO $pdo, $uid, $uname, $role, string $action, string $msg, $tid=null): void {
-    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,'user',?,?,?,NOW())")->execute([$tid,$uid,$uname,$role,$action,(string)$uid,$msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
@@ -17,183 +12,209 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please fill in all fields.';
     } else {
         $stmt = $pdo->prepare("
-            SELECT u.*, t.business_name AS tenant_name, t.status AS tenant_status
+            SELECT u.*, t.business_name AS tenant_name
             FROM users u
             LEFT JOIN tenants t ON u.tenant_id = t.id
-            WHERE u.username = ?
+            WHERE u.username = ? 
+              AND u.status = 'approved' 
+              AND u.is_suspended = 0
             LIMIT 1
         ");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
+            session_regenerate_id(true);
 
-            if ((int)$user['is_suspended'] === 1) {
-                $error = 'Your account has been suspended. Please contact your administrator.';
-                write_login_audit($pdo, $user['id'], $user['username'], $user['role'], 'LOGIN_BLOCKED', 'Login blocked — account suspended.', $user['tenant_id']);
+            $_SESSION['user'] = [
+                'id'          => $user['id'],
+                'name'        => $user['fullname'],
+                'username'    => $user['username'],
+                'role'        => $user['role'],
+                'tenant_id'   => $user['tenant_id'],
+                'tenant_name' => $user['tenant_name'],
+            ];
 
-            } elseif ($user['status'] === 'pending') {
-                $error = 'Your account is pending approval.';
+            if ($user['role'] === 'super_admin') { header('Location: superadmin.php'); exit; }
+            if ($user['role'] === 'admin')        { header('Location: tenant.php');     exit; }
+            if ($user['role'] === 'staff')        { header('Location: staff.php');      exit; }
+            if ($user['role'] === 'cashier')      { header('Location: cashier.php');    exit; }
 
-            } elseif ($user['status'] === 'rejected') {
-                $error = 'Your account application was rejected.';
-
-            } elseif ($user['role'] !== 'super_admin' && ($user['tenant_status'] ?? '') !== 'active') {
-                $error = ($user['tenant_status'] === 'inactive')
-                    ? 'Your account has been deactivated. Please contact PawnHub support to reactivate your subscription.'
-                    : 'Your business account is not active. Please contact PawnHub support.';
-                write_login_audit($pdo, $user['id'], $user['username'], $user['role'], 'LOGIN_BLOCKED', 'Login blocked — tenant is ' . ($user['tenant_status'] ?? 'unknown') . '.', $user['tenant_id']);
-
-            } elseif ($user['status'] !== 'approved') {
-                $error = 'Your account is not approved.';
-
-            } else {
-                session_regenerate_id(true);
-                $_SESSION['user'] = [
-                    'id'          => $user['id'],
-                    'name'        => $user['fullname'],
-                    'username'    => $user['username'],
-                    'role'        => $user['role'],
-                    'tenant_id'   => $user['tenant_id'],
-                    'tenant_name' => $user['tenant_name'],
-                ];
-                write_login_audit($pdo, $user['id'], $user['username'], $user['role'], 'USER_LOGIN', $user['fullname'] . ' logged in.', $user['tenant_id']);
-
-                if ($user['role'] === 'super_admin') { header('Location: superadmin.php'); exit; }
-                if ($user['role'] === 'admin')        { header('Location: tenant.php');     exit; }
-                if ($user['role'] === 'staff')        { header('Location: staff.php');      exit; }
-                if ($user['role'] === 'cashier')      { header('Location: cashier.php');    exit; }
-                session_unset(); session_destroy();
-                $error = 'Unknown user role.';
-            }
+            session_unset();
+            session_destroy();
+            $error = 'Unknown user role.';
         } else {
-            if (!$user) {
-                $error = 'Username not found.';
-            } else {
-                $error = 'Incorrect password.';
-                write_login_audit($pdo, $user['id'], $user['username'], $user['role'] ?? 'unknown', 'LOGIN_FAILED', 'Failed login attempt.', $user['tenant_id'] ?? null);
-            }
+            $chk = $pdo->prepare("SELECT status, is_suspended FROM users WHERE username = ? LIMIT 1");
+            $chk->execute([$username]);
+            $chk = $chk->fetch();
+
+            if (!$chk)                            $error = 'Username not found.';
+            elseif ((int)$chk['is_suspended'] === 1) $error = 'Your account has been suspended.';
+            elseif ($chk['status'] === 'pending')    $error = 'Your account is pending approval.';
+            elseif ($chk['status'] === 'rejected')   $error = 'Your account was rejected.';
+            else                                     $error = 'Incorrect password.';
         }
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>PawnHub — Login</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PawnHub — Sign In</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;display:flex;}
-.left{width:45%;min-height:100vh;background:linear-gradient(155deg,#0f172a,#1e3a8a,#1e293b);display:flex;flex-direction:column;justify-content:center;padding:50px;position:relative;overflow:hidden;}
-.left::before{content:'';position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&q=60') center/cover;opacity:.07;}
-.lp{position:relative;z-index:1;}
-.logo{display:flex;align-items:center;gap:12px;margin-bottom:48px;}
-.logo-icon{width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:12px;display:flex;align-items:center;justify-content:center;}
-.logo-icon svg{width:22px;height:22px;}
-.logo-text{font-size:1.4rem;font-weight:800;color:#fff;}
-h1{font-size:2rem;font-weight:800;color:#fff;line-height:1.3;margin-bottom:14px;}
-h1 span{color:#60a5fa;}
-.sub{font-size:.88rem;color:rgba(255,255,255,.5);line-height:1.7;}
-.feats{margin-top:40px;display:flex;flex-direction:column;gap:13px;}
-.feat{display:flex;align-items:center;gap:11px;color:rgba(255,255,255,.7);font-size:.84rem;}
-.feat-icon{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.feat-icon svg{width:14px;height:14px;}
-.right{flex:1;display:flex;align-items:center;justify-content:center;background:#f8fafc;padding:40px;}
-.box{width:100%;max-width:400px;}
-.title{font-size:1.45rem;font-weight:800;color:#0f172a;margin-bottom:5px;}
-.desc{font-size:.84rem;color:#64748b;margin-bottom:30px;}
-.fg{margin-bottom:17px;}
-.fg label{display:block;font-size:.77rem;font-weight:600;color:#374151;margin-bottom:5px;}
-.iw{position:relative;}
-.iw>svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#94a3b8;}
-.finput{width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px 11px 38px;font-family:inherit;font-size:.89rem;color:#0f172a;outline:none;background:#fff;transition:border .2s,box-shadow .2s;}
-.finput:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-.finput::placeholder{color:#c8d0db;}
-.toggle{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;}
-.toggle svg{width:15px;height:15px;}
-.err{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 13px;font-size:.81rem;color:#dc2626;margin-bottom:17px;display:flex;align-items:center;gap:7px;}
-.err svg{width:14px;height:14px;flex-shrink:0;}
-.btn{width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:13px;font-family:inherit;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,.3);transition:all .2s;margin-top:4px;}
-.btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,.4);}
-.footer{margin-top:22px;text-align:center;font-size:.77rem;color:#94a3b8;}
-.footer a{color:#2563eb;font-weight:600;text-decoration:none;}
-.badges{display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap;}
-.badge{font-size:.65rem;font-weight:600;color:#94a3b8;background:#f1f5f9;padding:3px 9px;border-radius:100px;border:1px solid #e2e8f0;}
-@media(max-width:768px){.left{display:none;}.right{padding:22px;}}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; overflow: hidden; }
+.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+.field-input {
+    width: 100%;
+    height: 56px;
+    padding: 0 20px;
+    background: rgba(226,226,228,0.45);
+    border: none;
+    border-radius: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.92rem;
+    color: #1a1c1d;
+    outline: none;
+    transition: all 0.2s;
+}
+.field-input:focus {
+    background: #fff;
+    box-shadow: 0 0 0 2px rgba(0,35,111,0.2);
+}
+.field-input::placeholder { color: #9ea0a8; }
 </style>
 </head>
-<body>
-<div class="left">
-  <div class="lp">
-    <div class="logo"><div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div><span class="logo-text">PawnHub</span></div>
-    <h1>Multi-Tenant<br>Pawnshop <span>Management</span></h1>
-    <p class="sub">One platform for all your pawnshop branches — manage tickets, loans, and staff with ease.</p>
-    <div class="feats">
-      <div class="feat"><div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg></div>Pawn Ticket Management</div>
-      <div class="feat"><div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>Multi-Tenant Support</div>
-      <div class="feat"><div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>Role-Based Access Control</div>
-    </div>
-  </div>
-</div>
-<div class="right">
-  <div class="box">
-    <div class="title">Welcome back 👋</div>
-    <div class="desc">Sign in to your PawnHub account</div>
+<body class="bg-gray-100 text-gray-900">
 
-    <?php if ($error): ?>
-      <div class="err">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
+<!-- BACKGROUND -->
+<div class="fixed inset-0 z-0">
+  <img class="w-full h-full object-cover"
+    src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI"
+    alt="PawnHub background"/>
+  <div class="absolute inset-0" style="background:rgba(30,58,138,0.18);backdrop-filter:brightness(0.72);"></div>
+</div>
+
+<!-- NAV -->
+<header class="fixed top-0 w-full z-50 px-8 h-20 flex justify-between items-center" style="background:rgba(255,255,255,0.08);backdrop-filter:blur(14px);">
+  <a href="index.php" class="flex items-center gap-2">
+    <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:16px;height:16px;"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
+    </div>
+    <span class="text-xl font-bold tracking-tight text-white">PawnHub</span>
+  </a>
+  <div class="hidden md:flex items-center gap-8">
+    <a href="#" class="text-white/70 hover:text-white transition-colors text-sm font-medium">Platform Status</a>
+    <a href="#" class="text-white/70 hover:text-white transition-colors text-sm font-medium">Security</a>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="relative z-10 min-h-screen flex items-center px-6 md:px-24 py-20">
+  <div class="w-full max-w-md">
+
+    <!-- CARD -->
+    <div style="background:rgba(255,255,255,0.82);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);padding:40px;border-radius:32px;box-shadow:0 20px 40px rgba(30,58,138,0.14);border:1px solid rgba(255,255,255,0.25);">
+
+      <!-- Logo / Icon -->
+      <div class="mb-10">
+        <div class="mb-6">
+          <span class="material-symbols-outlined" style="font-size:2.5rem;color:#1e3a8a;font-variation-settings:'FILL' 1;">diamond</span>
+        </div>
+        <h1 style="font-size:2.6rem;font-weight:800;color:#1a1c1d;line-height:1.1;margin-bottom:8px;">Welcome Back</h1>
+        <p style="font-size:0.85rem;color:#64748b;line-height:1.6;">Enter your credentials to access the PawnHub platform.</p>
+      </div>
+
+      <!-- ERROR -->
+      <?php if ($error): ?>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:11px 14px;font-size:0.82rem;color:#dc2626;margin-bottom:20px;display:flex;align-items:center;gap:8px;">
+        <span class="material-symbols-outlined" style="font-size:16px;flex-shrink:0;">error</span>
         <?= htmlspecialchars($error) ?>
       </div>
-    <?php endif; ?>
+      <?php endif; ?>
 
-    <form method="POST" action="">
-      <div class="fg">
-        <label>Username</label>
-        <div class="iw">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-          <input type="text" name="username" class="finput" placeholder="Enter your username" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+      <!-- FORM -->
+      <form method="POST" action="" style="display:flex;flex-direction:column;gap:22px;">
+
+        <div>
+          <label style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:7px;margin-left:4px;">Username</label>
+          <input type="text" name="username" class="field-input"
+            placeholder="Enter your username"
+            value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;margin-left:4px;">
+            <label style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;">Password</label>
+          </div>
+          <div style="position:relative;">
+            <input type="password" name="password" id="pw" class="field-input"
+              placeholder="••••••••" required style="padding-right:50px;">
+            <button type="button"
+              onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'"
+              style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;">
+              <span class="material-symbols-outlined" style="font-size:20px;">visibility</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-left:4px;">
+          <input type="checkbox" id="remember" style="width:18px;height:18px;border-radius:5px;accent-color:#1e3a8a;cursor:pointer;">
+          <label for="remember" style="font-size:0.85rem;color:#64748b;cursor:pointer;user-select:none;">Remember this device</label>
+        </div>
+
+        <button type="submit"
+          style="width:100%;height:56px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.96rem;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(30,58,138,0.25);transition:all 0.2s;"
+          onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          Sign In
+        </button>
+
+      </form>
+
+      <!-- FOOTER -->
+      <div style="margin-top:36px;padding-top:24px;border-top:1px solid rgba(0,0,0,0.07);">
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">
+          <span class="material-symbols-outlined" style="font-size:20px;color:#94a3b8;margin-top:1px;">info</span>
+          <div>
+            <p style="font-size:0.78rem;color:#64748b;font-weight:600;">New to the platform?</p>
+            <p style="font-size:0.78rem;color:#94a3b8;line-height:1.5;">
+              <a href="signup.php" style="color:#1e3a8a;font-weight:700;text-decoration:none;">Register your pawnshop</a> to apply for access.
+            </p>
+          </div>
         </div>
       </div>
 
-      <div class="fg">
-        <label>Password</label>
-        <div class="iw">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-          <input type="password" name="password" id="pw" class="finput" placeholder="Enter your password" required>
-          <button type="button" class="toggle" onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password'">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <button type="submit" class="btn">Sign In</button>
-    </form>
-
-    <div class="footer">Don't have an account? <a href="signup.php">Apply for access</a></div>
-    <div class="badges">
-      <span class="badge">🔒 SSL Secured</span>
-      <span class="badge">📋 BSP Compliant</span>
-      <span class="badge">🛡️ Data Protected</span>
     </div>
+
+    <!-- LEGAL LINKS -->
+    <div style="margin-top:24px;display:flex;gap:24px;padding-left:8px;">
+      <a href="#" style="font-size:0.75rem;color:rgba(255,255,255,0.55);text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Privacy Policy</a>
+      <a href="#" style="font-size:0.75rem;color:rgba(255,255,255,0.55);text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Terms of Service</a>
+      <a href="#" style="font-size:0.75rem;color:rgba(255,255,255,0.55);text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Support</a>
+    </div>
+
+  </div>
+</main>
+
+<!-- BOTTOM RIGHT BADGE -->
+<div class="fixed bottom-8 right-8 z-10 hidden md:block">
+  <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.1);backdrop-filter:blur(12px);padding:10px 20px;border-radius:100px;border:1px solid rgba(255,255,255,0.12);">
+    <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>
+    <span style="font-size:0.7rem;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.1em;">System Online</span>
   </div>
 </div>
+
+<style>
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+</style>
+
 </body>
 </html>
