@@ -154,19 +154,29 @@ html, body {
   height: 100vh;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  padding: 72px 0 0 0;
+}
+
+.page-left {
+  width: 520px;
+  min-width: 520px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  padding: 80px 24px 24px; /* top padding = nav height */
+  padding: 40px 48px 40px 56px;
+  overflow-y: auto;
 }
 
 /* ── CARD ── */
 .card {
   width: 100%;
-  max-width: 440px;
-  background: rgba(255,255,255,0.88);
+  background: rgba(255,255,255,0.90);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border-radius: 28px;
-  padding: 44px 40px 36px;
+  border-radius: 24px;
+  padding: 40px 36px 32px;
   box-shadow: 0 24px 60px rgba(15,30,80,0.22), 0 4px 16px rgba(0,0,0,0.08);
   border: 1px solid rgba(255,255,255,0.3);
 }
@@ -336,7 +346,7 @@ html, body {
 
 /* ── LEGAL LINKS ── */
 .legal-links {
-  margin-top: 20px;
+  margin-top: 16px;
   display: flex;
   gap: 20px;
   padding-left: 4px;
@@ -349,7 +359,12 @@ html, body {
 }
 .legal-links a:hover { color: #fff; }
 
-/* ── SYSTEM BADGE ── */
+@media (max-width: 640px) {
+  .nav-links { display: none; }
+  .page-left { width: 100%; min-width: unset; padding: 24px 20px; }
+  .card-title { font-size: 2rem; }
+  .system-badge { display: none; }
+}
 .system-badge {
   position: fixed;
   bottom: 28px;
@@ -385,12 +400,7 @@ html, body {
   50% { opacity: 0.35; }
 }
 
-@media (max-width: 600px) {
-  .nav-links { display: none; }
-  .card { padding: 32px 24px 28px; }
-  .card-title { font-size: 2rem; }
-  .system-badge { display: none; }
-}
+
 </style>
 </head>
 <body>
@@ -420,7 +430,7 @@ html, body {
 
 <!-- MAIN -->
 <main class="page-main">
-  <div style="width:100%;max-width:440px;">
+  <div class="page-left">
 
     <!-- CARD -->
     <div class="card">
