@@ -95,21 +95,19 @@ html, body {
 .nav-links a { font-size: 0.8rem; font-weight: 500; color: rgba(255,255,255,0.6); text-decoration: none; transition: color .2s; }
 .nav-links a:hover { color: #fff; }
 
-/* PAGE — left-aligned, fills entire viewport */
+/* PAGE — centered */
 .page {
   position: relative; z-index: 10;
   width: 100%; height: 100vh;
-  display: flex; align-items: center; justify-content: flex-start;
+  display: flex; align-items: center; justify-content: center; /* ← CHANGED */
   padding-top: 64px;
 }
 
-/* PANEL — fixed 460px column, vertically centered */
+/* PANEL */
 .panel {
   width: 460px; min-width: 460px;
-  height: calc(100vh - 64px);
-  display: flex; flex-direction: column; justify-content: center;
+  display: flex; flex-direction: column; align-items: center;
   padding: 0 40px;
-  overflow: hidden;
 }
 
 /* CARD */
