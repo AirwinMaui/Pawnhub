@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk->execute([$username]);
             $chk = $chk->fetch();
 
-            if (!$chk)                            $error = 'Username not found.';
+            if (!$chk)                               $error = 'Username not found.';
             elseif ((int)$chk['is_suspended'] === 1) $error = 'Your account has been suspended.';
             elseif ($chk['status'] === 'pending')    $error = 'Your account is pending approval.';
             elseif ($chk['status'] === 'rejected')   $error = 'Your account was rejected.';
@@ -63,158 +63,439 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>PawnHub — Sign In</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; overflow: hidden; }
-.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+}
+
+/* ── BACKGROUND ── */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+.bg-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 30, 80, 0.45);
+  backdrop-filter: brightness(0.7);
+}
+
+/* ── NAV ── */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.nav-logo-icon {
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-logo-text {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+.nav-links a {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.65);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: #fff; }
+
+/* ── MAIN LAYOUT ── */
+.page-main {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px 24px; /* top padding = nav height */
+}
+
+/* ── CARD ── */
+.card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-radius: 28px;
+  padding: 44px 40px 36px;
+  box-shadow: 0 24px 60px rgba(15,30,80,0.22), 0 4px 16px rgba(0,0,0,0.08);
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* ── CARD HEADER ── */
+.card-icon {
+  margin-bottom: 22px;
+}
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+.card-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 8px;
+}
+.card-subtitle {
+  font-size: 0.84rem;
+  color: #64748b;
+  line-height: 1.55;
+  margin-bottom: 30px;
+}
+
+/* ── ERROR ── */
+.error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 0.82rem;
+  color: #dc2626;
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.error-box .material-symbols-outlined {
+  font-size: 16px;
+  flex-shrink: 0;
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── FORM ── */
+.form { display: flex; flex-direction: column; gap: 20px; }
+
+.field-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #64748b;
+  margin-bottom: 7px;
+  margin-left: 2px;
+}
+
 .field-input {
-    width: 100%;
-    height: 56px;
-    padding: 0 20px;
-    background: rgba(226,226,228,0.45);
-    border: none;
-    border-radius: 12px;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.92rem;
-    color: #1a1c1d;
-    outline: none;
-    transition: all 0.2s;
+  width: 100%;
+  height: 52px;
+  padding: 0 18px;
+  background: rgba(226,226,228,0.4);
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  color: #111827;
+  outline: none;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
 .field-input:focus {
-    background: #fff;
-    box-shadow: 0 0 0 2px rgba(0,35,111,0.2);
+  background: #fff;
+  border-color: rgba(30,58,138,0.3);
+  box-shadow: 0 0 0 3px rgba(30,58,138,0.1);
 }
-.field-input::placeholder { color: #9ea0a8; }
+.field-input::placeholder { color: #adb5bd; }
+
+.pw-wrap { position: relative; }
+.pw-wrap .field-input { padding-right: 48px; }
+.pw-toggle {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color 0.2s;
+}
+.pw-toggle:hover { color: #475569; }
+.pw-toggle .material-symbols-outlined {
+  font-size: 20px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.remember-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  accent-color: #1e3a8a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.remember-row label {
+  font-size: 0.84rem;
+  color: #64748b;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn-signin {
+  width: 100%;
+  height: 52px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.94rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 22px rgba(30,58,138,0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-signin:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(30,58,138,0.38);
+}
+.btn-signin:active {
+  transform: translateY(0);
+}
+
+/* ── CARD FOOTER ── */
+.card-footer {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(0,0,0,0.07);
+}
+.card-footer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.card-footer-row .material-symbols-outlined {
+  font-size: 18px;
+  color: #94a3b8;
+  margin-top: 1px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+.card-footer p { font-size: 0.78rem; line-height: 1.55; }
+.card-footer p strong { color: #475569; font-weight: 600; display: block; }
+.card-footer p span { color: #94a3b8; }
+.card-footer a { color: #1e3a8a; font-weight: 700; text-decoration: none; }
+.card-footer a:hover { text-decoration: underline; }
+
+/* ── LEGAL LINKS ── */
+.legal-links {
+  margin-top: 20px;
+  display: flex;
+  gap: 20px;
+  padding-left: 4px;
+}
+.legal-links a {
+  font-size: 0.73rem;
+  color: rgba(255,255,255,0.5);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.legal-links a:hover { color: #fff; }
+
+/* ── SYSTEM BADGE ── */
+.system-badge {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: rgba(255,255,255,0.09);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 9px 18px;
+  border-radius: 100px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  animation: pulse 2s infinite;
+}
+.badge-text {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (max-width: 600px) {
+  .nav-links { display: none; }
+  .card { padding: 32px 24px 28px; }
+  .card-title { font-size: 2rem; }
+  .system-badge { display: none; }
+}
 </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
+<body>
 
 <!-- BACKGROUND -->
-<div class="fixed inset-0 z-0">
-  <img class="w-full h-full object-cover"
-    src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI"
-    alt="PawnHub background"/>
-  <div class="absolute inset-0" style="background:rgba(30,58,138,0.18);backdrop-filter:brightness(0.72);"></div>
+<div class="bg-layer">
+  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI" alt="PawnHub background"/>
+  <div class="bg-overlay"></div>
 </div>
 
 <!-- NAV -->
-<header class="fixed top-0 w-full z-50 px-8 h-20 flex justify-between items-center" style="background:rgba(255,255,255,0.08);backdrop-filter:blur(14px);">
-  <a href="index.php" class="flex items-center gap-2">
-    <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:16px;height:16px;"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
+<header class="nav">
+  <a href="index.php" class="nav-logo">
+    <div class="nav-logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:16px;height:16px;">
+        <rect x="3" y="9" width="18" height="12"/>
+        <polyline points="3 9 12 3 21 9"/>
+      </svg>
     </div>
-    <span class="text-xl font-bold tracking-tight text-white">PawnHub</span>
+    <span class="nav-logo-text">PawnHub</span>
   </a>
-  <div class="hidden md:flex items-center gap-8">
-    <a href="#" class="text-white/70 hover:text-white transition-colors text-sm font-medium">Platform Status</a>
-    <a href="#" class="text-white/70 hover:text-white transition-colors text-sm font-medium">Security</a>
-  </div>
+  <nav class="nav-links">
+    <a href="#">Platform Status</a>
+    <a href="#">Security</a>
+  </nav>
 </header>
 
 <!-- MAIN -->
-<main class="relative z-10 min-h-screen flex items-center px-6 md:px-24 py-20">
-  <div class="w-full max-w-md">
+<main class="page-main">
+  <div style="width:100%;max-width:440px;">
 
     <!-- CARD -->
-    <div style="background:rgba(255,255,255,0.82);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);padding:40px;border-radius:32px;box-shadow:0 20px 40px rgba(30,58,138,0.14);border:1px solid rgba(255,255,255,0.25);">
+    <div class="card">
 
-      <!-- Logo / Icon -->
-      <div class="mb-10">
-        <div class="mb-6">
-          <span class="material-symbols-outlined" style="font-size:2.5rem;color:#1e3a8a;font-variation-settings:'FILL' 1;">diamond</span>
-        </div>
-        <h1 style="font-size:2.6rem;font-weight:800;color:#1a1c1d;line-height:1.1;margin-bottom:8px;">Welcome Back</h1>
-        <p style="font-size:0.85rem;color:#64748b;line-height:1.6;">Enter your credentials to access the PawnHub platform.</p>
+      <div class="card-icon">
+        <span class="material-symbols-outlined" style="font-size:2.4rem;color:#1e3a8a;">diamond</span>
       </div>
 
-      <!-- ERROR -->
+      <h1 class="card-title">Welcome Back</h1>
+      <p class="card-subtitle">Enter your credentials to access the PawnHub platform.</p>
+
       <?php if ($error): ?>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:11px 14px;font-size:0.82rem;color:#dc2626;margin-bottom:20px;display:flex;align-items:center;gap:8px;">
-        <span class="material-symbols-outlined" style="font-size:16px;flex-shrink:0;">error</span>
+      <div class="error-box">
+        <span class="material-symbols-outlined">error</span>
         <?= htmlspecialchars($error) ?>
       </div>
       <?php endif; ?>
 
-      <!-- FORM -->
-      <form method="POST" action="" style="display:flex;flex-direction:column;gap:22px;">
+      <form method="POST" action="" class="form">
 
         <div>
-          <label style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-bottom:7px;margin-left:4px;">Username</label>
+          <label class="field-label">Username</label>
           <input type="text" name="username" class="field-input"
             placeholder="Enter your username"
             value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
         </div>
 
         <div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;margin-left:4px;">
-            <label style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;">Password</label>
-          </div>
-          <div style="position:relative;">
+          <label class="field-label">Password</label>
+          <div class="pw-wrap">
             <input type="password" name="password" id="pw" class="field-input"
-              placeholder="••••••••" required style="padding-right:50px;">
-            <button type="button"
-              onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'"
-              style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;">
-              <span class="material-symbols-outlined" style="font-size:20px;">visibility</span>
+              placeholder="••••••••" required>
+            <button type="button" class="pw-toggle"
+              onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+              <span class="material-symbols-outlined">visibility</span>
             </button>
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;gap:10px;margin-left:4px;">
-          <input type="checkbox" id="remember" style="width:18px;height:18px;border-radius:5px;accent-color:#1e3a8a;cursor:pointer;">
-          <label for="remember" style="font-size:0.85rem;color:#64748b;cursor:pointer;user-select:none;">Remember this device</label>
+        <div class="remember-row">
+          <input type="checkbox" id="remember">
+          <label for="remember">Remember this device</label>
         </div>
 
-        <button type="submit"
-          style="width:100%;height:56px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.96rem;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(30,58,138,0.25);transition:all 0.2s;"
-          onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-          Sign In
-        </button>
+        <button type="submit" class="btn-signin">Sign In</button>
 
       </form>
 
-      <!-- FOOTER -->
-      <div style="margin-top:36px;padding-top:24px;border-top:1px solid rgba(0,0,0,0.07);">
-        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">
-          <span class="material-symbols-outlined" style="font-size:20px;color:#94a3b8;margin-top:1px;">info</span>
-          <div>
-            <p style="font-size:0.78rem;color:#64748b;font-weight:600;">New to the platform?</p>
-            <p style="font-size:0.78rem;color:#94a3b8;line-height:1.5;">
-              <a href="signup.php" style="color:#1e3a8a;font-weight:700;text-decoration:none;">Register your pawnshop</a> to apply for access.
-            </p>
-          </div>
+      <div class="card-footer">
+        <div class="card-footer-row">
+          <span class="material-symbols-outlined">info</span>
+          <p>
+            <strong>New to the platform?</strong>
+            <span><a href="signup.php">Register your pawnshop</a> to apply for access.</span>
+          </p>
         </div>
       </div>
 
-    </div>
+    </div><!-- /card -->
 
     <!-- LEGAL LINKS -->
-    <div style="margin-top:24px;display:flex;gap:24px;padding-left:8px;">
-      <a href="#" style="font-size:0.75rem;color:rgba(255,255,255,0.55);text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Privacy Policy</a>
-      <a href="#" style="font-size:0.75rem;color:rgba(255,255,255,0.55);text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Terms of Service</a>
-      <a href="#" style="font-size:0.75rem;color:rgba(255,255,255,0.55);text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Support</a>
+    <div class="legal-links">
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">Support</a>
     </div>
 
   </div>
 </main>
 
-<!-- BOTTOM RIGHT BADGE -->
-<div class="fixed bottom-8 right-8 z-10 hidden md:block">
-  <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.1);backdrop-filter:blur(12px);padding:10px 20px;border-radius:100px;border:1px solid rgba(255,255,255,0.12);">
-    <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>
-    <span style="font-size:0.7rem;font-weight:600;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:0.1em;">System Online</span>
-  </div>
+<!-- SYSTEM BADGE -->
+<div class="system-badge">
+  <span class="badge-dot"></span>
+  <span class="badge-text">System Online</span>
 </div>
-
-<style>
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-</style>
 
 </body>
 </html>
