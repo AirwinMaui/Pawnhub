@@ -34,6 +34,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status) VALUES (?,?,?,?,?,?,?,'pending')")
                         ->execute([$bname,$oname,$email,$phone,$address,$plan,$branches]);
                     $new_tid    = $pdo->lastInsertId();
+
+                    // ── AUTO-GENERATE SLUG FROM BUSINESS NAME ─
+                    $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $bname));
+                    $slug = $base_slug;
+                    $slug_counter = 1;
+                    while (true) {
+                        $slug_chk = $pdo->prepare("SELECT id FROM tenants WHERE slug = ? AND id != ?");
+                        $slug_chk->execute([$slug, $new_tid]);
+                        if (!$slug_chk->fetch()) break;
+                        $slug = $base_slug . $slug_counter++;
+                    }
+                    $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $new_tid]);
+                    // ──────────────────────────────────────────
+
                     $token      = bin2hex(random_bytes(32));
                     $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
                     $pdo->prepare("INSERT INTO tenant_invitations (tenant_id,email,owner_name,token,status,expires_at,created_by) VALUES (?,?,?,?,'pending',?,?)")
@@ -138,35 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
         try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
-
-        // ── SEND LOGIN LINK EMAIL TO TENANT ───────────────────
-        try {
-            $tdata = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
-            $tdata->execute([$tid]);
-            $tdata = $tdata->fetch();
-
-            $udata = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
-            $udata->execute([$uid]);
-            $udata = $udata->fetch();
-
-            if ($tdata && !empty($tdata['slug'])) {
-                sendTenantLoginLink(
-                    $tdata['email'],
-                    $tdata['owner_name'],
-                    $tdata['business_name'],
-                    $tdata['slug'],
-                    $udata['username'] ?? ''
-                );
-                $success_msg = 'Tenant approved! Login link sent to ' . $tdata['email'] . '.';
-            } else {
-                $success_msg = 'Tenant approved successfully. They can now login.';
-            }
-        } catch (Exception $e) {
-            error_log("Email send error on approval: " . $e->getMessage());
-            $success_msg = 'Tenant approved successfully. (Email send failed — check mailer.php)';
-        }
-        // ──────────────────────────────────────────────────────
-
+        $success_msg = 'Tenant approved successfully. They can now login.';
         $active_page = 'tenants';
     }
 
