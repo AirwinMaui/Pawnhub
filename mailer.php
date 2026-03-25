@@ -1,12 +1,12 @@
 <?php
-// ── GMAIL SETTINGS — palitan ng sarili mong Gmail ─────────────
+// ── GMAIL SETTINGS ─────────────────────────────────────────────
 define('MAIL_FROM',     'mendozakiaro@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
 define('MAIL_USERNAME', 'mendozakiaro@gmail.com');
 define('MAIL_PASSWORD', 'rsze dtfm yygd nklm');
-define('APP_URL',       'http://localhost/pawnshop_ab');
+define('APP_URL',       'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
-// ── Load PHPMailer (with helpful error kung hindi pa naka-composer install) ──
+// ── Load PHPMailer ──────────────────────────────────────────────
 $_autoload = __DIR__ . '/vendor/autoload.php';
 
 if (!file_exists($_autoload)) {
@@ -41,7 +41,6 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 {
     $mail = new PHPMailer(true);
     try {
-        // Server settings
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
@@ -50,12 +49,10 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;
 
-        // Recipients
         $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
         $mail->addAddress($toEmail, $toName);
         $mail->addReplyTo(MAIL_FROM, MAIL_FROM_NAME);
 
-        // Content
         $mail->isHTML(true);
         $mail->CharSet = 'UTF-8';
         $mail->Subject = $subject;
@@ -72,7 +69,118 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 }
 
 /**
- * Send tenant invitation email with registration link
+ * Send tenant login link email
+ * Ginagamit ito kapag nag-approve ang super admin ng bagong tenant.
+ * Isesend ang branded login URL based sa slug ng tenant.
+ *
+ * Example link: https://yourdomain.com/tambunting
+ */
+function sendTenantLoginLink(
+    string $toEmail,
+    string $toName,
+    string $businessName,
+    string $slug,
+    string $username = ''
+): bool {
+    $loginUrl = APP_URL . '/' . urlencode($slug);
+
+    $usernameRow = $username
+        ? '<tr>
+             <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:.85rem;color:#64748b;">Username</td>
+             <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:.85rem;font-weight:700;color:#0f172a;">' . htmlspecialchars($username) . '</td>
+           </tr>'
+        : '';
+
+    $html = '
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+      <div style="max-width:580px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:32px 36px;text-align:center;">
+          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:inline-block;"></div>
+            <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+          </div>
+          <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Multi-Tenant Pawnshop Management</p>
+        </div>
+
+        <!-- Body -->
+        <div style="padding:36px;">
+          <h2 style="font-size:1.25rem;font-weight:800;color:#0f172a;margin:0 0 8px;">
+            Your PawnHub Account is Ready! 🎉
+          </h2>
+          <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 24px;">
+            Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
+            Your pawnshop <strong>' . htmlspecialchars($businessName) . '</strong> has been
+            <span style="color:#16a34a;font-weight:700;">approved</span> and is now active on PawnHub.
+            Use the button below to access your dedicated login page.
+          </p>
+
+          <!-- Login URL box -->
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+            <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 6px;">Your Login Page</p>
+            <a href="' . $loginUrl . '" style="font-size:.95rem;font-weight:700;color:#2563eb;word-break:break-all;">' . $loginUrl . '</a>
+          </div>
+
+          <!-- Account Details -->
+          ' . ($usernameRow ? '
+          <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+            <tr style="background:#f8fafc;">
+              <td colspan="2" style="padding:10px 14px;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;border-bottom:1px solid #e2e8f0;">
+                Account Details
+              </td>
+            </tr>
+            ' . $usernameRow . '
+            <tr>
+              <td style="padding:10px 14px;font-size:.85rem;color:#64748b;">Business</td>
+              <td style="padding:10px 14px;font-size:.85rem;font-weight:700;color:#0f172a;">' . htmlspecialchars($businessName) . '</td>
+            </tr>
+          </table>' : '') . '
+
+          <!-- CTA Button -->
+          <div style="text-align:center;margin:28px 0;">
+            <a href="' . $loginUrl . '"
+               style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;
+                      text-decoration:none;padding:14px 40px;border-radius:10px;
+                      font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
+              Go to My Login Page →
+            </a>
+          </div>
+
+          <!-- Info box -->
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;">
+            <p style="color:#15803d;font-size:.82rem;margin:0;line-height:1.6;">
+              ✅ This is your <strong>permanent login page</strong>. Bookmark it for easy access.<br>
+              🔒 Use your username and password to sign in.
+            </p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+          <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+            © ' . date('Y') . ' PawnHub · All rights reserved<br>
+            This is an automated message, please do not reply.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>';
+
+    return sendMail(
+        $toEmail,
+        $toName,
+        'PawnHub — Your ' . $businessName . ' Account is Now Active!',
+        $html
+    );
+}
+
+/**
+ * Send tenant invitation email with registration token
+ * Ginagamit ito para sa tenant na kailangan pang mag-set ng password
  */
 function sendTenantInvitation(string $toEmail, string $toName, string $businessName, string $token): bool
 {
@@ -101,17 +209,15 @@ function sendTenantInvitation(string $toEmail, string $toName, string $businessN
             Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
             You have been invited to join <strong>PawnHub</strong> as the owner of
             <strong>' . htmlspecialchars($businessName) . '</strong>.
-            Click the button below to set up your account and access the system.
+            Click the button below to set up your account.
           </p>
 
-          <!-- CTA Button -->
           <div style="text-align:center;margin:28px 0;">
             <a href="' . $link . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
               Set Up My Account →
             </a>
           </div>
 
-          <!-- Info box -->
           <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
             <p style="color:#1d4ed8;font-size:.82rem;margin:0;line-height:1.6;">
               🔒 This link will expire in <strong>24 hours</strong>.<br>
@@ -119,7 +225,6 @@ function sendTenantInvitation(string $toEmail, string $toName, string $businessN
             </p>
           </div>
 
-          <!-- Link fallback -->
           <p style="color:#94a3b8;font-size:.76rem;word-break:break-all;">
             Or copy this link: <a href="' . $link . '" style="color:#2563eb;">' . $link . '</a>
           </p>

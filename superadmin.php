@@ -138,7 +138,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
         try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
-        $success_msg = 'Tenant approved successfully. They can now login.';
+
+        // ── SEND LOGIN LINK EMAIL TO TENANT ───────────────────
+        try {
+            $tdata = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+            $tdata->execute([$tid]);
+            $tdata = $tdata->fetch();
+
+            $udata = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
+            $udata->execute([$uid]);
+            $udata = $udata->fetch();
+
+            if ($tdata && !empty($tdata['slug'])) {
+                sendTenantLoginLink(
+                    $tdata['email'],
+                    $tdata['owner_name'],
+                    $tdata['business_name'],
+                    $tdata['slug'],
+                    $udata['username'] ?? ''
+                );
+                $success_msg = 'Tenant approved! Login link sent to ' . $tdata['email'] . '.';
+            } else {
+                $success_msg = 'Tenant approved successfully. They can now login.';
+            }
+        } catch (Exception $e) {
+            error_log("Email send error on approval: " . $e->getMessage());
+            $success_msg = 'Tenant approved successfully. (Email send failed — check mailer.php)';
+        }
+        // ──────────────────────────────────────────────────────
+
         $active_page = 'tenants';
     }
 
