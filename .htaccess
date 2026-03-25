@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# Allow direct access to real files and folders
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Route /slug to router.php
+RewriteRule ^([a-zA-Z0-9_-]+)/?$ /router.php?slug=$1 [QSA,L]
