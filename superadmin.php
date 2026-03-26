@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ->execute([$new_tid,$email,$oname,$token,$expires_at,$u['id']]);
                     $pdo->commit();
                     try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\" and sent invitation to $email.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-                    $sent = sendTenantInvitation($email, $oname, $bname, $token);
+                    $sent = sendTenantInvitation($email, $oname, $bname, $token, $slug);
                     $success_msg = $sent
                         ? "✅ Tenant \"$bname\" created! Invitation sent to $email."
                         : "⚠️ Tenant created but email failed. Token: $token — Check mailer.php settings.";
@@ -152,20 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
         try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
-
-        // ── SEND APPROVAL NOTIFICATION (site URL login, no token) ──────
-        $site_url  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on' ? 'https' : 'http')
-                     . '://' . $_SERVER['HTTP_HOST'];
-        $login_url = $site_url . '/login.php';
-        $app = $pdo->prepare("SELECT t.business_name, u.fullname, u.email FROM tenants t JOIN users u ON u.tenant_id=t.id WHERE t.id=? AND u.role='admin' LIMIT 1");
-        $app->execute([$tid]);
-        $app_row = $app->fetch();
-        if ($app_row) {
-            try { sendApprovalNotification($app_row['email'], $app_row['fullname'], $app_row['business_name'], $login_url); } catch (Exception $e) {}
-        }
-        // ───────────────────────────────────────────────────────────────
-
-        $success_msg = '✅ Tenant approved! They can now login at: <strong>' . htmlspecialchars($login_url) . '</strong>';
+        $success_msg = 'Tenant approved successfully. They can now login.';
         $active_page = 'tenants';
     }
 
@@ -1205,7 +1192,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <div class="modal">
     <div class="mhdr"><div><div class="mtitle">✓ Approve Tenant</div><div class="msub" id="approve_sub"></div></div><button class="mclose" onclick="document.getElementById('approveModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="mbody">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">✅ Approving this tenant will set their status to <strong>Active</strong>. An approval email will be sent with the site login URL. They can log in immediately using the credentials they registered with — no invitation link required.</div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">✅ Approving this tenant will set their status to <strong>Active</strong> and allow them to login immediately.</div>
       <form method="POST"><input type="hidden" name="action" value="approve_tenant"><input type="hidden" name="tenant_id" id="approve_tid"><input type="hidden" name="user_id" id="approve_uid">
         <div style="display:flex;justify-content:flex-end;gap:9px;"><button type="button" class="btn-sm" onclick="document.getElementById('approveModal').classList.remove('open')">Cancel</button><button type="submit" class="btn-sm btn-success">✓ Confirm Approval</button></div>
       </form>
