@@ -162,7 +162,8 @@ $bgImg   = !empty($tenant['bg_image_url'])
 <style>
 :root { --primary: <?= $primary ?>; --accent: <?= $accent ?>; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overflow: hidden; }
+html { width: 100%; height: 100%; font-family: 'Inter', sans-serif; }
+body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; }
 .bg { position: fixed; inset: 0; z-index: 0; }
 .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.52); }
@@ -170,8 +171,8 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
 .nav-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .nav-logo-text { font-size: 1.15rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-.page { position: relative; z-index: 10; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 64px; overflow-y: auto; }
-.panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 20px 40px; }
+.page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; }
+.panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0 40px; }
 .card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
 .card-icon { margin-bottom: 12px; }
 .material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
@@ -212,7 +213,7 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
 .btxt { font-size: 0.63rem; font-weight: 600; color: rgba(255,255,255,0.82); text-transform: uppercase; letter-spacing: 0.1em; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.35} }
 @media (max-width: 560px) {
-  .panel { width: 100%; min-width: unset; padding: 20px 16px; }
+  .panel { width: 100%; min-width: unset; padding: 0 16px; }
   .card { padding: 26px 20px 22px; }
   .card-title { font-size: 1.5rem; }
   .badge { display: none; }

@@ -72,7 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overflow: hidden; }
+html { width: 100%; height: 100%; font-family: 'Inter', sans-serif; }
+body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; }
 .bg { position: fixed; inset: 0; z-index: 0; }
 .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.48); }
@@ -88,7 +89,7 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
 .nav-links { display: flex; align-items: center; gap: 28px; }
 .nav-links a { font-size: 0.8rem; font-weight: 500; color: rgba(255,255,255,0.6); text-decoration: none; transition: color .2s; }
 .nav-links a:hover { color: #fff; }
-.page { position: relative; z-index: 10; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 64px; }
+.page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; }
 .panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0 40px; }
 .card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
 .card-icon { margin-bottom: 12px; }
