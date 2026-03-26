@@ -151,8 +151,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $uid = intval($_POST['user_id']);
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-        $success_msg = 'Tenant approved successfully. They can now login.';
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
+
+        // ── SEND APPROVAL NOTIFICATION (site URL login, no token) ──────
+        $site_url  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on' ? 'https' : 'http')
+                     . '://' . $_SERVER['HTTP_HOST'];
+        $login_url = $site_url . '/login.php';
+        $app = $pdo->prepare("SELECT t.business_name, u.fullname, u.email FROM tenants t JOIN users u ON u.tenant_id=t.id WHERE t.id=? AND u.role='admin' LIMIT 1");
+        $app->execute([$tid]);
+        $app_row = $app->fetch();
+        if ($app_row) {
+            try { sendApprovalNotification($app_row['email'], $app_row['fullname'], $app_row['business_name'], $login_url); } catch (Exception $e) {}
+        }
+        // ───────────────────────────────────────────────────────────────
+
+        $success_msg = '✅ Tenant approved! They can now login at: <strong>' . htmlspecialchars($login_url) . '</strong>';
         $active_page = 'tenants';
     }
 
@@ -162,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $reason = trim($_POST['reject_reason'] ?? 'Application rejected.');
         $pdo->prepare("UPDATE tenants SET status='rejected' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='rejected', rejected_reason=? WHERE id=?")->execute([$reason, $uid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'REJECT_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Rejected tenant ID $tid. Reason: $reason",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'REJECT_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Rejected tenant ID $tid. Reason: $reason"]); } catch(PDOException $e){}
         $success_msg = 'Tenant application rejected.';
         $active_page = 'tenants';
     }
@@ -170,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'deactivate_tenant') {
         $tid = intval($_POST['tenant_id']);
         $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")->execute([$tid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'DEACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Deactivated tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'DEACTIVATE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Deactivated tenant ID $tid"]); } catch(PDOException $e){}
         $success_msg = 'Tenant deactivated.';
         $active_page = 'tenants';
     }
@@ -178,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'activate_tenant') {
         $tid = intval($_POST['tenant_id']);
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'ACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Activated tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'ACTIVATE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Activated tenant ID $tid"]); } catch(PDOException $e){}
         $success_msg = 'Tenant activated.';
         $active_page = 'tenants';
     }
@@ -1192,7 +1205,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <div class="modal">
     <div class="mhdr"><div><div class="mtitle">✓ Approve Tenant</div><div class="msub" id="approve_sub"></div></div><button class="mclose" onclick="document.getElementById('approveModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="mbody">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">✅ Approving this tenant will set their status to <strong>Active</strong> and allow them to login immediately.</div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">✅ Approving this tenant will set their status to <strong>Active</strong>. An approval email will be sent with the site login URL. They can log in immediately using the credentials they registered with — no invitation link required.</div>
       <form method="POST"><input type="hidden" name="action" value="approve_tenant"><input type="hidden" name="tenant_id" id="approve_tid"><input type="hidden" name="user_id" id="approve_uid">
         <div style="display:flex;justify-content:flex-end;gap:9px;"><button type="button" class="btn-sm" onclick="document.getElementById('approveModal').classList.remove('open')">Cancel</button><button type="submit" class="btn-sm btn-success">✓ Confirm Approval</button></div>
       </form>

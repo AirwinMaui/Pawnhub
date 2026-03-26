@@ -17,68 +17,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please enter a valid email address.';
     } elseif ($pass !== $conf) {
         $error = 'Passwords do not match.';
     } elseif (strlen($pass) < 8) {
         $error = 'Password must be at least 8 characters.';
     } else {
-        // Check duplicate username or email
         $chk = $pdo->prepare("SELECT id FROM users WHERE username=? OR email=?");
         $chk->execute([$username, $email]);
         if ($chk->fetch()) {
             $error = 'Username or email already exists.';
         } else {
-            try {
-                $pdo->beginTransaction();
-
-                // 1. Create tenant (status = pending — awaits super admin approval)
-                $pdo->prepare("INSERT INTO tenants (business_name, owner_name, email, phone, address, plan, branches, status)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')")
-                    ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches]);
-                $new_tid = $pdo->lastInsertId();
-
-                // 2. Auto-generate slug from business name
-                $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $biz_name));
-                if (empty($base_slug)) $base_slug = 'tenant';
-                $slug = $base_slug;
-                $slug_counter = 1;
-                while (true) {
-                    $slug_chk = $pdo->prepare("SELECT id FROM tenants WHERE slug = ? AND id != ?");
-                    $slug_chk->execute([$slug, $new_tid]);
-                    if (!$slug_chk->fetch()) break;
-                    $slug = $base_slug . $slug_counter++;
-                }
-                $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $new_tid]);
-
-                // 3. Create user (status = pending — awaits super admin approval)
-                $pdo->prepare("INSERT INTO users (tenant_id, fullname, email, username, password, role, status)
-                               VALUES (?, ?, ?, ?, ?, 'admin', 'pending')")
-                    ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
-                $new_uid = $pdo->lastInsertId();
-
-                // 4. ✅ KEY FIX: Create tenant_invitations record so it shows in Super Admin > Email Invitations
-                //    We mark it 'used' since tenant already self-registered (no invite link needed).
-                //    Status 'pending' means "awaiting admin approval" in this context.
-                $pdo->prepare("INSERT INTO tenant_invitations
-                                (tenant_id, email, owner_name, role, token, status, expires_at, created_by)
-                               VALUES (?, ?, ?, 'admin', ?, 'pending', ?, NULL)")
-                    ->execute([
-                        $new_tid,
-                        $email,
-                        $fullname,
-                        bin2hex(random_bytes(32)),                          // unique token (not used for email)
-                        date('Y-m-d H:i:s', strtotime('+365 days')),       // far future — won't expire
-                    ]);
-
-                $pdo->commit();
-                $success = true;
-
-            } catch (PDOException $e) {
-                $pdo->rollBack();
-                $error = 'Registration failed. Please try again. (' . $e->getMessage() . ')';
-            }
+            $pdo->beginTransaction();
+            $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status) VALUES (?,?,?,?,?,?,?,'pending')")
+                ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches]);
+            $new_tid = $pdo->lastInsertId();
+            $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
+                ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
+            $pdo->commit();
+            $success = true;
         }
     }
 }
@@ -158,7 +114,7 @@ body { font-family: "Inter", sans-serif; }
 <!-- NAV -->
 <header class="w-full sticky top-0 z-50" style="background:rgba(0,0,0,0.3);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,0.07);">
   <div class="flex justify-between items-center px-8 py-5 max-w-7xl mx-auto">
-    <a href="home.php" class="flex items-center gap-2">
+    <a href="index.php" class="flex items-center gap-2">
       <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:16px;height:16px;"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
       </div>
@@ -173,49 +129,47 @@ body { font-family: "Inter", sans-serif; }
 <main class="flex-grow flex items-center justify-center md:justify-end px-6 py-12 max-w-7xl mx-auto w-full">
 
   <?php if ($success): ?>
-  <!-- ══ SUCCESS STATE ══ -->
+  <!-- SUCCESS STATE -->
+  <?php
+    $site_url   = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on' ? 'https' : 'http')
+                  . '://' . $_SERVER['HTTP_HOST'];
+    $login_url  = $site_url . '/login.php';
+  ?>
   <div class="glass-panel w-full max-w-md p-10 rounded-3xl shadow-2xl text-center">
     <div style="width:72px;height:72px;background:rgba(34,197,94,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
-      <span class="material-symbols-outlined" style="color:#22c55e;font-size:36px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
+      <span class="material-symbols-outlined" style="color:#22c55e;font-size:36px;">check_circle</span>
     </div>
     <h2 class="text-2xl font-extrabold text-white mb-3">Application Submitted! 🎉</h2>
     <p class="text-white/60 text-sm leading-relaxed mb-6">
-      Your pawnshop registration has been submitted successfully.<br><br>
-      Our Super Admin will review and <strong class="text-white/80">approve your account</strong>.<br>
-      Once approved, you can login using your username and password.
+      Your pawnshop registration has been received.<br><br>
+      Our team will review your application. Once approved, you can log in directly using the credentials you just created.
     </p>
 
-    <!-- What happens next -->
-    <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;margin-bottom:20px;text-align:left;">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.4);margin-bottom:12px;">What happens next?</div>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-          <span style="width:22px;height:22px;background:rgba(59,130,246,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;color:#93c5fd;flex-shrink:0;">1</span>
-          <span style="font-size:0.79rem;color:rgba(255,255,255,0.6);line-height:1.5;">Super Admin reviews your application in the <strong style="color:rgba(255,255,255,0.8);">Tenant Management</strong> dashboard</span>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-          <span style="width:22px;height:22px;background:rgba(34,197,94,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;color:#86efac;flex-shrink:0;">2</span>
-          <span style="font-size:0.79rem;color:rgba(255,255,255,0.6);line-height:1.5;">Once approved, your account becomes <strong style="color:rgba(255,255,255,0.8);">Active</strong></span>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:10px;">
-          <span style="width:22px;height:22px;background:rgba(139,92,246,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;color:#c4b5fd;flex-shrink:0;">3</span>
-          <span style="font-size:0.79rem;color:rgba(255,255,255,0.6);line-height:1.5;">Login immediately with your username and password — <strong style="color:rgba(255,255,255,0.8);">no email link needed!</strong></span>
-        </div>
+    <!-- Site URL box -->
+    <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;text-align:left;">
+      <div style="font-size:0.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px;">Your Login URL</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:0.88rem;color:#93c5fd;font-weight:600;word-break:break-all;flex:1;"><?= htmlspecialchars($login_url) ?></span>
+        <button onclick="navigator.clipboard.writeText('<?= htmlspecialchars($login_url, ENT_QUOTES) ?>');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500);"
+          style="flex-shrink:0;background:rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;padding:5px 12px;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all .2s;">
+          Copy
+        </button>
       </div>
     </div>
 
-    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;font-size:0.8rem;color:#86efac;margin-bottom:24px;">
-      ✅ No need to wait for an invitation link — your account is ready once approved!
+    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:11px 14px;font-size:0.8rem;color:#86efac;margin-bottom:24px;line-height:1.6;">
+      ✅ No invitation link needed — once approved, just go to the URL above and log in with your username &amp; password.
     </div>
     <a href="login.php" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:13px 32px;border-radius:12px;font-size:0.92rem;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
-      Go to Login →
+      Go to Login Page →
     </a>
   </div>
 
   <?php else: ?>
-  <!-- ══ REGISTRATION FORM ══ -->
+  <!-- REGISTRATION FORM -->
   <div class="glass-panel w-full max-w-lg p-8 md:p-10 rounded-3xl shadow-2xl">
 
+    <!-- Header -->
     <div class="mb-8">
       <h1 class="text-3xl font-extrabold tracking-tight text-white mb-2">PawnHub Partnership</h1>
       <p class="text-white/60 text-sm leading-relaxed">Register your pawnshop to access the PawnHub ecosystem. Your application will be reviewed by our team.</p>
@@ -224,9 +178,9 @@ body { font-family: "Inter", sans-serif; }
     <!-- Plan Selector -->
     <div class="mb-7">
       <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-3">Select Plan</label>
-      <div class="flex gap-2 flex-wrap">
-        <button type="button" onclick="selectPlan('Starter')"    id="pill-Starter"    class="plan-pill <?= $selected_plan==='Starter'    ? 'active' : '' ?>">Starter — Free</button>
-        <button type="button" onclick="selectPlan('Pro')"        id="pill-Pro"        class="plan-pill <?= $selected_plan==='Pro'        ? 'active' : '' ?>">Pro — ₱999/mo</button>
+      <div class="flex gap-2">
+        <button type="button" onclick="selectPlan('Starter')"   id="pill-Starter"    class="plan-pill <?= $selected_plan==='Starter'    ? 'active' : '' ?>">Starter — Free</button>
+        <button type="button" onclick="selectPlan('Pro')"       id="pill-Pro"        class="plan-pill <?= $selected_plan==='Pro'        ? 'active' : '' ?>">Pro — ₱999/mo</button>
         <button type="button" onclick="selectPlan('Enterprise')" id="pill-Enterprise" class="plan-pill <?= $selected_plan==='Enterprise' ? 'active' : '' ?>">Enterprise — ₱2,499/mo</button>
       </div>
     </div>
@@ -307,10 +261,9 @@ body { font-family: "Inter", sans-serif; }
           <div style="color:rgba(255,255,255,0.45);" id="summary_branches"><?= $plans[$selected_plan]['branches'] ?> branch<?= $plans[$selected_plan]['branches'] > 1 ? 'es' : '' ?></div>
         </div>
 
-        <!-- Info note -->
-        <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:11px 14px;font-size:0.78rem;color:#fcd34d;line-height:1.6;">
-          ⏳ <strong>Approval Required:</strong> After submitting, our Super Admin will review your application. Once approved, you can login immediately with your username and password.
-        </div>
+        <p class="text-xs text-white/35 italic leading-relaxed">
+          ℹ️ After submission, the Super Admin will review your application. Once approved, you will be notified and can log in directly using the credentials you set here — no invitation link needed!
+        </p>
 
         <button type="submit" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;"
           onmouseover="this.style.background='#2563eb';this.style.transform='translateY(-1px)'"
@@ -342,7 +295,7 @@ body { font-family: "Inter", sans-serif; }
 const planBranches = { Starter: 1, Pro: 3, Enterprise: 10 };
 
 function selectPlan(name) {
-  document.getElementById('plan_input').value     = name;
+  document.getElementById('plan_input').value    = name;
   document.getElementById('branches_input').value = planBranches[name];
   document.getElementById('summary_plan').textContent = name;
   const b = planBranches[name];
