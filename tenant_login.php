@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'db.php';
+require 'mailer.php';
 
 $slug  = trim($_GET['slug'] ?? '');
 $token = trim($_GET['token'] ?? '');
@@ -103,6 +104,7 @@ p{font-size:.88rem;color:#64748b;line-height:1.7;margin-bottom:16px;}
 </div></div>
 </body></html>
 <?php exit; }
+
 if ($token) {
     $inv_stmt = $pdo->prepare("
         SELECT i.*, t.business_name, t.plan, t.id AS tenant_id
@@ -160,6 +162,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             $pdo->prepare("UPDATE tenants SET status='active', owner_name=? WHERE id=?")->execute([$fullname, $tenant['id']]);
             $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")->execute([$token]);
             $pdo->commit();
+
+            // ── SEND WELCOME EMAIL WITH LOGIN URL ─────────────────────
+            // Build the tenant's dedicated login URL using their slug
+            $login_url = APP_URL . '/' . urlencode($tenant['slug']);
+            try {
+                sendApprovalNotification(
+                    $inv['email'],
+                    $fullname,
+                    $tenant['business_name'],
+                    $login_url
+                );
+            } catch (Exception $e) {
+                // Non-blocking — don't stop the user even if email fails
+                error_log('Welcome email failed: ' . $e->getMessage());
+            }
+            // ─────────────────────────────────────────────────────────
 
             session_regenerate_id(true);
             $_SESSION['user'] = [
