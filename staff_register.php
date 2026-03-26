@@ -107,8 +107,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
     }
 }
 
-$role_label = ucfirst($inv['role'] ?? 'Staff');
-$biz_name   = htmlspecialchars($inv['business_name'] ?? 'PawnHub');
+$role_label  = ucfirst($inv['role'] ?? 'Staff');
+$biz_name    = htmlspecialchars($inv['business_name'] ?? 'PawnHub');
+$is_cashier  = ($inv['role'] ?? '') === 'cashier';
+$role_color  = $is_cashier ? '#7c3aed' : '#1e3a8a';
+$role_color2 = $is_cashier ? '#4c1d95' : '#2563eb';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -116,159 +119,251 @@ $biz_name   = htmlspecialchars($inv['business_name'] ?? 'PawnHub');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title><?= $biz_name ?> — Set Up Your Account</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;background:linear-gradient(135deg,#0f172a,#1e3a8a);display:flex;align-items:center;justify-content:center;padding:32px 16px;}
-.box{background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.25);width:100%;max-width:480px;overflow:hidden;}
-.box-header{padding:28px 32px;}
-.box-header.staff  { background:linear-gradient(135deg,#1e3a8a,#2563eb); }
-.box-header.cashier{ background:linear-gradient(135deg,#4c1d95,#7c3aed); }
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
-.logo-icon{width:38px;height:38px;background:rgba(255,255,255,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;}
-.logo-icon svg{width:20px;height:20px;}
-.logo-name{font-size:1.2rem;font-weight:800;color:#fff;}
-.hdr-title{font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:4px;}
-.hdr-sub{font-size:.82rem;color:rgba(255,255,255,.65);}
-.role-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;font-size:.8rem;color:#fff;font-weight:600;margin-top:10px;}
-.box-body{padding:28px 32px;}
-.fg{margin-bottom:15px;}
-.fg label{display:block;font-size:.75rem;font-weight:600;color:#374151;margin-bottom:5px;}
-.fg input{width:100%;border:1.5px solid #e2e8f0;border-radius:9px;padding:10px 12px;font-family:inherit;font-size:.87rem;color:#0f172a;outline:none;transition:border .2s;}
-.fg input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-.fg input::placeholder{color:#c8d0db;}
-.fg input[readonly]{background:#f8fafc;border:1.5px solid #e2e8f0;color:#94a3b8;cursor:not-allowed;}
-.iw{position:relative;}
-.iw>svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#94a3b8;}
-.iw input{padding-left:36px;}
-.err{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 13px;font-size:.81rem;color:#dc2626;margin-bottom:16px;display:flex;align-items:center;gap:7px;}
-.btn{width:100%;border:none;border-radius:10px;padding:13px;font-family:inherit;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,.3);transition:all .2s;margin-top:4px;color:#fff;}
-.btn.staff  { background:linear-gradient(135deg,#2563eb,#1d4ed8); }
-.btn.cashier{ background:linear-gradient(135deg,#7c3aed,#4c1d95); }
-.btn:hover{transform:translateY(-1px);}
-.hint{font-size:.73rem;color:#94a3b8;margin-top:5px;}
-.success-box{text-align:center;padding:32px;}
-.success-icon{width:64px;height:64px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.success-icon svg{width:30px;height:30px;color:#15803d;}
-.err-box{text-align:center;padding:32px;}
-.err-icon{width:64px;height:64px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.err-icon svg{width:30px;height:30px;color:#dc2626;}
+body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1a1c1d;overflow-x:hidden;position:relative;}
+.bg-fixed{position:fixed;inset:0;z-index:0;}
+.bg-fixed img{width:100%;height:100%;object-fit:cover;display:block;}
+.bg-fixed-ov{position:absolute;inset:0;background:rgba(0,35,111,0.22);backdrop-filter:brightness(0.75);}
+.topnav{position:fixed;top:0;left:0;width:100%;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:22px 32px;}
+.topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;}
+.topnav-right{display:flex;align-items:center;gap:14px;}
+.topnav-right span{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.7);}
+.topnav-right .ico{font-size:22px;color:#fff;cursor:pointer;padding:7px;border-radius:50%;transition:background .2s;}
+.topnav-right .ico:hover{background:rgba(255,255,255,.12);}
+.page{position:relative;z-index:10;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 24px 100px;}
+.card{width:100%;max-width:520px;background:rgba(255,255,255,0.78);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.35);border-radius:16px;box-shadow:0 20px 40px rgba(30,58,138,0.1);padding:40px 44px;}
+/* Header */
+.card-meta{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.card-meta-badge{background:#1e3a8a;color:#fff;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;padding:3px 10px;border-radius:6px;}
+.card-meta-badge.cashier{background:#4c1d95;}
+.card-meta-step{font-size:.75rem;font-weight:500;color:#757682;}
+.card-meta-div{height:1px;width:28px;background:rgba(0,0,0,.12);}
+.card-title{font-size:1.75rem;font-weight:800;color:#00236f;letter-spacing:-.03em;line-height:1.15;margin-bottom:8px;}
+.card-sub{font-size:.82rem;color:#444651;display:flex;align-items:center;gap:5px;margin-bottom:28px;}
+.card-sub .ms{font-size:15px;color:#757682;}
+/* Fields */
+.fg{margin-bottom:14px;}
+.fg label{display:block;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#444651;margin-bottom:6px;padding-left:2px;}
+.fin{width:100%;background:#e2e2e4;border:none;border-radius:10px;padding:13px 16px;font-family:'Inter',sans-serif;font-size:.875rem;color:#1a1c1d;outline:none;transition:background .2s,box-shadow .2s;}
+.fin:focus{background:#fff;box-shadow:0 0 0 2px rgba(0,35,111,.2);}
+.fin::placeholder{color:rgba(0,0,0,.35);}
+.fin[readonly]{background:#eeeef0;color:#757682;cursor:not-allowed;}
+.fin-wrap{position:relative;}
+.fin-wrap .ms-ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:17px;color:#757682;pointer-events:none;}
+.fin-wrap .fin{padding-left:40px;}
+.fin-wrap .pw-toggle{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:18px;color:#757682;cursor:pointer;transition:color .2s;background:none;border:none;padding:0;display:flex;}
+.fin-wrap .pw-toggle:hover{color:#1a1c1d;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.hint{font-size:.7rem;color:#757682;margin-top:4px;padding-left:2px;}
+/* Error */
+.alert-err{background:#ffdad6;border:1px solid #ffb4ab;border-radius:10px;padding:11px 14px;font-size:.8rem;color:#93000a;display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+.alert-err .ms{font-size:16px;flex-shrink:0;}
+/* Button */
+.btn-submit{width:100%;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:10px;padding:15px;font-family:'Inter',sans-serif;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(30,58,138,.25);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
+.btn-submit.cashier{background:linear-gradient(135deg,#4c1d95,#7c3aed);box-shadow:0 4px 18px rgba(124,58,237,.25);}
+.btn-submit:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(30,58,138,.35);}
+.btn-submit:active{transform:scale(.98);}
+.btn-submit .ms{font-size:18px;}
+/* Footer */
+.card-foot{margin-top:20px;text-align:center;font-size:.8rem;color:#757682;}
+.card-foot a{color:#00236f;font-weight:700;text-decoration:none;}
+.card-foot a:hover{text-decoration:underline;}
+/* Bento badges */
+.bento-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;}
+.bento{background:rgba(255,255,255,.72);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:12px 8px;text-align:center;}
+.bento .ms{font-size:22px;color:#00236f;display:block;margin-bottom:3px;}
+.bento p{font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1e3a8a;}
+/* State pages */
+.state-box{text-align:center;padding:20px 0;}
+.state-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+.state-icon.ok{background:#dcfce7;}
+.state-icon.err{background:#fee2e2;}
+.state-icon .ms{font-size:32px;}
+.state-icon.ok .ms{color:#15803d;}
+.state-icon.err .ms{color:#dc2626;}
+.state-title{font-size:1.2rem;font-weight:800;color:#1a1c1d;margin-bottom:8px;}
+.state-sub{font-size:.84rem;color:#444651;line-height:1.65;margin-bottom:20px;}
+.state-redirect{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:13px;font-size:.8rem;color:#15803d;margin-top:4px;}
+.state-redirect a{color:#2563eb;font-weight:600;}
+.btn-back{display:inline-block;background:#00236f;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-size:.88rem;font-weight:700;}
+/* Footer bar */
+.footer-bar{position:fixed;bottom:0;left:0;width:100%;z-index:40;display:flex;justify-content:space-between;align-items:center;padding:18px 48px;backdrop-filter:blur(12px);background:rgba(255,255,255,.06);}
+.footer-bar span{font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);}
+.footer-bar nav{display:flex;gap:28px;}
+.footer-bar nav a{font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);text-decoration:none;transition:color .2s;}
+.footer-bar nav a:hover{color:#fff;}
+@media(max-width:600px){
+  .card{padding:28px 22px;}
+  .grid2{grid-template-columns:1fr;}
+  .footer-bar nav{display:none;}
+  .topnav-right span{display:none;}
+}
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
+.ms{font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;line-height:1;}
+.ms.filled{font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;}
 </style>
 </head>
 <body>
-<div class="box">
+
+<!-- Background -->
+<div class="bg-fixed">
+  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCx2DpF3DhIT8TMkI77WjrdPvL6YVSpVpWmOEXSGYEKlgSNatvfUPOuV3QNXsel_47FDOEDJ99WDIO4ESDYlrYK-ERBoWVC3c-LXv1bOADmUcIWror3a9k9pousLqJjChv08FrIrBVwj8x-1jR1uBrrxeP6SIDEKNxL1OxGXCIGuHnIVKd8KPfKebyipejNKaBy12kucRMfr0_Og_bv9bc1_Ikfu9Airs60mBJVLIZs4vDeoJzDvCWs3p9cdGZ4TtDQqH6R7tA3fHI" alt="Pawnshop background"/>
+  <div class="bg-fixed-ov"></div>
+</div>
+
+<!-- Top Nav -->
+<header class="topnav">
+  <div class="topnav-brand">PawnHub</div>
+  <div class="topnav-right">
+    <span>Security Protocol Active</span>
+    <span class="ms ico">help_outline</span>
+  </div>
+</header>
+
+<!-- Page -->
+<main class="page">
+  <div style="width:100%;max-width:520px;">
 
   <?php if ($error && !$inv): ?>
-  <!-- Error State -->
-  <div class="box-body err-box">
-    <div class="err-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+  <!-- ── Error State ── -->
+  <div class="card">
+    <div class="state-box">
+      <div class="state-icon err"><span class="ms filled">cancel</span></div>
+      <div class="state-title">Invalid Invitation</div>
+      <p class="state-sub"><?= htmlspecialchars($error) ?></p>
+      <a href="login.php" class="btn-back">Back to Login</a>
     </div>
-    <div style="font-size:1.1rem;font-weight:800;color:#0f172a;margin-bottom:8px;">Invalid Invitation</div>
-    <p style="font-size:.85rem;color:#64748b;line-height:1.6;margin-bottom:20px;"><?= htmlspecialchars($error) ?></p>
-    <a href="login.php" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 24px;border-radius:9px;font-size:.88rem;font-weight:700;">Back to Login</a>
   </div>
 
   <?php elseif ($success): ?>
-  <!-- Success State -->
-  <div class="box-body success-box">
-    <div class="success-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
-    </div>
-    <div style="font-size:1.1rem;font-weight:800;color:#0f172a;margin-bottom:8px;">Account Created! 🎉</div>
-    <p style="font-size:.84rem;color:#64748b;line-height:1.6;margin-bottom:20px;">
-      Welcome to <strong><?= $biz_name ?></strong>!<br>
-      Your <strong><?= $role_label ?></strong> account is ready.<br><br>
-      Redirecting you to your dashboard...
-    </p>
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px;font-size:.81rem;color:#15803d;">
-      ⏳ Redirecting in 2 seconds...<br>
-      <a href="<?= htmlspecialchars($redirect_url) ?>" style="color:#2563eb;font-weight:600;">Click here if not redirected</a>
+  <!-- ── Success State ── -->
+  <div class="card">
+    <div class="state-box">
+      <div class="state-icon ok"><span class="ms filled">check_circle</span></div>
+      <div class="state-title">Account Created! 🎉</div>
+      <p class="state-sub">Welcome to <strong><?= $biz_name ?></strong>!<br>Your <strong><?= $role_label ?></strong> account is ready.<br><br>Redirecting you to your dashboard...</p>
+      <div class="state-redirect">⏳ Redirecting in 2 seconds...<br><a href="<?= htmlspecialchars($redirect_url) ?>">Click here if not redirected</a></div>
     </div>
   </div>
 
   <?php else: ?>
-  <!-- Registration Form -->
-  <div class="box-header <?= htmlspecialchars($inv['role'] ?? 'staff') ?>">
-    <div class="logo">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
-      </div>
-      <span class="logo-name"><?= $biz_name ?></span>
+  <!-- ── Registration Form ── -->
+  <div class="card">
+    <!-- Header -->
+    <div class="card-meta">
+      <span class="card-meta-badge <?= $is_cashier ? 'cashier' : '' ?>"><?= $role_label ?> Portal</span>
+      <div class="card-meta-div"></div>
+      <span class="card-meta-step">Step 02 of 02</span>
     </div>
-    <div class="hdr-title">Set Up Your Account</div>
-    <div class="hdr-sub">You've been invited to join <?= $biz_name ?> as a team member.</div>
-    <div class="role-badge">
-      <?php if ($inv['role'] === 'cashier'): ?>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-        Cashier Account
-      <?php else: ?>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-        Staff Account
-      <?php endif; ?>
-      · <?= $biz_name ?>
-    </div>
-  </div>
+    <h1 class="card-title">Set Up Your Account</h1>
+    <p class="card-sub">
+      <span class="ms">storefront</span>
+      <?= $biz_name ?> · <strong style="color:<?= $role_color2 ?>;"><?= $role_label ?> Account</strong>
+    </p>
 
-  <div class="box-body">
     <?php if ($error): ?>
-    <div class="err">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div class="alert-err">
+      <span class="ms">error</span>
       <?= htmlspecialchars($error) ?>
     </div>
     <?php endif; ?>
 
     <form method="POST">
+      <!-- Full Name -->
       <div class="fg">
         <label>Full Name *</label>
-        <div class="iw">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <input type="text" name="fullname" placeholder="Your full name"
+        <div class="fin-wrap">
+          <span class="ms ms-ico">person</span>
+          <input class="fin" type="text" name="fullname" placeholder="Your full name"
             value="<?= htmlspecialchars($_POST['fullname'] ?? $inv['owner_name']) ?>" required>
         </div>
       </div>
 
-      <div class="fg">
-        <label>Email</label>
-        <input type="email" value="<?= htmlspecialchars($inv['email']) ?>" readonly>
-        <div class="hint">This is the email your invitation was sent to.</div>
-      </div>
-
-      <div class="fg">
-        <label>Username *</label>
-        <div class="iw">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <input type="text" name="username" placeholder="Choose a username"
-            value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+      <!-- Email & Username -->
+      <div class="grid2">
+        <div class="fg">
+          <label>Email</label>
+          <input class="fin" type="email" value="<?= htmlspecialchars($inv['email']) ?>" readonly>
+          <div class="hint">Invitation email address.</div>
+        </div>
+        <div class="fg">
+          <label>Username *</label>
+          <div class="fin-wrap">
+            <span class="ms ms-ico">account_circle</span>
+            <input class="fin" type="text" name="username" placeholder="Choose a username"
+              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+          </div>
         </div>
       </div>
 
-      <div class="fg">
-        <label>Password * (min. 8 characters)</label>
-        <div class="iw">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <input type="password" name="password" placeholder="Create a strong password" required>
+      <!-- Password & Confirm -->
+      <div class="grid2">
+        <div class="fg">
+          <label>Password * (min. 8)</label>
+          <div class="fin-wrap">
+            <input class="fin" type="password" id="pw1" name="password" placeholder="••••••••" required>
+            <button type="button" class="pw-toggle" onclick="togglePw('pw1',this)"><span class="ms">visibility</span></button>
+          </div>
+        </div>
+        <div class="fg">
+          <label>Confirm Password *</label>
+          <div class="fin-wrap">
+            <input class="fin" type="password" id="pw2" name="confirm" placeholder="••••••••" required>
+            <button type="button" class="pw-toggle" onclick="togglePw('pw2',this)"><span class="ms">visibility</span></button>
+          </div>
         </div>
       </div>
 
-      <div class="fg">
-        <label>Confirm Password *</label>
-        <div class="iw">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <input type="password" name="confirm" placeholder="Repeat your password" required>
-        </div>
+      <!-- TOS -->
+      <div style="display:flex;align-items:flex-start;gap:10px;margin:14px 0 18px;">
+        <input type="checkbox" id="tos" required style="margin-top:2px;width:15px;height:15px;accent-color:#00236f;flex-shrink:0;">
+        <label for="tos" style="font-size:.75rem;color:#444651;line-height:1.55;cursor:pointer;">
+          I agree to the <a href="#" style="color:#00236f;font-weight:700;">Terms of Service</a> and <a href="#" style="color:#00236f;font-weight:700;">Privacy Policy</a> including data processing for administrative purposes.
+        </label>
       </div>
 
-      <button type="submit" class="btn <?= htmlspecialchars($inv['role'] ?? 'staff') ?>">
-        Create My Account & Sign In →
+      <button type="submit" class="btn-submit <?= $is_cashier ? 'cashier' : '' ?>">
+        Create My Account &amp; Sign In
+        <span class="ms">arrow_forward</span>
       </button>
-      <p style="text-align:center;font-size:.75rem;color:#94a3b8;margin-top:12px;">
-        By registering, you agree to PawnHub's terms of service.
-      </p>
     </form>
-  </div>
-  <?php endif; ?>
 
-</div>
+    <div class="card-foot">
+      Already registered for this branch? <a href="login.php">Log in here</a>
+    </div>
+  </div>
+
+  <!-- Bento badges -->
+  <div class="bento-row">
+    <div class="bento"><span class="ms filled">encrypted</span><p>256-Bit SSL</p></div>
+    <div class="bento"><span class="ms filled">verified_user</span><p>Identity Verified</p></div>
+    <div class="bento"><span class="ms filled">cloud_done</span><p>Cloud Sync</p></div>
+  </div>
+
+  <?php endif; ?>
+  </div>
+</main>
+
+<!-- Footer -->
+<footer class="footer-bar">
+  <span>© <?= date('Y') ?> PawnHub. All rights reserved.</span>
+  <nav>
+    <a href="#">Privacy Policy</a>
+    <a href="#">Terms of Service</a>
+    <a href="#">Branch Directory</a>
+  </nav>
+</footer>
+
+<script>
+function togglePw(id, btn) {
+  const f = document.getElementById(id);
+  const show = f.type === 'password';
+  f.type = show ? 'text' : 'password';
+  btn.querySelector('.ms').textContent = show ? 'visibility_off' : 'visibility';
+}
+</script>
 </body>
 </html>
