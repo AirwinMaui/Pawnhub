@@ -15,23 +15,52 @@ $theme = getTenantTheme($pdo, $tid);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-    // Add Staff or Cashier
-    if ($_POST['action'] === 'add_user') {
-        $fullname = trim($_POST['fullname']  ?? '');
-        $email    = trim($_POST['email']     ?? '');
-        $username = trim($_POST['username']  ?? '');
-        $password = trim($_POST['password']  ?? '');
+    // Invite Staff or Cashier via Email
+    if ($_POST['action'] === 'invite_staff') {
+        $email    = trim($_POST['email']  ?? '');
+        $name     = trim($_POST['name']   ?? '');
         $role     = in_array($_POST['role'], ['staff','cashier']) ? $_POST['role'] : 'staff';
-        if ($fullname && $username && $password) {
-            $chk = $pdo->prepare("SELECT id FROM users WHERE username=?"); $chk->execute([$username]);
-            if ($chk->fetch()) { $error_msg = 'Username already taken.'; }
-            else {
-                $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,?,'approved',?,NOW())")
-                    ->execute([$tid,$fullname,$email,$username,password_hash($password,PASSWORD_BCRYPT),$role,$u['id']]);
-                $success_msg = ucfirst($role)." account for \"$fullname\" created!";
+
+        if (!$email || !$name) {
+            $error_msg = 'Please fill in name and email.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error_msg = 'Invalid email address.';
+        } else {
+            // Check if email already has an account in this tenant
+            $chk = $pdo->prepare("SELECT id FROM users WHERE email=? AND tenant_id=?");
+            $chk->execute([$email, $tid]);
+            if ($chk->fetch()) {
+                $error_msg = 'This email already has an account in your branch.';
+            } else {
+                // Cancel any pending invitations for same email+tenant
+                $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role IN ('staff','cashier')")
+                    ->execute([$email, $tid]);
+
+                // Create new invitation token
+                $token      = bin2hex(random_bytes(32));
+                $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
+
+                $pdo->prepare("INSERT INTO tenant_invitations (tenant_id, email, owner_name, role, token, status, expires_at, created_by) VALUES (?,?,?,?,?,'pending',?,?)")
+                    ->execute([$tid, $email, $name, $role, $token, $expires_at, $u['id']]);
+
+                // Get tenant slug for login link
+                $slug_row = $pdo->prepare("SELECT slug FROM tenants WHERE id=? LIMIT 1");
+                $slug_row->execute([$tid]);
+                $slug_row = $slug_row->fetch();
+                $slug     = $slug_row['slug'] ?? '';
+
+                // Send invitation email
+                try {
+                    require_once __DIR__ . '/mailer.php';
+                    sendStaffInvitation($email, $name, $tenant['business_name'], $role, $token);
+                    $success_msg = ucfirst($role) . " invitation sent to {$email}!";
+                } catch (Throwable $e) {
+                    error_log('Staff invite email failed: ' . $e->getMessage());
+                    $error_msg = 'Invitation created but email failed to send. Check mailer config.';
+                }
                 $active_page = 'users';
             }
-        } else { $error_msg = 'Fill in all required fields.'; }
+        }
     }
 
     // Toggle user
@@ -299,7 +328,7 @@ tr:hover td{background:#f8fafc;}
     </div>
     <?php if($active_page==='users'):?>
     <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.78rem;padding:6px 13px;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Staff / Cashier
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Invite Staff / Cashier
     </button>
     <?php endif;?>
   </header>
@@ -563,24 +592,46 @@ tr:hover td{background:#f8fafc;}
   </div>
 </div>
 
-<!-- ADD STAFF/CASHIER MODAL -->
+<!-- INVITE STAFF/CASHIER MODAL -->
 <div class="modal-overlay" id="addUserModal">
   <div class="modal">
-    <div class="mhdr"><div class="mtitle">Add Staff / Cashier</div><button class="mclose" onclick="document.getElementById('addUserModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="mhdr">
+      <div class="mtitle">Invite Staff / Cashier</div>
+      <button class="mclose" onclick="document.getElementById('addUserModal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
     <div class="mbody">
       <form method="POST">
-        <input type="hidden" name="action" value="add_user">
-        <div class="fg2">
-          <div style="grid-column:1/-1;margin-bottom:11px;"><label class="flabel">Role *</label><select name="role" class="finput" required><option value="staff">Staff</option><option value="cashier">Cashier</option></select></div>
-          <div style="grid-column:1/-1;margin-bottom:11px;"><label class="flabel">Full Name *</label><input type="text" name="fullname" class="finput" placeholder="Maria Santos" required></div>
-          <div style="margin-bottom:11px;"><label class="flabel">Username *</label><input type="text" name="username" class="finput" placeholder="staffuser1" required></div>
-          <div style="margin-bottom:11px;"><label class="flabel">Email</label><input type="email" name="email" class="finput" placeholder="staff@branch.ph"></div>
-          <div style="grid-column:1/-1;margin-bottom:14px;"><label class="flabel">Password *</label><input type="password" name="password" class="finput" placeholder="Min. 8 characters" required></div>
+        <input type="hidden" name="action" value="invite_staff">
+
+        <div style="margin-bottom:11px;">
+          <label class="flabel">Role *</label>
+          <select name="role" class="finput" required>
+            <option value="staff">Staff</option>
+            <option value="cashier">Cashier</option>
+          </select>
         </div>
-        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:.76rem;color:#1d4ed8;margin-bottom:14px;">ℹ️ <strong>Staff</strong> can create pawn tickets and register customers. <strong>Cashier</strong> handles payments only.</div>
+
+        <div style="margin-bottom:11px;">
+          <label class="flabel">Full Name *</label>
+          <input type="text" name="name" class="finput" placeholder="Maria Santos" required>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label class="flabel">Email Address *</label>
+          <input type="email" name="email" class="finput" placeholder="staff@example.com" required>
+          <div style="font-size:.72rem;color:#94a3b8;margin-top:4px;">An invitation link will be sent to this email.</div>
+        </div>
+
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:.76rem;color:#1d4ed8;margin-bottom:14px;line-height:1.6;">
+          📧 <strong>How it works:</strong><br>
+          The staff/cashier will receive an email with a link to set up their own username and password. After registering, they'll also get their branch login page link.
+        </div>
+
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addUserModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-sm btn-primary">Create Account</button>
+          <button type="submit" class="btn-sm btn-primary">Send Invitation</button>
         </div>
       </form>
     </div>
