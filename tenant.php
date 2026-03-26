@@ -52,7 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // Send invitation email
                 try {
                     require_once __DIR__ . '/mailer.php';
-                    sendStaffInvitation($email, $name, $tenant['business_name'], $role, $token);
+                    $biz_row = $pdo->prepare("SELECT business_name FROM tenants WHERE id=? LIMIT 1");
+                    $biz_row->execute([$tid]);
+                    $biz_name_for_mail = $biz_row->fetchColumn() ?: 'PawnHub';
+                    sendStaffInvitation($email, $name, $biz_name_for_mail, $role, $token);
                     $success_msg = ucfirst($role) . " invitation sent to {$email}!";
                 } catch (Throwable $e) {
                     $emailErr = $e->getMessage();
