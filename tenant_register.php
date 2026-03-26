@@ -13,7 +13,7 @@ if (!$token) {
     $error = 'Invalid or missing invitation link.';
 } else {
     $stmt = $pdo->prepare("
-        SELECT i.*, t.business_name, t.plan, t.id as tenant_id
+        SELECT i.*, t.business_name, t.plan, t.id as tenant_id, t.slug
         FROM tenant_invitations i
         JOIN tenants t ON i.tenant_id = t.id
         WHERE i.token = ? AND i.status = 'pending'
@@ -97,7 +97,7 @@ if ($success) {
     $slug_row    = $slug_stmt->fetch();
     $tenant_slug = $slug_row['slug'] ?? '';
     $login_url   = !empty($tenant_slug)
-        ? 'tenant_login.php?slug=' . urlencode($tenant_slug)
+        ? '/' . urlencode($tenant_slug) . '?registered=1'
         : 'login.php';
     // Redirect to tenant login page after 4 seconds
     header('refresh:4;url=' . $login_url);
@@ -190,7 +190,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
 
 <!-- Top Nav -->
 <header class="topnav">
-  <div class="topnav-brand">PawnHub</div>
+  <div class="topnav-brand"><?= $inv ? htmlspecialchars($inv['business_name']) : 'PawnHub' ?></div>
   <div class="topnav-right">
     <span>Security Protocol Active</span>
     <span class="ico">help_outline</span>
@@ -311,7 +311,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
     </form>
 
     <div class="card-foot">
-      Already registered for this branch? <a href="login.php">Log in here</a>
+      Already registered for this branch? <a href="<?= !empty($inv['slug']) ? '/' . htmlspecialchars($inv['slug']) : 'login.php' ?>">Log in here</a>
     </div>
   </div>
 

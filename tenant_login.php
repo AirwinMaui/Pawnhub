@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             }
 
             // Redirect to tenant login page with success message — do NOT auto-login
-            $login_url = 'tenant_login.php?slug=' . urlencode($slug) . '&registered=1';
+            $login_url = '/' . urlencode($slug) . '?registered=1';
             header('Location: ' . $login_url);
             exit;
         }
@@ -271,7 +271,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         </div>
         <?php endif; ?>
 
-        <form method="POST" action="?slug=<?= htmlspecialchars($slug) ?>&token=<?= htmlspecialchars($token) ?>" class="form">
+        <form method="POST" action="/<?= htmlspecialchars($slug) ?>?token=<?= htmlspecialchars($token) ?>" class="form">
           <input type="hidden" name="form_type" value="register">
 
           <div>
@@ -343,7 +343,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         </div>
         <?php endif; ?>
 
-        <form method="POST" action="?slug=<?= htmlspecialchars($slug) ?>" class="form">
+        <form method="POST" action="/<?= htmlspecialchars($slug) ?>" class="form">
           <input type="hidden" name="form_type" value="login">
 
           <div>
