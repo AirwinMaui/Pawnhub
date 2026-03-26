@@ -6,14 +6,13 @@ $token   = trim($_GET['token'] ?? '');
 $error   = '';
 $success = false;
 $inv     = null;
-$tenant  = null;
 
-// ── Validate token ────────────────────────────────────────────
+// ── Validate token ─────────────────────────────────────────────
 if (!$token) {
     $error = 'Invalid or missing invitation link.';
 } else {
     $stmt = $pdo->prepare("
-        SELECT i.*, t.business_name, t.plan, t.id as tenant_id
+        SELECT i.*, t.business_name, t.plan, t.id AS tenant_id, t.slug
         FROM tenant_invitations i
         JOIN tenants t ON i.tenant_id = t.id
         WHERE i.token = ? AND i.status = 'pending'
@@ -25,18 +24,17 @@ if (!$token) {
     if (!$inv) {
         $error = 'This invitation link is invalid or has already been used.';
     } elseif (strtotime($inv['expires_at']) < time()) {
-        $error = 'This invitation link has expired. Please contact your Super Admin to resend.';
-        // Mark as expired
         $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE token=?")->execute([$token]);
+        $error = 'This invitation link has expired. Please contact your Super Admin to resend.';
     }
 }
 
-// ── Handle registration form ──────────────────────────────────
+// ── Handle POST ────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
-    $username = trim($_POST['username']  ?? '');
-    $password = trim($_POST['password']  ?? '');
-    $confirm  = trim($_POST['confirm']   ?? '');
-    $fullname = trim($_POST['fullname']  ?? $inv['owner_name']);
+    $username = trim($_POST['username'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+    $confirm  = trim($_POST['confirm']  ?? '');
+    $fullname = trim($_POST['fullname'] ?? $inv['owner_name']);
 
     if (!$username || !$password || !$fullname) {
         $error = 'Please fill in all required fields.';
@@ -45,429 +43,351 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
     } elseif (strlen($password) < 8) {
         $error = 'Password must be at least 8 characters.';
     } else {
-        // Check username unique
-        $chk = $pdo->prepare("SELECT id FROM users WHERE username=?");
+        $chk = $pdo->prepare("SELECT id FROM users WHERE username = ?");
         $chk->execute([$username]);
         if ($chk->fetch()) {
             $error = 'Username already taken. Please choose another.';
         } else {
-            $sa_stmt = $pdo->query("SELECT id FROM users WHERE role='super_admin' LIMIT 1");
-            $sa_row  = $sa_stmt->fetch();
-            $sa_id   = $sa_row ? $sa_row['id'] : null;
-
-            $pdo->beginTransaction();
-
-            // 1. Create admin user for this tenant
-            $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,'admin','approved',?,NOW())")
-                ->execute([$inv['tenant_id'], $fullname, $inv['email'], $username, password_hash($password, PASSWORD_BCRYPT), $sa_id]);
-
-            // 2. Activate tenant
-            $pdo->prepare("UPDATE tenants SET status='active', owner_name=? WHERE id=?")
-                ->execute([$fullname, $inv['tenant_id']]);
-
-            // 3. Mark invitation as used
-            $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")
-                ->execute([$token]);
-
-            $new_user_id = $pdo->lastInsertId();
-            $pdo->commit();
-
-            // 4. Auto login
-            $_SESSION['user'] = [
-                'id'          => $new_user_id,
-                'name'        => $fullname,
-                'username'    => $username,
-                'role'        => 'admin',
-                'tenant_id'   => $inv['tenant_id'],
-                'tenant_name' => $inv['business_name'],
-            ];
-
-            // 5. Send welcome email with their dedicated login page link
             try {
-                require_once __DIR__ . '/mailer.php';
-                $slug_for_mail = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
-                $slug_for_mail->execute([$inv['tenant_id']]);
-                $slug_row_mail = $slug_for_mail->fetch();
-                if (!empty($slug_row_mail['slug'])) {
-                    sendTenantWelcome($inv['email'], $fullname, $inv['business_name'], $slug_row_mail['slug']);
-                }
-            } catch (Throwable $e) {
-                error_log('Welcome email failed: ' . $e->getMessage());
-                // Hindi natin ihihinto ang registration kahit mag-fail ang email
-            }
+                $sa_stmt = $pdo->query("SELECT id FROM users WHERE role='super_admin' LIMIT 1");
+                $sa_row  = $sa_stmt->fetch();
+                $sa_id   = $sa_row ? $sa_row['id'] : null;
 
-            $success = true;
+                $pdo->beginTransaction();
+
+                // 1. Create admin user — auto approved (super admin invited them)
+                $pdo->prepare("
+                    INSERT INTO users (tenant_id, fullname, email, username, password, role, status, approved_by, approved_at)
+                    VALUES (?, ?, ?, ?, ?, 'admin', 'approved', ?, NOW())
+                ")->execute([
+                    $inv['tenant_id'],
+                    $fullname,
+                    $inv['email'],
+                    $username,
+                    password_hash($password, PASSWORD_BCRYPT),
+                    $sa_id,
+                ]);
+
+                // 2. Activate tenant
+                $pdo->prepare("UPDATE tenants SET status='active', owner_name=? WHERE id=?")
+                    ->execute([$fullname, $inv['tenant_id']]);
+
+                // 3. Mark invitation as used
+                $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")
+                    ->execute([$token]);
+
+                $pdo->commit();
+
+                // 4. Send welcome email with login URL
+                try {
+                    require_once __DIR__ . '/mailer.php';
+                    if (!empty($inv['slug'])) {
+                        sendTenantWelcome($inv['email'], $fullname, $inv['business_name'], $inv['slug']);
+                    }
+                } catch (Throwable $e) {
+                    error_log('Welcome email failed: ' . $e->getMessage());
+                }
+
+                $success = true;
+
+            } catch (PDOException $e) {
+                $pdo->rollBack();
+                $error = 'Registration failed. Please try again.';
+                error_log('tenant_register error: ' . $e->getMessage());
+            }
         }
     }
 }
 
+$redirect_url = '/tenant.php';
+if ($success && !empty($inv['slug'])) {
+    $redirect_url = '/' . $inv['slug'];
+}
 if ($success) {
-    // Get tenant slug for branded redirect
-    $slug_stmt = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
-    $slug_stmt->execute([$inv['tenant_id']]);
-    $slug_row = $slug_stmt->fetch();
-    $redirect_url = !empty($slug_row['slug']) ? '/' . $slug_row['slug'] : '/tenant.php';
-    // Redirect to tenant dashboard after 2 seconds
     header('refresh:2;url=' . $redirect_url);
 }
+
+$biz_name = htmlspecialchars($inv['business_name'] ?? 'PawnHub');
+$plan     = htmlspecialchars($inv['plan'] ?? 'Starter');
+$email    = htmlspecialchars($inv['email'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PawnHub — Complete Your Registration</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1a1c1d;overflow-x:hidden;position:relative;}
-.bg-fixed{position:fixed;inset:0;z-index:0;}
-.bg-fixed img{width:100%;height:100%;object-fit:cover;display:block;}
-.bg-fixed-ov{position:absolute;inset:0;background:rgba(0,35,111,0.22);backdrop-filter:brightness(0.75);}
-.topnav{position:fixed;top:0;left:0;width:100%;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:22px 32px;}
-.topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;}
-.topnav-right{display:flex;align-items:center;gap:14px;}
-.topnav-right span{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.7);}
-.topnav-right .ico{font-size:22px;color:#fff;cursor:pointer;padding:7px;border-radius:50%;transition:background .2s;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
-.topnav-right .ico:hover{background:rgba(255,255,255,.12);}
-.page{position:relative;z-index:10;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 24px 100px;}
-.card{width:100%;max-width:520px;background:rgba(255,255,255,0.78);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.35);border-radius:16px;box-shadow:0 20px 40px rgba(30,58,138,0.1);padding:40px 44px;}
-.card-meta{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
-.card-meta-badge{background:#1e3a8a;color:#fff;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;padding:3px 10px;border-radius:6px;}
-.card-meta-step{font-size:.75rem;font-weight:500;color:#757682;}
-.card-meta-div{height:1px;width:28px;background:rgba(0,0,0,.12);}
-.card-title{font-size:1.75rem;font-weight:800;color:#00236f;letter-spacing:-.03em;line-height:1.15;margin-bottom:8px;}
-.card-sub{font-size:.82rem;color:#444651;display:flex;align-items:center;gap:5px;margin-bottom:28px;flex-wrap:wrap;}
-.fg{margin-bottom:14px;}
-.fg label{display:block;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#444651;margin-bottom:6px;padding-left:2px;}
-.fin{width:100%;background:#e2e2e4;border:none;border-radius:10px;padding:13px 16px;font-family:'Inter',sans-serif;font-size:.875rem;color:#1a1c1d;outline:none;transition:background .2s,box-shadow .2s;}
-.fin:focus{background:#fff;box-shadow:0 0 0 2px rgba(0,35,111,.2);}
-.fin::placeholder{color:rgba(0,0,0,.35);}
-.fin[readonly]{background:#eeeef0;color:#757682;cursor:not-allowed;}
-.fin-wrap{position:relative;}
-.fin-wrap .ms-ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:17px;color:#757682;pointer-events:none;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
-.fin-wrap .fin{padding-left:40px;}
-.fin-wrap .pw-toggle{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:18px;color:#757682;cursor:pointer;transition:color .2s;background:none;border:none;padding:0;display:flex;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
-.fin-wrap .pw-toggle:hover{color:#1a1c1d;}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.hint{font-size:.7rem;color:#757682;margin-top:4px;padding-left:2px;}
-.alert-err{background:#ffdad6;border:1px solid #ffb4ab;border-radius:10px;padding:11px 14px;font-size:.8rem;color:#93000a;display:flex;align-items:center;gap:8px;margin-bottom:16px;}
-.btn-submit{width:100%;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:10px;padding:15px;font-family:'Inter',sans-serif;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(30,58,138,.25);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
-.btn-submit:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(30,58,138,.35);}
-.btn-submit:active{transform:scale(.98);}
-.card-foot{margin-top:20px;text-align:center;font-size:.8rem;color:#757682;}
-.card-foot a{color:#00236f;font-weight:700;text-decoration:none;}
-.card-foot a:hover{text-decoration:underline;}
-.bento-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;}
-.bento{background:rgba(255,255,255,.72);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:12px 8px;text-align:center;}
-.bento .ms{font-size:22px;color:#00236f;display:block;margin-bottom:3px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;}
-.bento p{font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1e3a8a;}
-.state-box{text-align:center;padding:20px 0;}
-.state-icon{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.state-icon.ok{background:#dcfce7;}
-.state-icon.err{background:#fee2e2;}
-.state-icon .ms{font-size:32px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;}
-.state-icon.ok .ms{color:#15803d;}
-.state-icon.err .ms{color:#dc2626;}
-.state-title{font-size:1.2rem;font-weight:800;color:#1a1c1d;margin-bottom:8px;}
-.state-sub{font-size:.84rem;color:#444651;line-height:1.65;margin-bottom:20px;}
-.state-redirect{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:13px;font-size:.8rem;color:#15803d;}
-.state-redirect a{color:#2563eb;font-weight:600;}
-.btn-back{display:inline-block;background:#00236f;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-size:.88rem;font-weight:700;}
-.footer-bar{position:fixed;bottom:0;left:0;width:100%;z-index:40;display:flex;justify-content:space-between;align-items:center;padding:18px 48px;backdrop-filter:blur(12px);background:rgba(255,255,255,.06);}
-.footer-bar span{font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);}
-.footer-bar nav{display:flex;gap:28px;}
-.footer-bar nav a{font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);text-decoration:none;transition:color .2s;}
-.footer-bar nav a:hover{color:#fff;}
-.ms-inline{font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;font-size:15px;vertical-align:middle;}
-@media(max-width:600px){
-  .card{padding:28px 22px;}
-  .grid2{grid-template-columns:1fr;}
-  .footer-bar nav{display:none;}
-  .topnav-right span{display:none;}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Inter', sans-serif; }
+body {
+    min-height: 100vh;
+    background-image: linear-gradient(rgba(0,0,0,0.60), rgba(0,0,0,0.70)),
+        url('https://lh3.googleusercontent.com/aida-public/AB6AXuCx2DpF3DhIT8TMkI77WjrdPvL6YVSpVpWmOEXSGYEKlgSNatvfUPOuV3QNXsel_47FDOEDJ99WDIO4ESDYlrYK-ERBoWVC3c-LXv1bOADmUcIWror3a9k9pousLqJjChv08FrIrBVwj8x-1jR1uBrrxeP6SIDEKNxL1OxGXCIGuHnIVKd8KPfKebyipejNKaBy12kucRMfr0_Og_bv9bc1_Ikfu9Airs60mBJVLIZs4vDeoJzDvCWs3p9cdGZ4TtDQqH6R7tA3fHI');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: #fff;
+}
+.topnav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 36px;
+    background: rgba(0,0,0,0.25);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.nav-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+.nav-logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+}
+.nav-logo-icon svg { width: 15px; height: 15px; }
+.nav-brand-name { font-size: 1.1rem; font-weight: 800; color: #fff; }
+.card {
+    width: 100%; max-width: 460px;
+    background: rgba(255,255,255,0.10);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 36px 34px 28px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    margin-top: 72px;
+}
+.tenant-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(37,99,235,0.25);
+    border: 1px solid rgba(37,99,235,0.4);
+    border-radius: 8px;
+    padding: 5px 11px;
+    font-size: 0.74rem; font-weight: 700; color: #93c5fd;
+    margin-bottom: 14px;
+}
+.plan-chip {
+    background: rgba(139,92,246,0.25);
+    border: 1px solid rgba(139,92,246,0.35);
+    border-radius: 100px;
+    padding: 1px 8px;
+    font-size: 0.65rem; font-weight: 700; color: #c4b5fd;
+    margin-left: 4px;
+}
+.card-title { font-size: 1.5rem; font-weight: 800; color: #fff; letter-spacing: -.03em; margin-bottom: 5px; }
+.card-sub { font-size: 0.81rem; color: rgba(255,255,255,0.45); margin-bottom: 22px; line-height: 1.55; }
+.fg { margin-bottom: 13px; }
+.flabel {
+    display: block; font-size: 0.66rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.09em;
+    color: rgba(255,255,255,0.45); margin-bottom: 5px;
+}
+.finput {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.86rem; color: #fff;
+    outline: none;
+    transition: all .2s;
+}
+.finput:focus { background: rgba(255,255,255,0.13); border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
+.finput::placeholder { color: rgba(255,255,255,0.22); }
+.finput[readonly] { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.3); cursor: not-allowed; }
+.pw-wrap { position: relative; }
+.pw-wrap .finput { padding-right: 42px; }
+.pw-btn {
+    position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: rgba(255,255,255,0.3); display: flex; align-items: center;
+    transition: color .2s; padding: 0;
+}
+.pw-btn:hover { color: rgba(255,255,255,0.7); }
+.pw-btn .material-symbols-outlined { font-size: 18px; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.alert-err {
+    background: rgba(220,38,38,0.15); border: 1px solid rgba(220,38,38,0.3);
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 0.81rem; color: #fca5a5;
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 16px;
+}
+.alert-err .material-symbols-outlined { font-size: 16px; flex-shrink: 0; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+.btn-submit {
+    width: 100%;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff; border: none; border-radius: 11px;
+    padding: 13px; font-family: 'Inter', sans-serif;
+    font-size: 0.91rem; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 18px rgba(37,99,235,0.35);
+    transition: all .2s; margin-top: 4px;
+}
+.btn-submit:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.btn-submit:active { transform: scale(.98); }
+.state-box { text-align: center; padding: 10px 0; }
+.state-icon {
+    width: 68px; height: 68px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+}
+.state-icon.ok { background: rgba(34,197,94,0.15); }
+.state-icon.err { background: rgba(220,38,38,0.15); }
+.state-icon .material-symbols-outlined { font-size: 34px; font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
+.state-icon.ok .material-symbols-outlined { color: #22c55e; }
+.state-icon.err .material-symbols-outlined { color: #f87171; }
+.state-title { font-size: 1.25rem; font-weight: 800; color: #fff; margin-bottom: 8px; }
+.state-sub { font-size: 0.84rem; color: rgba(255,255,255,0.5); line-height: 1.65; margin-bottom: 18px; }
+.state-redirect {
+    background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 10px; padding: 12px 16px;
+    font-size: 0.8rem; color: #86efac;
+}
+.state-redirect a { color: #93c5fd; font-weight: 600; }
+.btn-back {
+    display: inline-block; background: #2563eb; color: #fff;
+    text-decoration: none; padding: 11px 28px; border-radius: 10px;
+    font-size: 0.88rem; font-weight: 700; margin-top: 6px;
+}
+.card-foot {
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    text-align: center; font-size: 0.78rem; color: rgba(255,255,255,0.3);
+}
+.card-foot a { color: #60a5fa; font-weight: 600; text-decoration: none; }
+.page-footer { margin-top: 20px; font-size: 0.64rem; color: rgba(255,255,255,0.2); }
+@media (max-width: 520px) {
+    .card { padding: 26px 20px 22px; margin-top: 76px; }
+    .grid2 { grid-template-columns: 1fr; }
 }
 </style>
 </head>
 <body>
 
-<!-- Background -->
-<div class="bg-fixed">
-  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCx2DpF3DhIT8TMkI77WjrdPvL6YVSpVpWmOEXSGYEKlgSNatvfUPOuV3QNXsel_47FDOEDJ99WDIO4ESDYlrYK-ERBoWVC3c-LXv1bOADmUcIWror3a9k9pousLqJjChv08FrIrBVwj8x-1jR1uBrrxeP6SIDEKNxL1OxGXCIGuHnIVKd8KPfKebyipejNKaBy12kucRMfr0_Og_bv9bc1_Ikfu9Airs60mBJVLIZs4vDeoJzDvCWs3p9cdGZ4TtDQqH6R7tA3fHI" alt="Pawnshop background"/>
-  <div class="bg-fixed-ov"></div>
-</div>
-
-<!-- Top Nav -->
 <header class="topnav">
-  <div class="topnav-brand">PawnHub</div>
-  <div class="topnav-right">
-    <span>Security Protocol Active</span>
-    <span class="ico">help_outline</span>
-  </div>
+    <a href="home.php" class="nav-brand">
+        <div class="nav-logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
+            </svg>
+        </div>
+        <span class="nav-brand-name">PawnHub</span>
+    </a>
+    <span style="font-size:0.63rem;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:rgba(255,255,255,0.4);">Security Protocol Active</span>
 </header>
 
-<!-- Page -->
-<main class="page">
-  <div style="width:100%;max-width:520px;">
+<div class="card">
 
-  <?php if($error): ?>
-  <!-- ── Error State ── -->
-  <div class="card">
+    <?php if ($error): ?>
     <div class="state-box">
-      <div class="state-icon err"><span class="ms">cancel</span></div>
-      <div class="state-title">Invalid Invitation</div>
-      <p class="state-sub"><?= htmlspecialchars($error) ?></p>
-      <a href="login.php" class="btn-back">Back to Login</a>
+        <div class="state-icon err"><span class="material-symbols-outlined">cancel</span></div>
+        <div class="state-title">Invalid Invitation</div>
+        <p class="state-sub"><?= htmlspecialchars($error) ?></p>
+        <a href="login.php" class="btn-back">Back to Login</a>
     </div>
-  </div>
 
-  <?php elseif($success): ?>
-  <!-- ── Success State ── -->
-  <div class="card">
+    <?php elseif ($success): ?>
     <div class="state-box">
-      <div class="state-icon ok"><span class="ms">check_circle</span></div>
-      <div class="state-title">Welcome to PawnHub! 🎉</div>
-      <p class="state-sub">Your account has been created and your branch <strong><?= htmlspecialchars($inv['business_name']) ?></strong> is now active.<br><br>Redirecting you to your dashboard...</p>
-      <div class="state-redirect">
-        ⏳ Redirecting to dashboard in 2 seconds...<br>
-        <a href="<?= $redirect_url ?>">Click here if not redirected</a>
-      </div>
+        <div class="state-icon ok"><span class="material-symbols-outlined">check_circle</span></div>
+        <div class="state-title">Welcome to PawnHub! 🎉</div>
+        <p class="state-sub">
+            Your account is ready and <strong style="color:rgba(255,255,255,0.8);"><?= $biz_name ?></strong> is now active.<br><br>
+            Redirecting to your dashboard...
+        </p>
+        <div class="state-redirect">
+            ⏳ Redirecting in 2 seconds...<br>
+            <a href="<?= htmlspecialchars($redirect_url) ?>">Click here if not redirected</a>
+        </div>
     </div>
-  </div>
 
-  <?php else: ?>
-  <!-- ── Registration Form ── -->
-  <div class="card">
-    <div class="card-meta">
-      <span class="card-meta-badge">Member Portal</span>
-      <div class="card-meta-div"></div>
-      <span class="card-meta-step">Step 02 of 02</span>
+    <?php else: ?>
+    <div>
+        <div class="tenant-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+                <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
+            </svg>
+            <?= $biz_name ?><span class="plan-chip"><?= $plan ?></span>
+        </div>
     </div>
+
     <h1 class="card-title">Complete Your Registration</h1>
-    <p class="card-sub">
-      <span class="ms-inline">storefront</span>
-      <?= htmlspecialchars($inv['business_name']) ?> · <strong style="color:#2563eb;"><?= htmlspecialchars($inv['plan']) ?> Plan</strong>
-    </p>
+    <p class="card-sub">You've been invited to join PawnHub. Set up your login credentials below.</p>
 
-    <?php if($error && !empty($error)): ?>
+    <?php if ($error): ?>
     <div class="alert-err">
-      <span style="font-family:'Material Symbols Outlined';font-size:16px;flex-shrink:0;">error</span>
-      <?= htmlspecialchars($error) ?>
+        <span class="material-symbols-outlined">error</span>
+        <?= htmlspecialchars($error) ?>
     </div>
     <?php endif; ?>
 
     <form method="POST">
-      <!-- Full Name -->
-      <div class="fg">
-        <label>Full Name *</label>
-        <div class="fin-wrap">
-          <span class="ms-ico">person</span>
-          <input class="fin" type="text" name="fullname" placeholder="Your full name"
-            value="<?= htmlspecialchars($_POST['fullname'] ?? $inv['owner_name']) ?>" required>
-        </div>
-      </div>
 
-      <!-- Email & Username -->
-      <div class="grid2">
         <div class="fg">
-          <label>Email</label>
-          <input class="fin" type="email" value="<?= htmlspecialchars($inv['email']) ?>" readonly>
-          <div class="hint">Invitation email address.</div>
+            <label class="flabel">Full Name *</label>
+            <input type="text" name="fullname" class="finput"
+                placeholder="Your full name"
+                value="<?= htmlspecialchars($_POST['fullname'] ?? $inv['owner_name']) ?>"
+                required>
         </div>
-        <div class="fg">
-          <label>Username *</label>
-          <div class="fin-wrap">
-            <span class="ms-ico">account_circle</span>
-            <input class="fin" type="text" name="username" placeholder="Choose a username"
-              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
-          </div>
-        </div>
-      </div>
 
-      <!-- Password & Confirm -->
-      <div class="grid2">
         <div class="fg">
-          <label>Password * (min. 8)</label>
-          <div class="fin-wrap">
-            <input class="fin" type="password" id="pw1" name="password" placeholder="••••••••" required>
-            <button type="button" class="pw-toggle" onclick="togglePw('pw1',this)">visibility</button>
-          </div>
+            <label class="flabel">Email</label>
+            <input type="email" class="finput" value="<?= $email ?>" readonly>
+            <div style="font-size:0.68rem;color:rgba(255,255,255,0.25);margin-top:4px;">Your invitation email address.</div>
         </div>
+
         <div class="fg">
-          <label>Confirm Password *</label>
-          <div class="fin-wrap">
-            <input class="fin" type="password" id="pw2" name="confirm" placeholder="••••••••" required>
-            <button type="button" class="pw-toggle" onclick="togglePw('pw2',this)">visibility</button>
-          </div>
+            <label class="flabel">Username *</label>
+            <input type="text" name="username" class="finput"
+                placeholder="Choose a username"
+                value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
+                required>
         </div>
-      </div>
 
-      <!-- TOS -->
-      <div style="display:flex;align-items:flex-start;gap:10px;margin:14px 0 18px;">
-        <input type="checkbox" id="tos" required style="margin-top:2px;width:15px;height:15px;accent-color:#00236f;flex-shrink:0;">
-        <label for="tos" style="font-size:.75rem;color:#444651;line-height:1.55;cursor:pointer;">
-          I agree to the <a href="#" style="color:#00236f;font-weight:700;">Terms of Service</a> and <a href="#" style="color:#00236f;font-weight:700;">Privacy Policy</a> including data processing for administrative purposes.
-        </label>
-      </div>
+        <div class="grid2">
+            <div class="fg">
+                <label class="flabel">Password * (min. 8)</label>
+                <div class="pw-wrap">
+                    <input type="password" name="password" id="pw1" class="finput" placeholder="••••••••" required>
+                    <button type="button" class="pw-btn"
+                        onclick="const f=document.getElementById('pw1');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                        <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                </div>
+            </div>
+            <div class="fg">
+                <label class="flabel">Confirm Password *</label>
+                <div class="pw-wrap">
+                    <input type="password" name="confirm" id="pw2" class="finput" placeholder="••••••••" required>
+                    <button type="button" class="pw-btn"
+                        onclick="const f=document.getElementById('pw2');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                        <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                </div>
+            </div>
+        </div>
 
-      <button type="submit" class="btn-submit">
-        Create My Account &amp; Access System
-        <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">arrow_forward</span>
-      </button>
+        <button type="submit" class="btn-submit">
+            Create My Account & Access System →
+        </button>
     </form>
 
     <div class="card-foot">
-      Already registered for this branch? <a href="login.php">Log in here</a>
+        Already registered? <a href="login.php">Sign in here</a>
     </div>
-  </div>
+    <?php endif; ?>
 
-  <!-- Bento badges -->
-  <div class="bento-row">
-    <div class="bento"><span class="ms">encrypted</span><p>256-Bit SSL</p></div>
-    <div class="bento"><span class="ms">verified_user</span><p>Identity Verified</p></div>
-    <div class="bento"><span class="ms">cloud_done</span><p>Cloud Sync</p></div>
-  </div>
-
-  <?php endif; ?>
-  </div>
-</main>
-
-<!-- Footer -->
-<footer class="footer-bar">
-  <span>© <?= date('Y') ?> PawnHub. All rights reserved.</span>
-  <nav>
-    <a href="#">Privacy Policy</a>
-    <a href="#">Terms of Service</a>
-    <a href="#">Branch Directory</a>
-  </nav>
-</footer>
-
-<script>
-function togglePw(id, btn) {
-  const f = document.getElementById(id);
-  const show = f.type === 'password';
-  f.type = show ? 'text' : 'password';
-  btn.textContent = show ? 'visibility_off' : 'visibility';
-}
-</script>
-</body>
-</html>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;background:linear-gradient(135deg,#0f172a,#1e3a8a);display:flex;align-items:center;justify-content:center;padding:32px 16px;}
-.box{background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.25);width:100%;max-width:480px;overflow:hidden;}
-.box-header{background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:28px 32px;}
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
-.logo-icon{width:38px;height:38px;background:rgba(255,255,255,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;}
-.logo-icon svg{width:20px;height:20px;}
-.logo-name{font-size:1.2rem;font-weight:800;color:#fff;}
-.hdr-title{font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:4px;}
-.hdr-sub{font-size:.82rem;color:rgba(255,255,255,.65);}
-.tenant-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;font-size:.8rem;color:#fff;font-weight:600;margin-top:10px;}
-.box-body{padding:28px 32px;}
-.fg{margin-bottom:15px;}
-.fg label{display:block;font-size:.75rem;font-weight:600;color:#374151;margin-bottom:5px;}
-.fg input{width:100%;border:1.5px solid #e2e8f0;border-radius:9px;padding:10px 12px;font-family:inherit;font-size:.87rem;color:#0f172a;outline:none;transition:border .2s;}
-.fg input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-.fg input::placeholder{color:#c8d0db;}
-.iw{position:relative;}
-.iw>svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#94a3b8;}
-.iw input{padding-left:36px;}
-.err{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 13px;font-size:.81rem;color:#dc2626;margin-bottom:16px;display:flex;align-items:center;gap:7px;}
-.err svg{width:14px;height:14px;flex-shrink:0;}
-.btn{width:100%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:13px;font-family:inherit;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,.3);transition:all .2s;margin-top:4px;}
-.btn:hover{transform:translateY(-1px);}
-.hint{font-size:.73rem;color:#94a3b8;margin-top:5px;}
-.success-box{text-align:center;padding:32px;}
-.success-icon{width:64px;height:64px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.success-icon svg{width:30px;height:30px;color:#15803d;}
-.success-title{font-size:1.1rem;font-weight:800;color:#0f172a;margin-bottom:8px;}
-.success-sub{font-size:.84rem;color:#64748b;line-height:1.6;margin-bottom:20px;}
-.err-box{text-align:center;padding:32px;}
-.err-icon{width:64px;height:64px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.err-icon svg{width:30px;height:30px;color:#dc2626;}
-</style>
-</head>
-<body>
-<div class="box">
-  <?php if($error): ?>
-    <!-- Error State -->
-    <div class="box-body err-box">
-      <div class="err-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
-      <div style="font-size:1.1rem;font-weight:800;color:#0f172a;margin-bottom:8px;">Invalid Invitation</div>
-      <p style="font-size:.85rem;color:#64748b;line-height:1.6;margin-bottom:20px;"><?=htmlspecialchars($error)?></p>
-      <a href="login.php" style="display:inline-block;background:var(--blue-acc,#2563eb);color:#fff;text-decoration:none;padding:10px 24px;border-radius:9px;font-size:.88rem;font-weight:700;">Back to Login</a>
-    </div>
-
-  <?php elseif($success): ?>
-    <!-- Success State -->
-    <div class="box-body success-box">
-      <div class="success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg></div>
-      <div class="success-title">Welcome to PawnHub! 🎉</div>
-      <p class="success-sub">Your account has been created and your branch <strong><?=htmlspecialchars($inv['business_name'])?></strong> is now active.<br><br>Redirecting you to your dashboard...</p>
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px;font-size:.81rem;color:#15803d;">
-        ⏳ Redirecting to dashboard in 2 seconds...<br>
-        <a href="<?=$redirect_url?>" style="color:#2563eb;font-weight:600;">Click here if not redirected</a>
-      </div>
-    </div>
-
-  <?php else: ?>
-    <!-- Registration Form -->
-    <div class="box-header">
-      <div class="logo">
-        <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div>
-        <span class="logo-name">PawnHub</span>
-      </div>
-      <div class="hdr-title">Complete Your Registration</div>
-      <div class="hdr-sub">You've been invited to join PawnHub as a branch admin.</div>
-      <div class="tenant-badge">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
-        <?=htmlspecialchars($inv['business_name'])?> · <?=$inv['plan']?> Plan
-      </div>
-    </div>
-    <div class="box-body">
-      <?php if($error && !empty($error)): ?>
-      <div class="err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><?=htmlspecialchars($error)?></div>
-      <?php endif; ?>
-
-      <form method="POST">
-        <div class="fg">
-          <label>Full Name *</label>
-          <div class="iw">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <input type="text" name="fullname" placeholder="Your full name" value="<?=htmlspecialchars($_POST['fullname'] ?? $inv['owner_name'])?>" required>
-          </div>
-        </div>
-        <div class="fg">
-          <label>Email</label>
-          <input type="email" value="<?=htmlspecialchars($inv['email'])?>" readonly style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:9px;padding:10px 12px;width:100%;font-family:inherit;font-size:.87rem;color:#64748b;">
-          <div class="hint">This is the email your invitation was sent to.</div>
-        </div>
-        <div class="fg">
-          <label>Username *</label>
-          <div class="iw">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <input type="text" name="username" placeholder="Choose a username" value="<?=htmlspecialchars($_POST['username']??'')?>" required>
-          </div>
-        </div>
-        <div class="fg">
-          <label>Password * (min. 8 characters)</label>
-          <div class="iw">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <input type="password" name="password" placeholder="Create a strong password" required>
-          </div>
-        </div>
-        <div class="fg">
-          <label>Confirm Password *</label>
-          <div class="iw">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <input type="password" name="confirm" placeholder="Repeat your password" required>
-          </div>
-        </div>
-        <button type="submit" class="btn">Create My Account & Access System →</button>
-        <p style="text-align:center;font-size:.75rem;color:#94a3b8;margin-top:12px;">By registering, you agree to PawnHub's terms of service.</p>
-      </form>
-    </div>
-  <?php endif; ?>
 </div>
+
+<div class="page-footer">© <?= date('Y') ?> PawnHub. All rights reserved.</div>
+
 </body>
 </html>
