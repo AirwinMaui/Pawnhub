@@ -3,11 +3,15 @@ session_start();
 require 'db.php';
 
 $slug  = trim($_GET['slug'] ?? '');
+$token = trim($_GET['token'] ?? '');
 $error = '';
 $tenant = null;
+$inv = null;
+$mode = 'login'; // 'login' or 'register'
 
+// ── Load tenant ───────────────────────────────────────────────
 if ($slug) {
-    $stmt = $pdo->prepare("SELECT * FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1");
+    $stmt = $pdo->prepare("SELECT * FROM tenants WHERE slug = ? LIMIT 1");
     $stmt->execute([$slug]);
     $tenant = $stmt->fetch();
 }
@@ -17,8 +21,82 @@ if (!$tenant) {
     exit;
 }
 
-// Handle login POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// ── Check if token is present → registration mode ─────────────
+if ($token) {
+    $inv_stmt = $pdo->prepare("
+        SELECT i.*, t.business_name, t.plan, t.id AS tenant_id
+        FROM tenant_invitations i
+        JOIN tenants t ON i.tenant_id = t.id
+        WHERE i.token = ? AND i.status = 'pending' AND i.tenant_id = ?
+        LIMIT 1
+    ");
+    $inv_stmt->execute([$token, $tenant['id']]);
+    $inv = $inv_stmt->fetch();
+
+    if ($inv) {
+        if (strtotime($inv['expires_at']) < time()) {
+            $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE token=?")->execute([$token]);
+            $error = 'This invitation link has expired. Please contact your administrator.';
+        } else {
+            $mode = 'register';
+        }
+    } else {
+        $error = 'Invalid or already used invitation link.';
+    }
+}
+
+// ── Handle REGISTRATION POST ──────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'register' && $inv) {
+    $fullname = trim($_POST['fullname'] ?? $inv['owner_name']);
+    $username = trim($_POST['username'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+    $confirm  = trim($_POST['confirm']  ?? '');
+
+    if (!$fullname || !$username || !$password) {
+        $error = 'Please fill in all required fields.';
+        $mode  = 'register';
+    } elseif ($password !== $confirm) {
+        $error = 'Passwords do not match.';
+        $mode  = 'register';
+    } elseif (strlen($password) < 8) {
+        $error = 'Password must be at least 8 characters.';
+        $mode  = 'register';
+    } else {
+        $chk = $pdo->prepare("SELECT id FROM users WHERE username = ?");
+        $chk->execute([$username]);
+        if ($chk->fetch()) {
+            $error = 'Username already taken. Please choose another.';
+            $mode  = 'register';
+        } else {
+            $sa_stmt = $pdo->query("SELECT id FROM users WHERE role='super_admin' LIMIT 1");
+            $sa_row  = $sa_stmt->fetch();
+            $sa_id   = $sa_row ? $sa_row['id'] : null;
+
+            $pdo->beginTransaction();
+            $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,'admin','approved',?,NOW())")
+                ->execute([$tenant['id'], $fullname, $inv['email'], $username, password_hash($password, PASSWORD_BCRYPT), $sa_id]);
+            $new_uid = $pdo->lastInsertId();
+            $pdo->prepare("UPDATE tenants SET status='active', owner_name=? WHERE id=?")->execute([$fullname, $tenant['id']]);
+            $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")->execute([$token]);
+            $pdo->commit();
+
+            session_regenerate_id(true);
+            $_SESSION['user'] = [
+                'id'          => $new_uid,
+                'name'        => $fullname,
+                'username'    => $username,
+                'role'        => 'admin',
+                'tenant_id'   => $tenant['id'],
+                'tenant_name' => $tenant['business_name'],
+            ];
+            header('Location: tenant.php');
+            exit;
+        }
+    }
+}
+
+// ── Handle LOGIN POST ─────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -78,148 +156,65 @@ $bgImg   = !empty($tenant['bg_image_url'])
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title><?= $bizName ?> — Sign In</title>
+<title><?= $bizName ?> — <?= $mode === 'register' ? 'Set Up Account' : 'Sign In' ?></title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-:root {
-  --primary: <?= $primary ?>;
-  --accent:  <?= $accent ?>;
-}
+:root { --primary: <?= $primary ?>; --accent: <?= $accent ?>; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overflow: hidden; }
-
 .bg { position: fixed; inset: 0; z-index: 0; }
 .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.52); }
-
-.nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-  height: 64px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 36px;
-  background: rgba(255,255,255,0.07);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: 64px; display: flex; align-items: center; padding: 0 36px; background: rgba(255,255,255,0.07); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
-.nav-logo-icon {
-  width: 32px; height: 32px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  border-radius: 9px; display: flex; align-items: center; justify-content: center;
-}
+.nav-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .nav-logo-text { font-size: 1.15rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-
-.page {
-  position: relative; z-index: 10; width: 100%; height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  padding-top: 64px;
-}
-.panel {
-  width: 460px; min-width: 460px;
-  display: flex; flex-direction: column; align-items: center;
-  padding: 0 40px;
-}
-.card {
-  width: 100%;
-  background: rgba(255,255,255,0.91);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  border-radius: 22px; padding: 34px 30px 26px;
-  box-shadow: 0 18px 48px rgba(10,20,60,0.20);
-  border: 1px solid rgba(255,255,255,0.26);
-}
+.page { position: relative; z-index: 10; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 64px; overflow-y: auto; }
+.panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 20px 40px; }
+.card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
 .card-icon { margin-bottom: 12px; }
 .material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
-.card-title { font-size: 1.9rem; font-weight: 800; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 5px; }
+.card-title { font-size: 1.7rem; font-weight: 800; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 5px; }
 .card-sub { font-size: 0.81rem; color: #64748b; line-height: 1.5; margin-bottom: 20px; }
-
-.err {
-  display: flex; align-items: center; gap: 8px;
-  background: #fef2f2; border: 1px solid #fecaca;
-  border-radius: 9px; padding: 9px 12px;
-  font-size: 0.79rem; color: #dc2626; margin-bottom: 16px;
-}
+.tenant-badge { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent); border-radius: 8px; padding: 5px 10px; font-size: 0.72rem; font-weight: 700; color: var(--primary); margin-bottom: 14px; }
+.reg-badge { display: inline-flex; align-items: center; gap: 5px; background: linear-gradient(135deg,#16a34a,#15803d); color: #fff; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 100px; margin-bottom: 14px; }
+.err { display: flex; align-items: center; gap: 8px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 9px; padding: 9px 12px; font-size: 0.79rem; color: #dc2626; margin-bottom: 16px; }
 .err .material-symbols-outlined { font-size: 15px; flex-shrink: 0; }
-
 .form { display: flex; flex-direction: column; gap: 14px; }
 .lbl { display: block; font-size: 0.67rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: #64748b; margin-bottom: 5px; }
-.inp {
-  width: 100%; height: 46px; padding: 0 15px;
-  background: rgba(218,218,224,0.38);
-  border: 1.5px solid transparent; border-radius: 10px;
-  font-family: 'Inter', sans-serif; font-size: 0.87rem; color: #111827;
-  outline: none; transition: background .2s, border-color .2s, box-shadow .2s;
-}
-.inp:focus {
-  background: #fff;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
-}
+.inp { width: 100%; height: 46px; padding: 0 15px; background: rgba(218,218,224,0.38); border: 1.5px solid transparent; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 0.87rem; color: #111827; outline: none; transition: background .2s, border-color .2s, box-shadow .2s; }
+.inp:focus { background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent); }
 .inp::placeholder { color: #b0b8c5; }
-
+.inp[readonly] { background: rgba(218,218,224,0.2); color: #94a3b8; cursor: not-allowed; }
 .pw-wrap { position: relative; }
 .pw-wrap .inp { padding-right: 42px; }
-.pw-btn {
-  position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
-  background: none; border: none; cursor: pointer; color: #94a3b8;
-  display: flex; align-items: center; padding: 0; transition: color .2s;
-}
+.pw-btn { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #94a3b8; display: flex; align-items: center; padding: 0; transition: color .2s; }
 .pw-btn:hover { color: #475569; }
 .pw-btn .material-symbols-outlined { font-size: 18px; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
-
 .rem { display: flex; align-items: center; gap: 8px; }
 .rem input[type="checkbox"] { width: 16px; height: 16px; border-radius: 4px; accent-color: var(--primary); cursor: pointer; }
 .rem label { font-size: 0.81rem; color: #64748b; cursor: pointer; user-select: none; }
-
-.btn {
-  width: 100%; height: 46px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: #fff; border: none; border-radius: 10px;
-  font-family: 'Inter', sans-serif; font-size: 0.91rem; font-weight: 700; cursor: pointer;
-  box-shadow: 0 5px 16px rgba(0,0,0,0.2);
-  transition: transform .15s, box-shadow .15s;
-}
+.btn { width: 100%; height: 46px; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; border: none; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 0.91rem; font-weight: 700; cursor: pointer; box-shadow: 0 5px 16px rgba(0,0,0,0.2); transition: transform .15s, box-shadow .15s; }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 7px 22px rgba(0,0,0,0.28); }
 .btn:active { transform: translateY(0); }
-
-.tenant-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
-  border-radius: 8px; padding: 5px 10px;
-  font-size: 0.72rem; font-weight: 700;
-  color: var(--primary);
-  margin-bottom: 14px;
-}
-
 .card-foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(0,0,0,0.07); }
 .card-foot-row { display: flex; align-items: flex-start; gap: 8px; }
 .card-foot-row .material-symbols-outlined { font-size: 16px; color: #94a3b8; margin-top: 1px; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
 .card-foot p { font-size: 0.75rem; line-height: 1.55; }
 .card-foot strong { color: #475569; font-weight: 600; display: block; }
 .card-foot span { color: #94a3b8; }
-.card-foot a { color: var(--primary); font-weight: 700; text-decoration: none; }
-.card-foot a:hover { text-decoration: underline; }
-
 .legal { margin-top: 12px; display: flex; gap: 16px; padding-left: 2px; }
 .legal a { font-size: 0.68rem; color: rgba(255,255,255,0.44); text-decoration: none; transition: color .2s; }
 .legal a:hover { color: #fff; }
-
-.badge {
-  position: fixed; bottom: 22px; right: 22px; z-index: 20;
-  display: flex; align-items: center; gap: 8px;
-  background: rgba(255,255,255,0.08);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  padding: 7px 15px; border-radius: 100px;
-  border: 1px solid rgba(255,255,255,0.10);
-}
+.badge { position: fixed; bottom: 22px; right: 22px; z-index: 20; display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.08); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 7px 15px; border-radius: 100px; border: 1px solid rgba(255,255,255,0.10); }
 .bdot { width: 7px; height: 7px; border-radius: 50%; background: #34d399; animation: pulse 2s infinite; }
 .btxt { font-size: 0.63rem; font-weight: 600; color: rgba(255,255,255,0.82); text-transform: uppercase; letter-spacing: 0.1em; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.35} }
-
 @media (max-width: 560px) {
-  .panel { width: 100%; min-width: unset; padding: 0 16px; }
+  .panel { width: 100%; min-width: unset; padding: 20px 16px; }
   .card { padding: 26px 20px 22px; }
-  .card-title { font-size: 1.6rem; }
+  .card-title { font-size: 1.5rem; }
   .badge { display: none; }
 }
 </style>
@@ -227,7 +222,7 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
 <body>
 
 <div class="bg">
-  <img src="<?= $bgImg ?>" alt="<?= $bizName ?> background"/>
+  <img src="<?= $bgImg ?>" alt="<?= $bizName ?>"/>
   <div class="bg-ov"></div>
 </div>
 
@@ -235,8 +230,7 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
   <a href="#" class="nav-logo">
     <div class="nav-logo-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:14px;height:14px;">
-        <rect x="3" y="9" width="18" height="12"/>
-        <polyline points="3 9 12 3 21 9"/>
+        <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
       </svg>
     </div>
     <span class="nav-logo-text"><?= $bizName ?></span>
@@ -248,64 +242,132 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
     <div class="card">
 
       <div class="card-icon">
-        <span class="material-symbols-outlined" style="font-size:2rem;color:<?= $primary ?>;">diamond</span>
+        <span class="material-symbols-outlined" style="font-size:2rem;color:<?= $primary ?>;">
+          <?= $mode === 'register' ? 'how_to_reg' : 'diamond' ?>
+        </span>
       </div>
 
-      <div class="tenant-badge">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
-          <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
-        </svg>
-        <?= $bizName ?>
-      </div>
+      <?php if ($mode === 'register'): ?>
 
-      <h1 class="card-title">Welcome Back</h1>
-      <p class="card-sub">Sign in to access the <?= $bizName ?> management system.</p>
+        <!-- ══ REGISTRATION FORM ══════════════════════════════ -->
+        <div class="reg-badge">
+          <span class="material-symbols-outlined" style="font-size:11px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">verified</span>
+          Account Setup
+        </div>
+        <h1 class="card-title">Set Up Your Account</h1>
+        <p class="card-sub">Welcome to <?= $bizName ?>! Create your login credentials to get started.</p>
 
-      <?php if ($error): ?>
-      <div class="err">
-        <span class="material-symbols-outlined">error</span>
-        <?= htmlspecialchars($error) ?>
-      </div>
-      <?php endif; ?>
+        <?php if ($error): ?>
+        <div class="err">
+          <span class="material-symbols-outlined">error</span>
+          <?= htmlspecialchars($error) ?>
+        </div>
+        <?php endif; ?>
 
-      <form method="POST" action="" class="form">
+        <form method="POST" action="?slug=<?= htmlspecialchars($slug) ?>&token=<?= htmlspecialchars($token) ?>" class="form">
+          <input type="hidden" name="form_type" value="register">
 
-        <div>
-          <label class="lbl">Username</label>
-          <input type="text" name="username" class="inp"
-            placeholder="Enter your username"
-            value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+          <div>
+            <label class="lbl">Full Name *</label>
+            <input type="text" name="fullname" class="inp" placeholder="Your full name"
+              value="<?= htmlspecialchars($_POST['fullname'] ?? $inv['owner_name']) ?>" required>
+          </div>
+
+          <div>
+            <label class="lbl">Email</label>
+            <input type="email" class="inp" value="<?= htmlspecialchars($inv['email']) ?>" readonly>
+          </div>
+
+          <div>
+            <label class="lbl">Username *</label>
+            <input type="text" name="username" class="inp" placeholder="Choose a username"
+              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+          </div>
+
+          <div>
+            <label class="lbl">Password * (min. 8 characters)</label>
+            <div class="pw-wrap">
+              <input type="password" name="password" id="pw1" class="inp" placeholder="Create a strong password" required>
+              <button type="button" class="pw-btn"
+                onclick="const f=document.getElementById('pw1');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="lbl">Confirm Password *</label>
+            <div class="pw-wrap">
+              <input type="password" name="confirm" id="pw2" class="inp" placeholder="Repeat your password" required>
+              <button type="button" class="pw-btn"
+                onclick="const f=document.getElementById('pw2');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn">Create Account & Sign In →</button>
+        </form>
+
+      <?php else: ?>
+
+        <!-- ══ LOGIN FORM ═════════════════════════════════════ -->
+        <div class="tenant-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+            <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
+          </svg>
+          <?= $bizName ?>
         </div>
 
-        <div>
-          <label class="lbl">Password</label>
-          <div class="pw-wrap">
-            <input type="password" name="password" id="pw" class="inp" placeholder="••••••••" required>
-            <button type="button" class="pw-btn"
-              onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-              <span class="material-symbols-outlined">visibility</span>
-            </button>
+        <h1 class="card-title">Welcome Back</h1>
+        <p class="card-sub">Sign in to access the <?= $bizName ?> management system.</p>
+
+        <?php if ($error): ?>
+        <div class="err">
+          <span class="material-symbols-outlined">error</span>
+          <?= htmlspecialchars($error) ?>
+        </div>
+        <?php endif; ?>
+
+        <form method="POST" action="?slug=<?= htmlspecialchars($slug) ?>" class="form">
+          <input type="hidden" name="form_type" value="login">
+
+          <div>
+            <label class="lbl">Username</label>
+            <input type="text" name="username" class="inp" placeholder="Enter your username"
+              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+          </div>
+
+          <div>
+            <label class="lbl">Password</label>
+            <div class="pw-wrap">
+              <input type="password" name="password" id="pw" class="inp" placeholder="••••••••" required>
+              <button type="button" class="pw-btn"
+                onclick="const f=document.getElementById('pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="rem">
+            <input type="checkbox" id="rem">
+            <label for="rem">Remember this device</label>
+          </div>
+
+          <button type="submit" class="btn">Sign In</button>
+        </form>
+
+        <div class="card-foot">
+          <div class="card-foot-row">
+            <span class="material-symbols-outlined">info</span>
+            <p>
+              <strong>Need help?</strong>
+              <span>Contact your branch administrator for account issues.</span>
+            </p>
           </div>
         </div>
 
-        <div class="rem">
-          <input type="checkbox" id="rem">
-          <label for="rem">Remember this device</label>
-        </div>
-
-        <button type="submit" class="btn">Sign In</button>
-
-      </form>
-
-      <div class="card-foot">
-        <div class="card-foot-row">
-          <span class="material-symbols-outlined">info</span>
-          <p>
-            <strong>Need help?</strong>
-            <span>Contact your branch administrator for account issues.</span>
-          </p>
-        </div>
-      </div>
+      <?php endif; ?>
 
     </div>
 
