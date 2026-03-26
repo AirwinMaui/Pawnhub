@@ -87,8 +87,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
 }
 
 if ($success) {
+    // Get tenant slug for branded redirect
+    $slug_stmt = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
+    $slug_stmt->execute([$inv['tenant_id']]);
+    $slug_row = $slug_stmt->fetch();
+    $redirect_url = !empty($slug_row['slug']) ? '/' . $slug_row['slug'] : '/tenant.php';
     // Redirect to tenant dashboard after 2 seconds
-    header('refresh:2;url=tenant.php');
+    header('refresh:2;url=' . $redirect_url);
 }
 ?>
 <!DOCTYPE html>
@@ -152,7 +157,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;background:line
       <p class="success-sub">Your account has been created and your branch <strong><?=htmlspecialchars($inv['business_name'])?></strong> is now active.<br><br>Redirecting you to your dashboard...</p>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px;font-size:.81rem;color:#15803d;">
         ⏳ Redirecting to dashboard in 2 seconds...<br>
-        <a href="tenant.php" style="color:#2563eb;font-weight:600;">Click here if not redirected</a>
+        <a href="<?=$redirect_url?>" style="color:#2563eb;font-weight:600;">Click here if not redirected</a>
       </div>
     </div>
 
