@@ -151,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $uid = intval($_POST['user_id']);
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant approved successfully. They can now login.';
         $active_page = 'tenants';
     }
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $reason = trim($_POST['reject_reason'] ?? 'Application rejected.');
         $pdo->prepare("UPDATE tenants SET status='rejected' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='rejected', rejected_reason=? WHERE id=?")->execute([$reason, $uid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'REJECT_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Rejected tenant ID $tid. Reason: $reason"]); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'REJECT_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Rejected tenant ID $tid. Reason: $reason",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant application rejected.';
         $active_page = 'tenants';
     }
@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'deactivate_tenant') {
         $tid = intval($_POST['tenant_id']);
         $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")->execute([$tid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'DEACTIVATE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Deactivated tenant ID $tid"]); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'DEACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Deactivated tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant deactivated.';
         $active_page = 'tenants';
     }
@@ -178,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'activate_tenant') {
         $tid = intval($_POST['tenant_id']);
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'ACTIVATE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Activated tenant ID $tid"]); } catch(PDOException $e){}
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'ACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Activated tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant activated.';
         $active_page = 'tenants';
     }
