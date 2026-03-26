@@ -51,11 +51,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
         if ($chk->fetch()) {
             $error = 'Username already taken. Please choose another.';
         } else {
+            $sa_stmt = $pdo->query("SELECT id FROM users WHERE role='super_admin' LIMIT 1");
+            $sa_row  = $sa_stmt->fetch();
+            $sa_id   = $sa_row ? $sa_row['id'] : null;
+
             $pdo->beginTransaction();
 
             // 1. Create admin user for this tenant
-            $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,'admin','approved',1,NOW())")
-                ->execute([$inv['tenant_id'], $fullname, $inv['email'], $username, password_hash($password, PASSWORD_BCRYPT)]);
+            $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status,approved_by,approved_at) VALUES (?,?,?,?,?,'admin','approved',?,NOW())")
+                ->execute([$inv['tenant_id'], $fullname, $inv['email'], $username, password_hash($password, PASSWORD_BCRYPT), $sa_id]);
 
             // 2. Activate tenant
             $pdo->prepare("UPDATE tenants SET status='active', owner_name=? WHERE id=?")
