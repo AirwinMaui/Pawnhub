@@ -69,17 +69,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
             $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")
                 ->execute([$token]);
 
+            $new_user_id = $pdo->lastInsertId();
             $pdo->commit();
 
             // 4. Auto login
             $_SESSION['user'] = [
-                'id'          => $pdo->lastInsertId(),
+                'id'          => $new_user_id,
                 'name'        => $fullname,
                 'username'    => $username,
                 'role'        => 'admin',
                 'tenant_id'   => $inv['tenant_id'],
                 'tenant_name' => $inv['business_name'],
             ];
+
+            // 5. Send welcome email with their dedicated login page link
+            try {
+                require_once __DIR__ . '/mailer.php';
+                $slug_for_mail = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
+                $slug_for_mail->execute([$inv['tenant_id']]);
+                $slug_row_mail = $slug_for_mail->fetch();
+                if (!empty($slug_row_mail['slug'])) {
+                    sendTenantWelcome($inv['email'], $fullname, $inv['business_name'], $slug_row_mail['slug']);
+                }
+            } catch (Throwable $e) {
+                error_log('Welcome email failed: ' . $e->getMessage());
+                // Hindi natin ihihinto ang registration kahit mag-fail ang email
+            }
 
             $success = true;
         }
