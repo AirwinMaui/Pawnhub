@@ -88,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 'role'        => 'admin',
                 'tenant_id'   => $tenant['id'],
                 'tenant_name' => $tenant['business_name'],
+                'tenant_slug' => $tenant['slug'] ?? $slug,
             ];
             header('Location: tenant.php');
             exit;
@@ -125,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 'role'        => $user['role'],
                 'tenant_id'   => $user['tenant_id'],
                 'tenant_name' => $user['tenant_name'],
+                'tenant_slug' => $tenant['slug'] ?? $slug,
             ];
             if ($user['role'] === 'admin')   { header('Location: tenant.php');  exit; }
             if ($user['role'] === 'staff')   { header('Location: staff.php');   exit; }
