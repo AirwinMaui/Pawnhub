@@ -152,7 +152,15 @@ $theme   = getTenantTheme($pdo, $tenant['id']);
 $primary = htmlspecialchars($theme['primary_color']   ?? '#1e3a8a');
 $accent  = htmlspecialchars($theme['accent_color']    ?? '#2563eb');
 $sidebar = htmlspecialchars($theme['secondary_color'] ?? '#1e3a8a');
-$bizName = htmlspecialchars($theme['system_name'] ?? $tenant['business_name'] ?? 'PawnHub');
+
+// Use system_name only if tenant explicitly set a custom one (not the default 'PawnHub')
+// Always fall back to the actual business_name from tenants table
+$customSysName = $theme['system_name'] ?? '';
+$bizName = htmlspecialchars(
+    ($customSysName && $customSysName !== 'PawnHub')
+        ? $customSysName
+        : ($tenant['business_name'] ?? 'PawnHub')
+);
 $bgImg   = !empty($tenant['bg_image_url'])
     ? htmlspecialchars($tenant['bg_image_url'])
     : 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI';
