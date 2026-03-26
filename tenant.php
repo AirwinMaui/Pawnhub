@@ -55,8 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     sendStaffInvitation($email, $name, $tenant['business_name'], $role, $token);
                     $success_msg = ucfirst($role) . " invitation sent to {$email}!";
                 } catch (Throwable $e) {
-                    error_log('Staff invite email failed: ' . $e->getMessage());
-                    $error_msg = 'Invitation created but email failed to send. Check mailer config.';
+                    $emailErr = $e->getMessage();
+                    error_log('Staff invite email failed: ' . $emailErr);
+                    $error_msg = 'Invitation created but email failed to send. Error: ' . htmlspecialchars($emailErr);
                 }
                 $active_page = 'users';
             }
