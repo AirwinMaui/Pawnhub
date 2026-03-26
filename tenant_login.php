@@ -1,7 +1,6 @@
 <?php
 session_start();
 require 'db.php';
-require_once __DIR__ . '/mailer.php';
 
 $slug  = trim($_GET['slug'] ?? '');
 $token = trim($_GET['token'] ?? '');
@@ -81,29 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")->execute([$token]);
             $pdo->commit();
 
-            session_regenerate_id(true);
-            $_SESSION['user'] = [
-                'id'          => $new_uid,
-                'name'        => $fullname,
-                'username'    => $username,
-                'role'        => 'admin',
-                'tenant_id'   => $tenant['id'],
-                'tenant_name' => $tenant['business_name'],
-                'tenant_slug' => $tenant['slug'] ?? $slug,
-            ];
-
-            // Send welcome email with their branded login URL
-            try {
-                $tenant_slug = $tenant['slug'] ?? $slug;
-                if (!empty($tenant_slug)) {
-                    sendTenantWelcome($inv['email'], $fullname, $tenant['business_name'], $tenant_slug);
-                }
-            } catch (Throwable $mail_err) {
-                error_log('Welcome email failed: ' . $mail_err->getMessage());
-                // Don't block the redirect — email failure is non-fatal
-            }
-
-            header('Location: tenant.php');
+            // Redirect to tenant login page with success message — do NOT auto-login
+            $login_url = 'tenant_login.php?slug=' . urlencode($slug) . '&registered=1';
+            header('Location: ' . $login_url);
             exit;
         }
     }
@@ -159,9 +138,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
     }
 }
 
-$primary = htmlspecialchars($tenant['primary_color'] ?? '#1e3a8a');
-$accent  = htmlspecialchars($tenant['accent_color']  ?? '#2563eb');
-$bizName = htmlspecialchars($tenant['business_name'] ?? 'PawnHub');
+// ── Load tenant theme via theme_helper ────────────────────────
+require_once __DIR__ . '/theme_helper.php';
+$theme   = getTenantTheme($pdo, $tenant['id']);
+$primary = htmlspecialchars($theme['primary_color']   ?? '#1e3a8a');
+$accent  = htmlspecialchars($theme['accent_color']    ?? '#2563eb');
+$sidebar = htmlspecialchars($theme['secondary_color'] ?? '#1e3a8a');
+$bizName = htmlspecialchars($theme['system_name'] ?? $tenant['business_name'] ?? 'PawnHub');
 $bgImg   = !empty($tenant['bg_image_url'])
     ? htmlspecialchars($tenant['bg_image_url'])
     : 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI';
@@ -175,7 +158,7 @@ $bgImg   = !empty($tenant['bg_image_url'])
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-:root { --primary: <?= $primary ?>; --accent: <?= $accent ?>; }
+:root { --primary: <?= $primary ?>; --accent: <?= $accent ?>; --secondary: <?= $sidebar ?>; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { width: 100%; height: 100%; font-family: 'Inter', sans-serif; }
 body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; }
@@ -337,6 +320,13 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 
         <h1 class="card-title">Welcome Back</h1>
         <p class="card-sub">Sign in to access the <?= $bizName ?> management system.</p>
+
+        <?php if (!empty($_GET['registered'])): ?>
+        <div style="display:flex;align-items:flex-start;gap:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:11px 14px;font-size:.81rem;color:#15803d;margin-bottom:16px;">
+          <span class="material-symbols-outlined" style="font-size:17px;flex-shrink:0;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
+          <div><strong>Account created successfully!</strong> You can now sign in with your new username and password.</div>
+        </div>
+        <?php endif; ?>
 
         <?php if ($error): ?>
         <div class="err">
