@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ->execute([$new_tid,$email,$oname,$token,$expires_at,$u['id']]);
                     $pdo->commit();
                     try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\" and sent invitation to $email.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-                    $sent = sendTenantInvitation($email, $oname, $bname, $token);
+                    $sent = sendTenantInvitation($email, $oname, $bname, $token, $slug);
                     $success_msg = $sent
                         ? "✅ Tenant \"$bname\" created! Invitation sent to $email."
                         : "⚠️ Tenant created but email failed. Token: $token — Check mailer.php settings.";
@@ -78,7 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $token      = bin2hex(random_bytes(32));
             $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
             $pdo->prepare("UPDATE tenant_invitations SET token=?,expires_at=? WHERE id=?")->execute([$token,$expires_at,$inv_id]);
-            $sent = sendTenantInvitation($inv['email'],$inv['owner_name'],$inv['business_name'],$token);
+            // Get slug for this tenant so the link points to the right branded page
+            $slug_row = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
+            $slug_row->execute([$inv['tenant_id']]);
+            $slug_row = $slug_row->fetch();
+            $inv_slug = $slug_row['slug'] ?? '';
+            $sent = sendTenantInvitation($inv['email'],$inv['owner_name'],$inv['business_name'],$token,$inv_slug);
             $success_msg = $sent ? "📧 Invitation resent to {$inv['email']}!" : "⚠️ Failed to send. Check mailer.php settings.";
         }
         $active_page = 'invitations';
@@ -150,12 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $tid = intval($_POST['tenant_id']);
         $uid = intval($_POST['user_id']);
 
-        // 1. Fetch tenant info — need email, name, slug for the approval email
+        // Fetch tenant info for email + slug generation
         $t_stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
         $t_stmt->execute([$tid]);
         $t_row = $t_stmt->fetch();
 
-        // 2. Auto-generate slug if missing (self-registered tenants via signup.php have no slug yet)
+        // Auto-generate slug if missing (signup.php tenants have no slug yet)
         $slug = $t_row['slug'] ?? '';
         if (empty($slug) && !empty($t_row['business_name'])) {
             $base_slug    = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $t_row['business_name']));
@@ -170,32 +175,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $tid]);
         }
 
-        // 3. Approve tenant + user
+        // Approve tenant + user
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
 
-        // 4. Send approval email with login URL only for self-registered tenants (signup.php flow).
-        //    Invited tenants (add_tenant flow) already receive their URL via sendTenantWelcome()
-        //    after they complete the registration form in tenant_login.php.
-        $inv_check = $pdo->prepare("SELECT id FROM tenant_invitations WHERE tenant_id = ? LIMIT 1");
-        $inv_check->execute([$tid]);
-        $has_invitation = $inv_check->fetch();
-
-        if (!$has_invitation && $t_row && !empty($t_row['email'])) {
+        // Send approval email only for self-registered tenants (signup.php flow)
+        // Invited tenants get their URL via sendTenantWelcome() in tenant_login.php after they register
+        $inv_chk = $pdo->prepare("SELECT id FROM tenant_invitations WHERE tenant_id = ? LIMIT 1");
+        $inv_chk->execute([$tid]);
+        if (!$inv_chk->fetch() && $t_row && !empty($t_row['email'])) {
             try {
-                sendTenantApproved(
-                    $t_row['email'],
-                    $t_row['owner_name'],
-                    $t_row['business_name'],
-                    $slug
-                );
+                sendTenantApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $slug);
             } catch (Throwable $mail_err) {
                 error_log('Approval email failed: ' . $mail_err->getMessage());
             }
         }
 
         try { $pdo->prepare("INSERT INTO audit_logs (actor_id,actor_username,actor_role,action,entity_type,entity_id,message,created_at) VALUES (?,?,?,'APPROVE_TENANT','tenant',?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid"]); } catch(PDOException $e){}
-        $success_msg = 'Tenant approved! They can now login and have been notified via email.';
+        $success_msg = 'Tenant approved! They will receive an email with their login link.';
         $active_page = 'tenants';
     }
 
