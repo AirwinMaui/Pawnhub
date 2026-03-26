@@ -199,12 +199,12 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
 .flabel{display:block;font-size:.73rem;font-weight:600;color:rgba(255,255,255,.45);margin-bottom:5px;}
 .finput{width:100%;border:1.5px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:.85rem;color:#fff;outline:none;background:rgba(255,255,255,.06);transition:border .2s;}
-.finput:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.15);}
+.finput:focus{border-color:var(--t-primary,#10b981);box-shadow:0 0 0 3px color-mix(in srgb,var(--t-primary,#10b981) 18%,transparent);}
 .finput::placeholder{color:rgba(255,255,255,.2);}
 .finput option{background:#080d10;color:#fff;}
 .fgroup{margin-bottom:12px;}
 
-.btn-pay{width:100%;background:linear-gradient(135deg,#059669,#047857);color:#fff;border:none;border-radius:11px;padding:14px;font-family:inherit;font-size:.93rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(5,150,105,.3);transition:all .2s;margin-top:4px;}
+.btn-pay{width:100%;background:linear-gradient(135deg,var(--t-primary,#059669),var(--t-secondary,#047857));color:#fff;border:none;border-radius:11px;padding:14px;font-family:inherit;font-size:.93rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(5,150,105,.3);transition:all .2s;margin-top:4px;}
 .btn-pay:hover{transform:translateY(-1px);filter:brightness(1.08);}
 
 .alert{padding:11px 16px;border-radius:12px;font-size:.82rem;margin-bottom:18px;display:flex;align-items:center;gap:9px;}
@@ -225,8 +225,11 @@ tr:hover td{background:rgba(255,255,255,.03);}
 </style>
 </head>
 <body>
+<?php
+$cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=1600&auto=format&fit=crop&q=60');
+?>
 <div class="bg-scene">
-  <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=1600&auto=format&fit=crop&q=60" alt="">
+  <img src="<?= $cashierBg ?>" alt="">
   <div class="bg-overlay"></div>
 </div>
 
@@ -294,7 +297,13 @@ tr:hover td{background:rgba(255,255,255,.03);}
       <span class="topbar-title"><?php $titles=['dashboard'=>'Cashier Dashboard','process'=>'Process Payment','tickets'=>'Active Tickets','history'=>'My Transactions','inventory'=>'View Inventory'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="cashier-chip">Cashier<?php if($tenant): ?> · <?=htmlspecialchars($tenant['business_name'])?><?php endif;?></span>
     </div>
-    <span style="font-size:.75rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:100px;">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--t-primary,#10b981);display:inline-block;"></span>
+        <span style="font-size:.69rem;color:rgba(255,255,255,.5);font-weight:600;"><?=htmlspecialchars($sys_name)?></span>
+      </div>
+      <span style="font-size:.72rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+    </div>
   </header>
 
   <div class="content">
@@ -316,7 +325,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
     </div>
 
     <?php if($tenant): ?>
-    <div style="background:linear-gradient(135deg,#064e3b,#059669);border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(16,185,129,.2);">
+    <div style="background:linear-gradient(135deg,var(--t-sidebar,#064e3b),var(--t-secondary,#059669));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(255,255,255,.1);">
       <div>
         <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px;">Your Branch</div>
         <div style="font-size:1.05rem;font-weight:800;color:#fff;"><?=htmlspecialchars($tenant['business_name'])?></div>

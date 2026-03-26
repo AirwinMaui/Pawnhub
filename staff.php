@@ -276,8 +276,11 @@ tr:hover td{background:rgba(255,255,255,.03);}
 </style>
 </head>
 <body>
+<?php
+$staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1600&auto=format&fit=crop&q=60');
+?>
 <div class="bg-scene">
-  <img src="https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1600&auto=format&fit=crop&q=60" alt="">
+  <img src="<?= $staffBg ?>" alt="">
   <div class="bg-overlay"></div>
 </div>
 
@@ -350,7 +353,13 @@ tr:hover td{background:rgba(255,255,255,.03);}
       <span class="topbar-title"><?php $titles=['dashboard'=>'Staff Dashboard','create_ticket'=>'Create Pawn Ticket','tickets'=>'All Tickets','customers'=>'Customers','register_customer'=>'Register Customer','void_requests'=>'My Void Requests'];echo $titles[$active_page]??'Dashboard';?></span>
       <?php if($tenant): ?><span class="tenant-badge"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
-    <span style="font-size:.75rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:100px;">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--t-primary,#3b82f6);display:inline-block;"></span>
+        <span style="font-size:.69rem;color:rgba(255,255,255,.5);font-weight:600;"><?=htmlspecialchars($sys_name)?></span>
+      </div>
+      <span style="font-size:.72rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+    </div>
   </header>
 
   <div class="content">

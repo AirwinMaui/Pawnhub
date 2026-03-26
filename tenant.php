@@ -133,9 +133,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $logourl = '';
         }
 
+        // Handle background image upload
+        $bgurl = $theme['bg_image_url'] ?? '';
+        if (!empty($_FILES['bg_file']['name'])) {
+            $allowed = ['image/jpeg','image/png','image/gif','image/webp'];
+            $ftype   = mime_content_type($_FILES['bg_file']['tmp_name']);
+            if (in_array($ftype, $allowed) && $_FILES['bg_file']['size'] <= 5*1024*1024) {
+                $ext      = pathinfo($_FILES['bg_file']['name'], PATHINFO_EXTENSION);
+                $filename = 'bg_' . $tid . '_' . time() . '.' . $ext;
+                $uploaddir= __DIR__ . '/uploads/';
+                if (!is_dir($uploaddir)) mkdir($uploaddir, 0755, true);
+                if ($bgurl && strpos($bgurl, '/uploads/') !== false) {
+                    $oldfile = __DIR__ . parse_url($bgurl, PHP_URL_PATH);
+                    if (file_exists($oldfile)) unlink($oldfile);
+                }
+                if (move_uploaded_file($_FILES['bg_file']['tmp_name'], $uploaddir . $filename)) {
+                    $bgurl = 'uploads/' . $filename;
+                } else {
+                    $error_msg = 'Failed to upload background image. Please try again.';
+                }
+            } else {
+                $error_msg = 'Invalid background file. Please upload JPG, PNG, GIF, or WebP under 5MB.';
+            }
+        } elseif (isset($_POST['remove_bg']) && $_POST['remove_bg'] === '1') {
+            if ($bgurl && file_exists(__DIR__ . '/' . $bgurl)) unlink(__DIR__ . '/' . $bgurl);
+            $bgurl = '';
+        }
+
         if (!$error_msg) {
-            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url)
-                VALUES (?,?,?,?,?,?,?,?)
+            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url,bg_image_url)
+                VALUES (?,?,?,?,?,?,?,?,?)
                 ON DUPLICATE KEY UPDATE
                 primary_color=VALUES(primary_color),
                 secondary_color=VALUES(secondary_color),
@@ -144,8 +171,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 system_name=VALUES(system_name),
                 logo_text=VALUES(logo_text),
                 logo_url=VALUES(logo_url),
+                bg_image_url=VALUES(bg_image_url),
                 updated_at=NOW()")
-                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl]);
+                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl,$bgurl]);
 
             $success_msg = '✅ Theme saved! Staff and cashier dashboards will now reflect the new design.';
             $theme = getTenantTheme($pdo, $tid);
@@ -360,8 +388,11 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <body>
 
 <!-- Background Scene -->
+<?php
+$dashBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1600&auto=format&fit=crop&q=60');
+?>
 <div class="bg-scene">
-  <img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1600&auto=format&fit=crop&q=60" alt="">
+  <img src="<?= $dashBg ?>" alt="">
   <div class="bg-overlay"></div>
 </div>
 
@@ -447,7 +478,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
         <span class="material-symbols-outlined">notifications</span>
         <span class="notif-dot"></span>
       </div>
-      <div class="topbar-icon"><span class="material-symbols-outlined">settings</span></div>
+      <a href="?page=settings" class="topbar-icon" title="Theme & Branding Settings"><span class="material-symbols-outlined">palette</span></a>
       <div class="topbar-user">
         <div style="text-align:right;">
           <div class="topbar-user-name"><?=htmlspecialchars(explode(' ',$u['name'])[0]??$u['name'])?></div>
@@ -776,9 +807,35 @@ tr:hover td{background:rgba(255,255,255,.03);}
             </div>
           </div>
 
+          <!-- Background Image Upload -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-hdr"><span class="card-title">🖼️ Dashboard & Login Background</span></div>
+            <div style="font-size:.76rem;color:rgba(255,255,255,.4);margin-bottom:10px;line-height:1.5;">
+              This image appears as the background on the <strong style="color:rgba(255,255,255,.6);">Login Page</strong>, <strong style="color:rgba(255,255,255,.6);">Staff Dashboard</strong>, and <strong style="color:rgba(255,255,255,.6);">Cashier Dashboard</strong>.
+            </div>
+            <?php if(!empty($theme['bg_image_url'])): ?>
+            <div style="position:relative;border-radius:10px;overflow:hidden;margin-bottom:10px;border:1px solid rgba(255,255,255,.1);">
+              <img src="<?=htmlspecialchars($theme['bg_image_url'])?>" style="width:100%;height:120px;object-fit:cover;display:block;">
+              <div style="position:absolute;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:.72rem;color:#fff;font-weight:700;">Current Background</span>
+              </div>
+            </div>
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.72rem;color:#fca5a5;font-weight:600;margin-bottom:10px;">
+              <input type="checkbox" name="remove_bg" value="1" style="margin:0;"> Remove current background
+            </label>
+            <?php endif; ?>
+            <div id="bg-drop-zone" style="border:2px dashed rgba(255,255,255,.12);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.03);" onclick="document.getElementById('bg_file_input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--t-primary,#3b82f6)';" ondragleave="this.style.borderColor='rgba(255,255,255,.12)'" ondrop="handleBgDrop(event)">
+              <div id="bg-preview-wrap" style="display:none;margin-bottom:10px;"><img id="bg-preview-img" style="width:100%;height:90px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.1);"></div>
+              <span class="material-symbols-outlined" style="font-size:26px;color:rgba(255,255,255,.25);display:block;margin-bottom:8px;">image</span>
+              <div style="font-size:.78rem;font-weight:600;color:rgba(255,255,255,.4);margin-bottom:3px;">Click to upload or drag & drop</div>
+              <div style="font-size:.69rem;color:rgba(255,255,255,.2);">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
+              <input type="file" id="bg_file_input" name="bg_file" accept="image/*" style="display:none;" onchange="previewBg(this)">
+            </div>
+          </div>
+
           <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:14px 16px;font-size:.78rem;color:rgba(147,197,253,.8);margin-bottom:16px;line-height:1.7;">
             ℹ️ <strong style="color:#93c5fd;">How it works:</strong><br>
-            When you save, your Staff and Cashier dashboards will automatically use these colors and branding.
+            When you save, your Staff and Cashier dashboards will automatically use these colors, background, and branding.
           </div>
 
           <button type="submit" style="width:100%;background:linear-gradient(135deg,var(--t-primary,#2563eb),var(--t-secondary,#1d4ed8));color:#fff;border:none;border-radius:12px;padding:14px;font-family:inherit;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(37,99,235,.35);">
@@ -877,6 +934,28 @@ function handleLogoDrop(e) {
 document.querySelector('input[name="system_name"]')?.addEventListener('input', function() {
   document.getElementById('prev_sysname').textContent = this.value || 'PawnHub';
 });
+
+function previewBg(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('bg-preview-img').src = e.target.result;
+      document.getElementById('bg-preview-wrap').style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+function handleBgDrop(e) {
+  e.preventDefault();
+  document.getElementById('bg-drop-zone').style.borderColor = 'rgba(255,255,255,.12)';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('bg_file_input').files = dt.files;
+    previewBg(document.getElementById('bg_file_input'));
+  }
+}
 </script>
 </body>
 </html>

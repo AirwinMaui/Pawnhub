@@ -146,12 +146,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
     }
 }
 
-$primary = htmlspecialchars($tenant['primary_color'] ?? '#1e3a8a');
-$accent  = htmlspecialchars($tenant['accent_color']  ?? '#2563eb');
-$bizName = htmlspecialchars($tenant['business_name'] ?? 'PawnHub');
-$bgImg   = !empty($tenant['bg_image_url'])
-    ? htmlspecialchars($tenant['bg_image_url'])
-    : 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI';
+// Load theme from tenant_settings (overrides legacy tenant table colors)
+require_once __DIR__ . '/theme_helper.php';
+$tenantTheme = getTenantTheme($pdo, $tenant['id']);
+
+$primary = htmlspecialchars($tenantTheme['primary_color']   ?? $tenant['primary_color']   ?? '#1e3a8a');
+$accent  = htmlspecialchars($tenantTheme['secondary_color'] ?? $tenant['accent_color']    ?? '#2563eb');
+$bizName = htmlspecialchars($tenantTheme['system_name']     ?? $tenant['business_name']   ?? 'PawnHub');
+
+// Background: prefer tenant_settings bg_image_url, then legacy tenants.bg_image_url
+$bgImg = !empty($tenantTheme['bg_image_url'])
+    ? htmlspecialchars($tenantTheme['bg_image_url'])
+    : (!empty($tenant['bg_image_url'])
+        ? htmlspecialchars($tenant['bg_image_url'])
+        : 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlX9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI');
+
+// Logo URL from tenant_settings
+$loginLogoUrl = $tenantTheme['logo_url'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -231,10 +242,14 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 
 <header class="nav">
   <a href="#" class="nav-logo">
-    <div class="nav-logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:14px;height:14px;">
-        <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
-      </svg>
+    <div class="nav-logo-icon" style="overflow:hidden;">
+      <?php if($loginLogoUrl): ?>
+        <img src="<?=htmlspecialchars($loginLogoUrl)?>" style="width:100%;height:100%;object-fit:cover;" alt="logo">
+      <?php else: ?>
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:14px;height:14px;">
+          <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
+        </svg>
+      <?php endif; ?>
     </div>
     <span class="nav-logo-text"><?= $bizName ?></span>
   </a>

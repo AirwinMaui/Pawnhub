@@ -1,7 +1,7 @@
 <?php
 /**
  * PawnHub Theme Helper
- * Load tenant custom theme settings
+ * Load tenant custom theme settings (colors + bg image + logo)
  */
 function getTenantTheme(PDO $pdo, int $tenant_id): array {
     try {
@@ -18,9 +18,21 @@ function getTenantTheme(PDO $pdo, int $tenant_id): array {
         'sidebar_color'   => '#0f172a',
         'logo_text'       => null,
         'logo_url'        => null,
+        'bg_image_url'    => null,
         'system_name'     => 'PawnHub',
         'font_style'      => 'Plus Jakarta Sans',
     ];
+}
+
+/**
+ * Returns the background image URL for dashboards/login.
+ * Falls back to a default if none is set.
+ */
+function getTenantBgImage(array $theme, string $default = ''): string {
+    if (!empty($theme['bg_image_url'])) {
+        return htmlspecialchars($theme['bg_image_url']);
+    }
+    return $default;
 }
 
 function renderThemeCSS(array $theme): string {
@@ -29,7 +41,6 @@ function renderThemeCSS(array $theme): string {
     $a  = htmlspecialchars($theme['accent_color']    ?? '#10b981');
     $sb = htmlspecialchars($theme['sidebar_color']   ?? '#0f172a');
 
-    // Darken helper (simple offset)
     $pDark = adjustColor($p, -20);
     $aDark = adjustColor($a, -20);
 
