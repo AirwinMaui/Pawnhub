@@ -1,7 +1,7 @@
 <?php
 session_start();
 require 'db.php';
-require 'mailer.php';
+require_once __DIR__ . '/mailer.php';
 
 $slug  = trim($_GET['slug'] ?? '');
 $token = trim($_GET['token'] ?? '');
@@ -22,89 +22,7 @@ if (!$tenant) {
     exit;
 }
 
-// ── Define bgImg early (needed for status pages) ──────────────
-$_bgImg_default = 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlX9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI';
-$_bgImg_early   = !empty($tenant['bg_image_url']) ? htmlspecialchars($tenant['bg_image_url']) : $_bgImg_default;
-$_bizName_early = htmlspecialchars($tenant['business_name'] ?? 'PawnHub');
-
-// ── Check if tenant is deactivated/inactive ───────────────────
-if ($tenant['status'] === 'inactive') { ?>
-<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title><?= $_bizName_early ?> — Deactivated</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;min-height:100%;font-family:'Inter',sans-serif;overflow-x:hidden;overflow-y:auto;}
-.bg{position:fixed;inset:0;z-index:0;}.bg img{width:100%;height:100%;object-fit:cover;display:block;}
-.bg-ov{position:absolute;inset:0;background:rgba(10,20,60,0.65);}
-.page{position:relative;z-index:10;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;}
-.card{background:#fff;border-radius:20px;padding:40px 36px;max-width:460px;width:100%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.25);}
-.icon-wrap{width:72px;height:72px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;}
-.icon-wrap svg{width:34px;height:34px;color:#dc2626;}
-h1{font-size:1.4rem;font-weight:800;color:#0f172a;margin-bottom:10px;}
-p{font-size:.88rem;color:#64748b;line-height:1.7;margin-bottom:16px;}
-.biz-name{font-size:1rem;font-weight:700;color:#1e293b;background:#f1f5f9;border-radius:8px;padding:8px 14px;display:inline-block;margin-bottom:16px;}
-.info-box{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;font-size:.8rem;color:#dc2626;margin-bottom:16px;line-height:1.7;text-align:left;}
-</style></head><body>
-<div class="bg"><img src="<?= $_bgImg_early ?>" alt="bg"/><div class="bg-ov"></div></div>
-<div class="page"><div class="card">
-  <div class="icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div>
-  <h1>Branch Deactivated</h1>
-  <div class="biz-name">🏪 <?= $_bizName_early ?></div>
-  <p>This branch's access has been temporarily deactivated by the system administrator.</p>
-  <div class="info-box">
-    ⚠️ <strong>What this means:</strong><br>
-    Your branch account has been suspended. Staff and cashiers cannot log in at this time.<br><br>
-    📧 Please contact the <strong>PawnHub Super Admin</strong> for assistance or to request reactivation.
-  </div>
-  <p style="font-size:.75rem;color:#94a3b8;">If you believe this is an error, please reach out to your system administrator.</p>
-</div></div>
-</body></html>
-<?php exit; }
-
-// ── Check if tenant is pending or rejected ────────────────────
-if (in_array($tenant['status'], ['pending', 'rejected'])) {
-    $is_rejected = $tenant['status'] === 'rejected'; ?>
-<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title><?= $_bizName_early ?> — <?= $is_rejected ? 'Rejected' : 'Pending Approval' ?></title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;min-height:100%;font-family:'Inter',sans-serif;overflow-x:hidden;overflow-y:auto;}
-.bg{position:fixed;inset:0;z-index:0;}.bg img{width:100%;height:100%;object-fit:cover;display:block;}
-.bg-ov{position:absolute;inset:0;background:rgba(10,20,60,0.65);}
-.page{position:relative;z-index:10;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;}
-.card{background:#fff;border-radius:20px;padding:40px 36px;max-width:460px;width:100%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.25);}
-.icon-wrap{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;}
-.icon-wrap svg{width:34px;height:34px;}
-h1{font-size:1.4rem;font-weight:800;color:#0f172a;margin-bottom:10px;}
-p{font-size:.88rem;color:#64748b;line-height:1.7;margin-bottom:16px;}
-.biz-name{font-size:1rem;font-weight:700;color:#1e293b;background:#f1f5f9;border-radius:8px;padding:8px 14px;display:inline-block;margin-bottom:16px;}
-.info-box{border-radius:10px;padding:14px 16px;font-size:.8rem;margin-bottom:16px;line-height:1.7;text-align:left;}
-</style></head><body>
-<div class="bg"><img src="<?= $_bgImg_early ?>" alt="bg"/><div class="bg-ov"></div></div>
-<div class="page"><div class="card">
-  <div class="icon-wrap" style="background:<?= $is_rejected ? '#fee2e2' : '#fef3c7' ?>;">
-    <svg viewBox="0 0 24 24" fill="none" stroke="<?= $is_rejected ? '#dc2626' : '#d97706' ?>" stroke-width="2">
-      <?php if ($is_rejected): ?><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-      <?php else: ?><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><?php endif; ?>
-    </svg>
-  </div>
-  <h1><?= $is_rejected ? 'Application Rejected' : 'Pending Approval' ?></h1>
-  <div class="biz-name">🏪 <?= $_bizName_early ?></div>
-  <p><?= $is_rejected
-      ? 'Your pawnshop application has been rejected by the system administrator.'
-      : 'Your pawnshop application is currently under review. Please wait for approval from the Super Admin.' ?></p>
-  <div class="info-box" style="background:<?= $is_rejected ? '#fef2f2' : '#fef3c7' ?>;border:1px solid <?= $is_rejected ? '#fecaca' : '#fde68a' ?>;color:<?= $is_rejected ? '#dc2626' : '#b45309' ?>;">
-    📧 <strong>Need help?</strong><br>
-    Please contact the <strong>PawnHub Super Admin</strong> for more information about your application status.
-  </div>
-</div></div>
-</body></html>
-<?php exit; }
-
+// ── Check if token is present → registration mode ─────────────
 if ($token) {
     $inv_stmt = $pdo->prepare("
         SELECT i.*, t.business_name, t.plan, t.id AS tenant_id
@@ -163,22 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")->execute([$token]);
             $pdo->commit();
 
-            // ── SEND WELCOME EMAIL WITH LOGIN URL ─────────────────────
-            // Build the tenant's dedicated login URL using their slug
-            $login_url = APP_URL . '/' . urlencode($tenant['slug']);
-            try {
-                sendApprovalNotification(
-                    $inv['email'],
-                    $fullname,
-                    $tenant['business_name'],
-                    $login_url
-                );
-            } catch (Exception $e) {
-                // Non-blocking — don't stop the user even if email fails
-                error_log('Welcome email failed: ' . $e->getMessage());
-            }
-            // ─────────────────────────────────────────────────────────
-
             session_regenerate_id(true);
             $_SESSION['user'] = [
                 'id'          => $new_uid,
@@ -187,7 +89,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 'role'        => 'admin',
                 'tenant_id'   => $tenant['id'],
                 'tenant_name' => $tenant['business_name'],
+                'tenant_slug' => $tenant['slug'] ?? $slug,
             ];
+
+            // Send welcome email with their branded login URL
+            try {
+                $tenant_slug = $tenant['slug'] ?? $slug;
+                if (!empty($tenant_slug)) {
+                    sendTenantWelcome($inv['email'], $fullname, $tenant['business_name'], $tenant_slug);
+                }
+            } catch (Throwable $mail_err) {
+                error_log('Welcome email failed: ' . $mail_err->getMessage());
+                // Don't block the redirect — email failure is non-fatal
+            }
+
             header('Location: tenant.php');
             exit;
         }
@@ -224,6 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 'role'        => $user['role'],
                 'tenant_id'   => $user['tenant_id'],
                 'tenant_name' => $user['tenant_name'],
+                'tenant_slug' => $tenant['slug'] ?? $slug,
             ];
             if ($user['role'] === 'admin')   { header('Location: tenant.php');  exit; }
             if ($user['role'] === 'staff')   { header('Location: staff.php');   exit; }
@@ -261,7 +177,8 @@ $bgImg   = !empty($tenant['bg_image_url'])
 <style>
 :root { --primary: <?= $primary ?>; --accent: <?= $accent ?>; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overflow: hidden; }
+html { width: 100%; height: 100%; font-family: 'Inter', sans-serif; }
+body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; }
 .bg { position: fixed; inset: 0; z-index: 0; }
 .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.52); }
@@ -269,8 +186,8 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
 .nav-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .nav-logo-text { font-size: 1.15rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-.page { position: relative; z-index: 10; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 64px; overflow-y: auto; }
-.panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 20px 40px; }
+.page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; }
+.panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0 40px; }
 .card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
 .card-icon { margin-bottom: 12px; }
 .material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
@@ -311,7 +228,7 @@ html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; overfl
 .btxt { font-size: 0.63rem; font-weight: 600; color: rgba(255,255,255,0.82); text-transform: uppercase; letter-spacing: 0.1em; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.35} }
 @media (max-width: 560px) {
-  .panel { width: 100%; min-width: unset; padding: 20px 16px; }
+  .panel { width: 100%; min-width: unset; padding: 0 16px; }
   .card { padding: 26px 20px 22px; }
   .card-title { font-size: 1.5rem; }
   .badge { display: none; }

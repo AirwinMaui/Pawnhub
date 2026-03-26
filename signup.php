@@ -130,38 +130,21 @@ body { font-family: "Inter", sans-serif; }
 
   <?php if ($success): ?>
   <!-- SUCCESS STATE -->
-  <?php
-    $site_url   = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']==='on' ? 'https' : 'http')
-                  . '://' . $_SERVER['HTTP_HOST'];
-    $login_url  = $site_url . '/login.php';
-  ?>
   <div class="glass-panel w-full max-w-md p-10 rounded-3xl shadow-2xl text-center">
     <div style="width:72px;height:72px;background:rgba(34,197,94,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
       <span class="material-symbols-outlined" style="color:#22c55e;font-size:36px;">check_circle</span>
     </div>
     <h2 class="text-2xl font-extrabold text-white mb-3">Application Submitted! 🎉</h2>
     <p class="text-white/60 text-sm leading-relaxed mb-6">
-      Your pawnshop registration has been received.<br><br>
-      Our team will review your application. Once approved, you can log in directly using the credentials you just created.
+      Your pawnshop registration has been submitted successfully.<br><br>
+      Our Super Admin will review and approve your account.<br>
+      Once approved, you can login using your username and password.
     </p>
-
-    <!-- Site URL box -->
-    <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:14px 16px;margin-bottom:16px;text-align:left;">
-      <div style="font-size:0.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px;">Your Login URL</div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:0.88rem;color:#93c5fd;font-weight:600;word-break:break-all;flex:1;"><?= htmlspecialchars($login_url) ?></span>
-        <button onclick="navigator.clipboard.writeText('<?= htmlspecialchars($login_url, ENT_QUOTES) ?>');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500);"
-          style="flex-shrink:0;background:rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;padding:5px 12px;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all .2s;">
-          Copy
-        </button>
-      </div>
-    </div>
-
-    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:11px 14px;font-size:0.8rem;color:#86efac;margin-bottom:24px;line-height:1.6;">
-      ✅ No invitation link needed — once approved, just go to the URL above and log in with your username &amp; password.
+    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;font-size:0.8rem;color:#86efac;margin-bottom:24px;">
+      📧 Once approved, you will receive an email with your personal login link. No invitation link needed!
     </div>
     <a href="login.php" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:13px 32px;border-radius:12px;font-size:0.92rem;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
-      Go to Login Page →
+      Go to Login →
     </a>
   </div>
 
@@ -262,7 +245,7 @@ body { font-family: "Inter", sans-serif; }
         </div>
 
         <p class="text-xs text-white/35 italic leading-relaxed">
-          ℹ️ After submission, the Super Admin will review your application. Once approved, you will be notified and can log in directly using the credentials you set here — no invitation link needed!
+          ℹ️ After submission, the Super Admin will review your application. Once approved, you will receive an email with your personal login link — just use the username and password you set here!
         </p>
 
         <button type="submit" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;"
