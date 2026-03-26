@@ -80,6 +80,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             $pdo->prepare("UPDATE tenant_invitations SET status='used', used_at=NOW() WHERE token=?")->execute([$token]);
             $pdo->commit();
 
+            // Send welcome email with their dedicated login page link
+            try {
+                require_once __DIR__ . '/mailer.php';
+                sendTenantWelcome($inv['email'], $fullname, $tenant['business_name'], $slug);
+            } catch (Throwable $e) {
+                error_log('Welcome email failed: ' . $e->getMessage());
+            }
+
             // Redirect to tenant login page with success message — do NOT auto-login
             $login_url = 'tenant_login.php?slug=' . urlencode($slug) . '&registered=1';
             header('Location: ' . $login_url);
