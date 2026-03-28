@@ -23,25 +23,40 @@ if (!$tenant) {
 
 // ── Check if token is present → registration mode ─────────────
 if ($token) {
+    // Step 1: Find the invitation by token alone (no tenant_id restriction)
+    // This prevents false "invalid" errors from slug/tenant_id mismatches
     $inv_stmt = $pdo->prepare("
-        SELECT i.*, t.business_name, t.plan, t.id AS tenant_id
+        SELECT i.*, t.business_name, t.plan, t.id AS tenant_id, t.slug AS tenant_slug
         FROM tenant_invitations i
         JOIN tenants t ON i.tenant_id = t.id
-        WHERE i.token = ? AND i.status = 'pending' AND i.tenant_id = ?
+        WHERE i.token = ?
         LIMIT 1
     ");
-    $inv_stmt->execute([$token, $tenant['id']]);
+    $inv_stmt->execute([$token]);
     $inv = $inv_stmt->fetch();
 
-    if ($inv) {
-        if (strtotime($inv['expires_at']) < time()) {
-            $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE token=?")->execute([$token]);
-            $error = 'This invitation link has expired. Please contact your administrator.';
-        } else {
-            $mode = 'register';
-        }
+    if (!$inv) {
+        // Token doesn't exist at all
+        $error = 'Invalid invitation link. Please ask your administrator to resend the invitation.';
+    } elseif ($inv['status'] === 'used') {
+        // Token was already used — check if the user just needs to log in
+        $error = 'This invitation link has already been used. If you already set up your account, please log in below.';
+    } elseif ($inv['status'] === 'expired') {
+        $error = 'This invitation link has expired. Please ask your administrator to resend the invitation.';
+    } elseif ($inv['status'] !== 'pending') {
+        $error = 'This invitation link is no longer valid. Please contact your administrator.';
+    } elseif (strtotime($inv['expires_at']) < time()) {
+        // Pending but expired by time — auto-mark as expired
+        $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE token=?")->execute([$token]);
+        $error = 'This invitation link has expired. Please ask your administrator to resend the invitation.';
     } else {
-        $error = 'Invalid or already used invitation link.';
+        // Valid pending token — allow registration regardless of which slug URL they used
+        // If token belongs to a different tenant than the current slug, redirect to correct branch URL
+        if ($inv['tenant_id'] !== $tenant['id'] && !empty($inv['tenant_slug'])) {
+            header('Location: /' . urlencode($inv['tenant_slug']) . '?token=' . urlencode($token));
+            exit;
+        }
+        $mode = 'register';
     }
 }
 
@@ -345,7 +360,13 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         </div>
         <?php endif; ?>
 
-        <?php if ($error): ?>
+        <?php if ($error && $token): ?>
+        <!-- Token-related error: show warning but keep login form accessible -->
+        <div style="display:flex;align-items:flex-start;gap:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:11px 14px;font-size:.81rem;color:#c2410c;margin-bottom:16px;">
+          <span class="material-symbols-outlined" style="font-size:17px;flex-shrink:0;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">warning</span>
+          <div><?= htmlspecialchars($error) ?></div>
+        </div>
+        <?php elseif ($error): ?>
         <div class="err">
           <span class="material-symbols-outlined">error</span>
           <?= htmlspecialchars($error) ?>

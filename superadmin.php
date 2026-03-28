@@ -72,19 +72,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // ── RESEND INVITATION ─────────────────────────────────────
     if ($_POST['action'] === 'resend_invite') {
         $inv_id = intval($_POST['inv_id']);
-        $inv    = $pdo->prepare("SELECT i.*,t.business_name FROM tenant_invitations i JOIN tenants t ON i.tenant_id=t.id WHERE i.id=?");
+        $inv    = $pdo->prepare("SELECT i.*,t.business_name,t.slug FROM tenant_invitations i JOIN tenants t ON i.tenant_id=t.id WHERE i.id=?");
         $inv->execute([$inv_id]); $inv = $inv->fetch();
-        if ($inv && $inv['status'] === 'pending') {
+        if ($inv && in_array($inv['status'], ['pending', 'expired'])) {
+            // Generate a fresh token and reset status to 'pending'
             $token      = bin2hex(random_bytes(32));
             $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
-            $pdo->prepare("UPDATE tenant_invitations SET token=?,expires_at=? WHERE id=?")->execute([$token,$expires_at,$inv_id]);
-            // Get slug for this tenant so the link points to the right branded page
-            $slug_row = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
-            $slug_row->execute([$inv['tenant_id']]);
-            $slug_row = $slug_row->fetch();
-            $inv_slug = $slug_row['slug'] ?? '';
+            $pdo->prepare("UPDATE tenant_invitations SET token=?, expires_at=?, status='pending', used_at=NULL WHERE id=?")
+                ->execute([$token, $expires_at, $inv_id]);
+            $inv_slug = $inv['slug'] ?? '';
             $sent = sendTenantInvitation($inv['email'],$inv['owner_name'],$inv['business_name'],$token,$inv_slug);
             $success_msg = $sent ? "📧 Invitation resent to {$inv['email']}!" : "⚠️ Failed to send. Check mailer.php settings.";
+        } elseif ($inv && $inv['status'] === 'used') {
+            $error_msg = "This invitation was already used. The tenant already has an account.";
+        } else {
+            $error_msg = "Invitation not found.";
         }
         $active_page = 'invitations';
     }
