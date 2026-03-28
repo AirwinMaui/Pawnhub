@@ -9,15 +9,20 @@ define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsit
 // ── Load PHPMailer ─────────────────────────────────────────────
 $_autoload = __DIR__ . '/vendor/autoload.php';
 if (!file_exists($_autoload)) {
-    die('
-    <div style="font-family:\'Segoe UI\',sans-serif;max-width:560px;margin:60px auto;background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:28px 32px;color:#991b1b;">
-        <h2 style="margin:0 0 10px;font-size:1.1rem;">⚠️ Missing Composer Dependencies</h2>
-        <p style="margin:0 0 14px;font-size:.9rem;line-height:1.7;color:#7f1d1d;">
-            The <code style="background:#fee2e2;padding:2px 6px;border-radius:4px;">vendor/</code> folder is missing.
-        </p>
-        <pre style="background:#1e293b;color:#e2e8f0;padding:14px 18px;border-radius:8px;font-size:.85rem;overflow-x:auto;">composer install</pre>
-    </div>
-    ');
+    // Log the error but do NOT die() — that would crash pages that use mailer inside try-catch
+    error_log('[PawnHub] vendor/autoload.php missing — run composer install');
+    // Define stub functions so pages don't crash if mailer is unavailable
+    if (!function_exists('sendMail')) {
+        function sendMail(): bool { return false; }
+        function sendTenantInvitation(): bool { return false; }
+        function sendTenantWelcome(): bool { return false; }
+        function sendTenantApproved(): bool { return false; }
+        function sendStaffInvitation(): bool { return false; }
+        function sendStaffWelcome(): bool { return false; }
+        function sendManagerInvitation(): bool { return false; }
+        function sendManagerWelcome(): bool { return false; }
+    }
+    return; // Stop loading mailer.php — stub functions are enough
 }
 require $_autoload;
 
@@ -54,8 +59,7 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
         return true;
     } catch (Exception $e) {
         error_log("PHPMailer Error: " . $mail->ErrorInfo);
-        die('<pre style="background:#fef2f2;padding:20px;color:red;font-size:14px;">PHPMailer Error: ' . $mail->ErrorInfo . '</pre>');
-        return false;
+        return false; // Never die() — let caller handle the failure gracefully
     }
 }
 
@@ -326,7 +330,6 @@ function sendStaffWelcome(string $toEmail, string $toName, string $businessName,
  */
 function sendManagerInvitation(string $toEmail, string $toName, string $businessName, string $token, string $slug = ''): bool
 {
-    // Include slug as return-to hint so after setup, manager lands on correct branch login
     $registerLink = APP_URL . '/staff_register.php?token=' . urlencode($token)
         . ($slug ? '&slug=' . urlencode($slug) : '');
 
