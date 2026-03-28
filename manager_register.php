@@ -58,6 +58,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
             if ($chk->fetch()) {
                 $error = 'Username already taken. Please choose another.';
             } else {
+                // Get super admin ID for approved_by (mirrors tenant_register.php)
+                try {
+                    $sa_stmt = $pdo->query("SELECT id FROM users WHERE role='super_admin' LIMIT 1");
+                    $sa_row  = $sa_stmt ? $sa_stmt->fetch() : null;
+                    $sa_id   = $sa_row ? $sa_row['id'] : ($inv['created_by'] ?? null);
+                } catch (Throwable $e) {
+                    $sa_id = $inv['created_by'] ?? null;
+                }
+
                 $pdo->beginTransaction();
 
                 // 1. Create manager user
@@ -72,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
                     $inv['email'],
                     $username,
                     password_hash($password, PASSWORD_BCRYPT),
-                    $inv['created_by'] ?? null,
+                    $sa_id,
                 ]);
                 $new_uid = $pdo->lastInsertId();
 
