@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'invite_staff') {
         $email    = trim($_POST['email']  ?? '');
         $name     = trim($_POST['name']   ?? '');
-        $role     = in_array($_POST['role'], ['staff','cashier']) ? $_POST['role'] : 'staff';
+        $role     = in_array($_POST['role'], ['manager','staff','cashier']) ? $_POST['role'] : 'staff';
 
         if (!$email || !$name) {
             $error_msg = 'Please fill in name and email.';
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($chk->fetch()) {
                 $error_msg = 'This email already has an account in your branch.';
             } else {
-                $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role IN ('staff','cashier')")
+                $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role IN ('manager','staff','cashier')")
                     ->execute([$email, $tid]);
 
                 $token      = bin2hex(random_bytes(32));
@@ -50,11 +50,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $biz_row = $pdo->prepare("SELECT business_name FROM tenants WHERE id=? LIMIT 1");
                     $biz_row->execute([$tid]);
                     $biz_name_for_mail = $biz_row->fetchColumn() ?: 'PawnHub';
-                    sendStaffInvitation($email, $name, $biz_name_for_mail, $role, $token);
+
+                    if ($role === 'manager') {
+                        sendManagerInvitation($email, $name, $biz_name_for_mail, $token);
+                    } else {
+                        sendStaffInvitation($email, $name, $biz_name_for_mail, $role, $token);
+                    }
                     $success_msg = ucfirst($role) . " invitation sent to {$email}!";
                 } catch (Throwable $e) {
                     $emailErr = $e->getMessage();
-                    error_log('Staff invite email failed: ' . $emailErr);
+                    error_log('Invite email failed: ' . $emailErr);
                     $error_msg = 'Invitation created but email failed to send. Error: ' . htmlspecialchars($emailErr);
                 }
                 $active_page = 'users';
@@ -190,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // ── Fetch data ────────────────────────────────────────────────
 $tenant       = $pdo->prepare("SELECT * FROM tenants WHERE id=?"); $tenant->execute([$tid]); $tenant=$tenant->fetch();
-$my_users     = $pdo->prepare("SELECT * FROM users WHERE tenant_id=? AND role IN ('staff','cashier') ORDER BY role,fullname"); $my_users->execute([$tid]); $my_users=$my_users->fetchAll();
+$my_users     = $pdo->prepare("SELECT * FROM users WHERE tenant_id=? AND role IN ('manager','staff','cashier') ORDER BY role,fullname"); $my_users->execute([$tid]); $my_users=$my_users->fetchAll();
 $tickets      = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $tickets->execute([$tid]); $tickets=$tickets->fetchAll();
 $customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
 $inventory    = $pdo->prepare("SELECT * FROM item_inventory WHERE tenant_id=? ORDER BY received_at DESC"); $inventory->execute([$tid]); $inventory=$inventory->fetchAll();
@@ -452,7 +457,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
     </a>
     <div class="sb-section">Team</div>
     <a href="?page=users" class="sb-item <?=$active_page==='users'?'active':''?>">
-      <span class="material-symbols-outlined">badge</span>Staff &amp; Cashier
+      <span class="material-symbols-outlined">badge</span>Managers, Staff &amp; Cashier
     </a>
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
@@ -473,13 +478,13 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','void_requests'=>'Void Requests','renewals'=>'Renewal Requests','users'=>'Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','void_requests'=>'Void Requests','renewals'=>'Renewal Requests','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="tenant-chip"><?=htmlspecialchars($business_name)?></span>
     </div>
     <div class="topbar-right">
       <?php if($active_page==='users'):?>
       <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="padding:7px 14px;font-size:.78rem;">
-        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Staff / Cashier
+        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Manager / Staff / Cashier
       </button>
       <?php endif;?>
       <div class="topbar-icon">
@@ -554,7 +559,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
         </div>
         <div>
           <div class="stat-value"><?=count($my_users)?></div>
-          <div class="stat-label">Active Staff</div>
+          <div class="stat-label">Active Team Members</div>
         </div>
       </div>
     </div>
@@ -704,13 +709,16 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
   <?php elseif($active_page==='users'): ?>
     <div class="card" style="overflow-x:auto;">
-      <?php if(empty($my_users)):?><div class="empty-state"><span class="material-symbols-outlined">badge</span><p>No staff or cashiers yet.</p></div>
+      <?php if(empty($my_users)):?><div class="empty-state"><span class="material-symbols-outlined">badge</span><p>No managers, staff, or cashiers yet.</p></div>
       <?php else:?><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead><tbody>
-      <?php foreach($my_users as $usr):?>
+      <?php foreach($my_users as $usr):
+        $role_badge = match($usr['role']) { 'manager'=>'b-green', 'cashier'=>'b-purple', default=>'b-blue' };
+        $avatar_bg  = match($usr['role']) { 'manager'=>'rgba(16,185,129,.4)', 'cashier'=>'rgba(139,92,246,.4)', default=>'rgba(59,130,246,.4)' };
+      ?>
       <tr>
-        <td><div style="display:flex;align-items:center;gap:9px;"><div style="width:28px;height:28px;border-radius:50%;background:<?=$usr['role']==='cashier'?'rgba(139,92,246,.4)':'rgba(59,130,246,.4)'?>;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;"><?=strtoupper(substr($usr['fullname'],0,1))?></div><span style="font-weight:600;color:#fff;"><?=htmlspecialchars($usr['fullname'])?></span></div></td>
+        <td><div style="display:flex;align-items:center;gap:9px;"><div style="width:28px;height:28px;border-radius:50%;background:<?=$avatar_bg?>;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;"><?=strtoupper(substr($usr['fullname'],0,1))?></div><span style="font-weight:600;color:#fff;"><?=htmlspecialchars($usr['fullname'])?></span></div></td>
         <td style="font-family:monospace;font-size:.76rem;color:var(--t-primary,#60a5fa);"><?=htmlspecialchars($usr['username'])?></td>
-        <td><span class="badge <?=$usr['role']==='cashier'?'b-purple':'b-blue'?>"><?=ucfirst($usr['role'])?></span></td>
+        <td><span class="badge <?=$role_badge?>"><?=ucfirst($usr['role'])?></span></td>
         <td><span class="badge <?=$usr['is_suspended']?'b-red':'b-green'?>"><span class="b-dot"></span><?=$usr['is_suspended']?'Suspended':'Active'?></span></td>
         <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($usr['created_at']))?></td>
         <td><form method="POST" style="display:inline;"><input type="hidden" name="action" value="toggle_user"><input type="hidden" name="user_id" value="<?=$usr['id']?>"><input type="hidden" name="is_suspended" value="<?=$usr['is_suspended']?>"><button type="submit" class="btn-sm <?=$usr['is_suspended']?'btn-success':'btn-danger'?>" style="font-size:.7rem;" onclick="return confirm('<?=$usr['is_suspended']?'Unsuspend':'Suspend'?> this user?')"><?=$usr['is_suspended']?'Unsuspend':'Suspend'?></button></form></td>
@@ -872,7 +880,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <div class="modal-overlay" id="addUserModal">
   <div class="modal">
     <div class="mhdr">
-      <div class="mtitle">Invite Staff / Cashier</div>
+      <div class="mtitle">Invite Team Member</div>
       <button class="mclose" onclick="document.getElementById('addUserModal').classList.remove('open')">
         <span class="material-symbols-outlined">close</span>
       </button>
@@ -880,11 +888,13 @@ tr:hover td{background:rgba(255,255,255,.03);}
     <div class="mbody">
       <form method="POST">
         <input type="hidden" name="action" value="invite_staff">
-        <div style="margin-bottom:12px;"><label class="flabel">Role *</label><select name="role" class="finput" required><option value="staff">Staff</option><option value="cashier">Cashier</option></select></div>
+        <div style="margin-bottom:12px;"><label class="flabel">Role *</label><select name="role" class="finput" required><option value="manager">Manager</option><option value="staff">Staff</option><option value="cashier">Cashier</option></select></div>
         <div style="margin-bottom:12px;"><label class="flabel">Full Name *</label><input type="text" name="name" class="finput" placeholder="Maria Santos" required></div>
         <div style="margin-bottom:14px;"><label class="flabel">Email Address *</label><input type="email" name="email" class="finput" placeholder="staff@example.com" required><div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">An invitation link will be sent to this email.</div></div>
-        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:11px 13px;font-size:.76rem;color:rgba(147,197,253,.8);margin-bottom:14px;line-height:1.6;">
-          📧 The staff/cashier will receive an email with a link to set up their credentials.
+        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 13px;font-size:.76rem;color:rgba(110,231,183,.8);margin-bottom:14px;line-height:1.6;">
+          📧 The invited person will receive an email with a link to set up their credentials.<br>
+          <strong style="color:rgba(110,231,183,1);">Manager</strong> — can invite and manage staff &amp; cashiers.<br>
+          <strong style="color:rgba(147,197,253,1);">Staff / Cashier</strong> — branch operations only.
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addUserModal').classList.remove('open')">Cancel</button>

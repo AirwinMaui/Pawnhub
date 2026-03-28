@@ -129,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 'tenant_slug' => $tenant['slug'] ?? $slug,
             ];
             if ($user['role'] === 'admin')   { header('Location: tenant.php');  exit; }
+            if ($user['role'] === 'manager') { header('Location: manager.php'); exit; }
             if ($user['role'] === 'staff')   { header('Location: staff.php');   exit; }
             if ($user['role'] === 'cashier') { header('Location: cashier.php'); exit; }
             session_unset(); session_destroy();

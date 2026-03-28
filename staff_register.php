@@ -16,7 +16,7 @@ if (!$token) {
         FROM tenant_invitations i
         JOIN tenants t ON i.tenant_id = t.id
         WHERE i.token = ? AND i.status = 'pending'
-        AND i.role IN ('staff','cashier')
+        AND i.role IN ('manager','staff','cashier')
         LIMIT 1
     ");
     $stmt->execute([$token]);
@@ -77,16 +77,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
             try {
                 require_once __DIR__ . '/mailer.php';
                 if (!empty($inv['slug'])) {
-                    sendStaffWelcome(
-                        $inv['email'],
-                        $fullname,
-                        $inv['business_name'],
-                        $inv['role'],
-                        $inv['slug']
-                    );
+                    if ($inv['role'] === 'manager') {
+                        sendManagerWelcome(
+                            $inv['email'],
+                            $fullname,
+                            $inv['business_name'],
+                            $inv['slug']
+                        );
+                    } else {
+                        sendStaffWelcome(
+                            $inv['email'],
+                            $fullname,
+                            $inv['business_name'],
+                            $inv['role'],
+                            $inv['slug']
+                        );
+                    }
                 }
             } catch (Throwable $e) {
-                error_log('Staff welcome email failed: ' . $e->getMessage());
+                error_log('Welcome email failed: ' . $e->getMessage());
             }
 
             // 4. Auto login
@@ -101,7 +110,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
             ];
 
             $success      = true;
-            $redirect_url = !empty($inv['slug']) ? '/' . $inv['slug'] : '/tenant_login.php';
+            if ($inv['role'] === 'manager') {
+                $redirect_url = 'manager.php';
+            } else {
+                $redirect_url = !empty($inv['slug']) ? '/' . $inv['slug'] : '/tenant_login.php';
+            }
             header('refresh:2;url=' . $redirect_url);
         }
     }
@@ -110,8 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
 $role_label  = ucfirst($inv['role'] ?? 'Staff');
 $biz_name    = htmlspecialchars($inv['business_name'] ?? 'PawnHub');
 $is_cashier  = ($inv['role'] ?? '') === 'cashier';
-$role_color  = $is_cashier ? '#7c3aed' : '#1e3a8a';
-$role_color2 = $is_cashier ? '#4c1d95' : '#2563eb';
+$is_manager  = ($inv['role'] ?? '') === 'manager';
+$role_color  = $is_manager ? '#059669' : ($is_cashier ? '#7c3aed' : '#1e3a8a');
+$role_color2 = $is_manager ? '#064e3b' : ($is_cashier ? '#4c1d95' : '#2563eb');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -139,6 +153,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
 .card-meta{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
 .card-meta-badge{background:#1e3a8a;color:#fff;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;padding:3px 10px;border-radius:6px;}
 .card-meta-badge.cashier{background:#4c1d95;}
+.card-meta-badge.manager{background:#064e3b;}
 .card-meta-step{font-size:.75rem;font-weight:500;color:#757682;}
 .card-meta-div{height:1px;width:28px;background:rgba(0,0,0,.12);}
 .card-title{font-size:1.75rem;font-weight:800;color:#00236f;letter-spacing:-.03em;line-height:1.15;margin-bottom:8px;}
@@ -164,6 +179,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
 /* Button */
 .btn-submit{width:100%;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:10px;padding:15px;font-family:'Inter',sans-serif;font-size:.94rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(30,58,138,.25);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
 .btn-submit.cashier{background:linear-gradient(135deg,#4c1d95,#7c3aed);box-shadow:0 4px 18px rgba(124,58,237,.25);}
+.btn-submit.manager{background:linear-gradient(135deg,#064e3b,#059669);box-shadow:0 4px 18px rgba(5,150,105,.25);}
 .btn-submit:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(30,58,138,.35);}
 .btn-submit:active{transform:scale(.98);}
 .btn-submit .ms{font-size:18px;}
@@ -254,7 +270,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
   <div class="card">
     <!-- Header -->
     <div class="card-meta">
-      <span class="card-meta-badge <?= $is_cashier ? 'cashier' : '' ?>"><?= $role_label ?> Portal</span>
+      <span class="card-meta-badge <?= $is_manager ? 'manager' : ($is_cashier ? 'cashier' : '') ?>"><?= $role_label ?> Portal</span>
       <div class="card-meta-div"></div>
       <span class="card-meta-step">Step 02 of 02</span>
     </div>
@@ -325,7 +341,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
         </label>
       </div>
 
-      <button type="submit" class="btn-submit <?= $is_cashier ? 'cashier' : '' ?>">
+      <button type="submit" class="btn-submit <?= $is_manager ? 'manager' : ($is_cashier ? 'cashier' : '') ?>">
         Create My Account &amp; Sign In
         <span class="ms">arrow_forward</span>
       </button>
