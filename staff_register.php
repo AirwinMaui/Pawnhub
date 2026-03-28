@@ -31,6 +31,16 @@ if (!$token) {
     }
 }
 
+// ── Determine redirect URL based on role ─────────────────────
+// Defined early so it's ALWAYS available — prevents undefined variable fatal errors
+function getStaffRedirectUrl(string $role, string $slug = ''): string {
+    if ($role === 'manager') return 'manager.php';
+    if ($role === 'staff')   return 'staff.php';
+    if ($role === 'cashier') return 'cashier.php';
+    return !empty($slug) ? '/' . $slug : 'login.php';
+}
+$redirect_url = $inv ? getStaffRedirectUrl($inv['role'] ?? '', $inv['slug'] ?? '') : 'login.php';
+
 // ── Handle registration form ──────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
     $username = trim($_POST['username'] ?? '');
@@ -52,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
         } else {
             $pdo->beginTransaction();
 
-            // 1. Create staff/cashier user
+            // 1. Create staff/cashier/manager user
             $pdo->prepare("
                 INSERT INTO users (tenant_id, fullname, email, username, password, role, status, approved_by, approved_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, NOW())
@@ -73,32 +83,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
 
             $pdo->commit();
 
-            // 3. Send welcome email with login page link
+            // 3. Send welcome email
             try {
                 require_once __DIR__ . '/mailer.php';
                 if (!empty($inv['slug'])) {
                     if ($inv['role'] === 'manager') {
-                        sendManagerWelcome(
-                            $inv['email'],
-                            $fullname,
-                            $inv['business_name'],
-                            $inv['slug']
-                        );
+                        sendManagerWelcome($inv['email'], $fullname, $inv['business_name'], $inv['slug']);
                     } else {
-                        sendStaffWelcome(
-                            $inv['email'],
-                            $fullname,
-                            $inv['business_name'],
-                            $inv['role'],
-                            $inv['slug']
-                        );
+                        sendStaffWelcome($inv['email'], $fullname, $inv['business_name'], $inv['role'], $inv['slug']);
                     }
                 }
             } catch (Throwable $e) {
                 error_log('Welcome email failed: ' . $e->getMessage());
             }
 
-            // 4. Auto login
+            // 4. Auto login — include tenant_slug for proper logout redirect
             session_regenerate_id(true);
             $_SESSION['user'] = [
                 'id'          => $new_uid,
@@ -107,14 +106,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
                 'role'        => $inv['role'],
                 'tenant_id'   => $inv['tenant_id'],
                 'tenant_name' => $inv['business_name'],
+                'tenant_slug' => $inv['slug'] ?? '',
             ];
 
             $success      = true;
-            if ($inv['role'] === 'manager') {
-                $redirect_url = 'manager.php';
-            } else {
-                $redirect_url = !empty($inv['slug']) ? '/' . $inv['slug'] : '/tenant_login.php';
-            }
+            $redirect_url = getStaffRedirectUrl($inv['role'], $inv['slug'] ?? '');
             header('refresh:2;url=' . $redirect_url);
         }
     }
