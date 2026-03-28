@@ -117,10 +117,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
     }
 }
 
-$role_label  = ucfirst($inv['role'] ?? 'Staff');
-$biz_name    = htmlspecialchars($inv['business_name'] ?? 'PawnHub');
-$is_cashier  = ($inv['role'] ?? '') === 'cashier';
-$is_manager  = ($inv['role'] ?? '') === 'manager';
+
+// Safe variable extraction — $inv may be null when token is invalid/missing
+$inv_role    = is_array($inv) ? ($inv['role'] ?? 'staff') : 'staff';
+$inv_bizname = is_array($inv) ? ($inv['business_name'] ?? 'PawnHub') : 'PawnHub';
+$inv_slug    = is_array($inv) ? ($inv['slug'] ?? $slug_hint) : $slug_hint;
+$inv_email   = is_array($inv) ? ($inv['email'] ?? '') : '';
+$inv_name    = is_array($inv) ? ($inv['owner_name'] ?? '') : '';
+
+$role_label  = ucfirst($inv_role);
+$biz_name    = htmlspecialchars($inv_bizname);
+$is_cashier  = $inv_role === 'cashier';
+$is_manager  = $inv_role === 'manager';
 $role_color  = $is_manager ? '#059669' : ($is_cashier ? '#7c3aed' : '#1e3a8a');
 $role_color2 = $is_manager ? '#064e3b' : ($is_cashier ? '#4c1d95' : '#2563eb');
 ?>
@@ -291,7 +299,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
         <div class="fin-wrap">
           <span class="ms ms-ico">person</span>
           <input class="fin" type="text" name="fullname" placeholder="Your full name"
-            value="<?= htmlspecialchars($_POST['fullname'] ?? $inv['owner_name']) ?>" required>
+            value="<?= htmlspecialchars($_POST['fullname'] ?? $inv_name) ?>" required>
         </div>
       </div>
 
@@ -299,7 +307,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
       <div class="grid2">
         <div class="fg">
           <label>Email</label>
-          <input class="fin" type="email" value="<?= htmlspecialchars($inv['email']) ?>" readonly>
+          <input class="fin" type="email" value="<?= htmlspecialchars($inv_email) ?>" readonly>
           <div class="hint">Invitation email address.</div>
         </div>
         <div class="fg">
@@ -347,7 +355,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
     <div class="card-foot">
       Already registered for this branch?
       <?php
-        $branch_slug = $inv['slug'] ?? $slug_hint ?? '';
+        $branch_slug = $inv_slug ?? '';
         $login_href  = $branch_slug ? '/' . htmlspecialchars($branch_slug) : 'login.php';
       ?>
       <a href="<?= $login_href ?>">Log in here</a>
