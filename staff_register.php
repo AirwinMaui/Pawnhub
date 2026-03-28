@@ -3,6 +3,7 @@ session_start();
 require 'db.php';
 
 $token   = trim($_GET['token'] ?? '');
+$slug_hint = trim($_GET['slug'] ?? ''); // Optional: passed by manager invitation link
 $error   = '';
 $success = false;
 $inv     = null;
@@ -344,7 +345,12 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
     </form>
 
     <div class="card-foot">
-      Already registered for this branch? <a href="login.php">Log in here</a>
+      Already registered for this branch?
+      <?php
+        $branch_slug = $inv['slug'] ?? $slug_hint ?? '';
+        $login_href  = $branch_slug ? '/' . htmlspecialchars($branch_slug) : 'login.php';
+      ?>
+      <a href="<?= $login_href ?>">Log in here</a>
     </div>
   </div>
 

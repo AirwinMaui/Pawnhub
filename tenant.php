@@ -17,9 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // Invite Staff or Cashier via Email
     if ($_POST['action'] === 'invite_staff') {
-        $email    = trim($_POST['email']  ?? '');
-        $name     = trim($_POST['name']   ?? '');
-        $role     = in_array($_POST['role'], ['manager','staff','cashier']) ? $_POST['role'] : 'staff';
+        $email = trim($_POST['email'] ?? '');
+        $name  = trim($_POST['name']  ?? '');
+        // Admin/Owner can ONLY invite Managers — Managers handle Staff/Cashier themselves
+        $role  = 'manager';
 
         if (!$email || !$name) {
             $error_msg = 'Please fill in name and email.';
@@ -31,7 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($chk->fetch()) {
                 $error_msg = 'This email already has an account in your branch.';
             } else {
-                $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role IN ('manager','staff','cashier')")
+                // Expire only existing pending manager invitations for this email
+                $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role='manager'")
                     ->execute([$email, $tid]);
 
                 $token      = bin2hex(random_bytes(32));
@@ -40,23 +42,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $pdo->prepare("INSERT INTO tenant_invitations (tenant_id, email, owner_name, role, token, status, expires_at, created_by) VALUES (?,?,?,?,?,'pending',?,?)")
                     ->execute([$tid, $email, $name, $role, $token, $expires_at, $u['id']]);
 
-                $slug_row = $pdo->prepare("SELECT slug FROM tenants WHERE id=? LIMIT 1");
+                // Get tenant slug AND business name in one query
+                $slug_row = $pdo->prepare("SELECT slug, business_name FROM tenants WHERE id=? LIMIT 1");
                 $slug_row->execute([$tid]);
-                $slug_row = $slug_row->fetch();
-                $slug     = $slug_row['slug'] ?? '';
+                $slug_row          = $slug_row->fetch();
+                $slug              = $slug_row['slug'] ?? '';
+                $biz_name_for_mail = $slug_row['business_name'] ?: 'PawnHub';
 
                 try {
                     require_once __DIR__ . '/mailer.php';
-                    $biz_row = $pdo->prepare("SELECT business_name FROM tenants WHERE id=? LIMIT 1");
-                    $biz_row->execute([$tid]);
-                    $biz_name_for_mail = $biz_row->fetchColumn() ?: 'PawnHub';
-
-                    if ($role === 'manager') {
-                        sendManagerInvitation($email, $name, $biz_name_for_mail, $token);
-                    } else {
-                        sendStaffInvitation($email, $name, $biz_name_for_mail, $role, $token);
-                    }
-                    $success_msg = ucfirst($role) . " invitation sent to {$email}!";
+                    // Pass slug so after registration manager lands on correct branch login
+                    sendManagerInvitation($email, $name, $biz_name_for_mail, $token, $slug);
+                    $success_msg = "Manager invitation sent to {$email}!";
                 } catch (Throwable $e) {
                     $emailErr = $e->getMessage();
                     error_log('Invite email failed: ' . $emailErr);
@@ -880,7 +877,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <div class="modal-overlay" id="addUserModal">
   <div class="modal">
     <div class="mhdr">
-      <div class="mtitle">Invite Team Member</div>
+      <div class="mtitle">Invite Branch Manager</div>
       <button class="mclose" onclick="document.getElementById('addUserModal').classList.remove('open')">
         <span class="material-symbols-outlined">close</span>
       </button>
@@ -888,17 +885,23 @@ tr:hover td{background:rgba(255,255,255,.03);}
     <div class="mbody">
       <form method="POST">
         <input type="hidden" name="action" value="invite_staff">
-        <div style="margin-bottom:12px;"><label class="flabel">Role *</label><select name="role" class="finput" required><option value="manager">Manager</option><option value="staff">Staff</option><option value="cashier">Cashier</option></select></div>
+        <input type="hidden" name="role" value="manager">
+        <div style="margin-bottom:12px;">
+          <label class="flabel">Role</label>
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 14px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#6ee7b7;">manage_accounts</span>
+            <span style="font-size:.85rem;font-weight:700;color:#6ee7b7;">Branch Manager</span>
+          </div>
+        </div>
         <div style="margin-bottom:12px;"><label class="flabel">Full Name *</label><input type="text" name="name" class="finput" placeholder="Maria Santos" required></div>
-        <div style="margin-bottom:14px;"><label class="flabel">Email Address *</label><input type="email" name="email" class="finput" placeholder="staff@example.com" required><div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">An invitation link will be sent to this email.</div></div>
+        <div style="margin-bottom:14px;"><label class="flabel">Email Address *</label><input type="email" name="email" class="finput" placeholder="manager@example.com" required><div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">An invitation link will be sent to this email.</div></div>
         <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 13px;font-size:.76rem;color:rgba(110,231,183,.8);margin-bottom:14px;line-height:1.6;">
-          📧 The invited person will receive an email with a link to set up their credentials.<br>
-          <strong style="color:rgba(110,231,183,1);">Manager</strong> — can invite and manage staff &amp; cashiers.<br>
-          <strong style="color:rgba(147,197,253,1);">Staff / Cashier</strong> — branch operations only.
+          📧 The Manager will receive an email to set up their account credentials.<br>
+          <strong style="color:rgba(110,231,183,1);">Manager</strong> — can invite and manage their own staff &amp; cashiers.
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addUserModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-sm btn-primary">Send Invitation</button>
+          <button type="submit" class="btn-sm btn-primary">Send Manager Invitation</button>
         </div>
       </form>
     </div>

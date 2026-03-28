@@ -324,9 +324,11 @@ function sendStaffWelcome(string $toEmail, string $toName, string $businessName,
  * EMAIL — Manager Invitation (sent by Tenant Admin/Owner)
  * Link goes to staff_register.php?token=... (same flow as staff/cashier)
  */
-function sendManagerInvitation(string $toEmail, string $toName, string $businessName, string $token): bool
+function sendManagerInvitation(string $toEmail, string $toName, string $businessName, string $token, string $slug = ''): bool
 {
-    $registerLink = APP_URL . '/staff_register.php?token=' . urlencode($token);
+    // Include slug as return-to hint so after setup, manager lands on correct branch login
+    $registerLink = APP_URL . '/staff_register.php?token=' . urlencode($token)
+        . ($slug ? '&slug=' . urlencode($slug) : '');
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
