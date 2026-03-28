@@ -330,7 +330,7 @@ function sendStaffWelcome(string $toEmail, string $toName, string $businessName,
  */
 function sendManagerInvitation(string $toEmail, string $toName, string $businessName, string $token, string $slug = ''): bool
 {
-    $registerLink = APP_URL . '/staff_register.php?token=' . urlencode($token)
+    $registerLink = APP_URL . '/manager_register.php?token=' . urlencode($token)
         . ($slug ? '&slug=' . urlencode($slug) : '');
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>

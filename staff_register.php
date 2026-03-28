@@ -17,7 +17,7 @@ if (!$token) {
         FROM tenant_invitations i
         JOIN tenants t ON i.tenant_id = t.id
         WHERE i.token = ? AND i.status = 'pending'
-        AND i.role IN ('manager','staff','cashier')
+        AND i.role IN ('staff','cashier')
         LIMIT 1
     ");
     $stmt->execute([$token]);
@@ -35,7 +35,6 @@ if (!$token) {
 // ── Determine redirect URL based on role ─────────────────────
 // Defined early so it's ALWAYS available — prevents undefined variable fatal errors
 function getStaffRedirectUrl(string $role, string $slug = ''): string {
-    if ($role === 'manager') return '/manager.php';
     if ($role === 'staff')   return '/staff.php';
     if ($role === 'cashier') return '/cashier.php';
     return !empty($slug) ? '/' . $slug : '/login.php';
@@ -89,12 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
                 $mailer_path = __DIR__ . '/mailer.php';
                 if (file_exists($mailer_path)) {
                     require_once $mailer_path;
-                    if (!empty($inv['slug'])) {
-                        if ($inv['role'] === 'manager') {
-                            sendManagerWelcome($inv['email'], $fullname, $inv['business_name'], $inv['slug']);
-                        } else {
-                            sendStaffWelcome($inv['email'], $fullname, $inv['business_name'], $inv['role'], $inv['slug']);
-                        }
+                    if (!empty($inv['slug']) && function_exists('sendStaffWelcome')) {
+                        sendStaffWelcome($inv['email'], $fullname, $inv['business_name'], $inv['role'], $inv['slug']);
                     }
                 }
             } catch (Throwable $e) {
@@ -116,7 +111,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
             $success      = true;
             $redirect_url = getStaffRedirectUrl($inv['role'], $inv['slug'] ?? '');
             header('refresh:2;url=' . $redirect_url);
-            // Do NOT exit here — let the success HTML render below
         }
     }
 }
