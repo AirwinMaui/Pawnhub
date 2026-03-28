@@ -123,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log('manager_register registration failed: ' . $e->getMessage());
-            $error = 'Registration failed due to a server error. Please try again.';
+            $error = 'DB ERROR (debug): ' . $e->getMessage();
         }
     }
 }
