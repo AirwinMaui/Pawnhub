@@ -40,9 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $plans = [
-    'Starter'    => ['branches' => 1],
-    'Pro'        => ['branches' => 3],
-    'Enterprise' => ['branches' => 10],
+    'Starter'    => ['max_staff' => 3,  'branches' => 1],
+    'Pro'        => ['max_staff' => 0,  'branches' => 3],
+    'Enterprise' => ['max_staff' => 0,  'branches' => 10],
 ];
 $selected_plan = $_POST['plan'] ?? ($_GET['plan'] ?? 'Starter');
 if (!array_key_exists($selected_plan, $plans)) $selected_plan = 'Starter';
@@ -239,9 +239,14 @@ body { font-family: "Inter", sans-serif; }
         </div>
 
         <!-- Plan Summary -->
-        <div id="plan_summary" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;font-size:0.82rem;">
-          <div style="color:rgba(255,255,255,0.7);">Selected Plan: <strong style="color:#93c5fd;" id="summary_plan"><?= htmlspecialchars($selected_plan) ?></strong></div>
-          <div style="color:rgba(255,255,255,0.45);" id="summary_branches"><?= $plans[$selected_plan]['branches'] ?> branch<?= $plans[$selected_plan]['branches'] > 1 ? 'es' : '' ?></div>
+        <div id="plan_summary" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:12px 16px;font-size:0.82rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="color:rgba(255,255,255,0.7);">Selected Plan: <strong style="color:#93c5fd;" id="summary_plan"><?= htmlspecialchars($selected_plan) ?></strong></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.76rem;">
+            <div style="color:rgba(255,255,255,0.5);">📍 Branches: <strong style="color:#93c5fd;" id="summary_branches"><?= $plans[$selected_plan]['branches'] == 1 ? '1 Branch' : 'Up to '.$plans[$selected_plan]['branches'].' Branches' ?></strong></div>
+            <div style="color:rgba(255,255,255,0.5);">👥 Staff/Cashier: <strong style="color:#93c5fd;" id="summary_staff"><?= $plans[$selected_plan]['max_staff'] == 0 ? 'Unlimited' : 'Up to '.$plans[$selected_plan]['max_staff'] ?></strong></div>
+          </div>
         </div>
 
         <p class="text-xs text-white/35 italic leading-relaxed">
@@ -275,16 +280,21 @@ body { font-family: "Inter", sans-serif; }
 </footer>
 
 <script>
-const planBranches = { Starter: 1, Pro: 3, Enterprise: 10 };
+const planData = {
+  Starter:    { branches: 1,  maxStaff: 3 },
+  Pro:        { branches: 3,  maxStaff: 0 },
+  Enterprise: { branches: 10, maxStaff: 0 },
+};
 
 function selectPlan(name) {
-  document.getElementById('plan_input').value    = name;
-  document.getElementById('branches_input').value = planBranches[name];
-  document.getElementById('summary_plan').textContent = name;
-  const b = planBranches[name];
-  document.getElementById('summary_branches').textContent = b + ' branch' + (b > 1 ? 'es' : '');
-  ['Starter','Pro','Enterprise'].forEach(p => {
-    document.getElementById('pill-' + p).classList.toggle('active', p === name);
+  const p = planData[name];
+  document.getElementById('plan_input').value     = name;
+  document.getElementById('branches_input').value = p.branches;
+  document.getElementById('summary_plan').textContent     = name;
+  document.getElementById('summary_branches').textContent = p.branches === 1 ? '1 Branch' : 'Up to ' + p.branches + ' Branches';
+  document.getElementById('summary_staff').textContent    = p.maxStaff === 0 ? 'Unlimited' : 'Up to ' + p.maxStaff;
+  ['Starter','Pro','Enterprise'].forEach(n => {
+    document.getElementById('pill-' + n).classList.toggle('active', n === name);
   });
 }
 </script>

@@ -443,15 +443,8 @@ tr:hover td{background:rgba(255,255,255,.03);}
     <a href="?page=inventory" class="sb-item <?=$active_page==='inventory'?'active':''?>">
       <span class="material-symbols-outlined">inventory_2</span>Inventory
     </a>
-    <div class="sb-section">Approvals</div>
-    <a href="?page=void_requests" class="sb-item <?=$active_page==='void_requests'?'active':''?>">
-      <span class="material-symbols-outlined">cancel_presentation</span>Void Requests
-      <?php if(count($pending_voids)>0):?><span class="sb-pill"><?=count($pending_voids)?></span><?php endif;?>
-    </a>
-    <a href="?page=renewals" class="sb-item <?=$active_page==='renewals'?'active':''?>">
-      <span class="material-symbols-outlined">update</span>Renewals
-      <?php if(count($pending_renewals)>0):?><span class="sb-pill"><?=count($pending_renewals)?></span><?php endif;?>
-    </a>
+
+
     <div class="sb-section">Team</div>
     <a href="?page=users" class="sb-item <?=$active_page==='users'?'active':''?>">
       <span class="material-symbols-outlined">badge</span>Managers, Staff &amp; Cashier
@@ -475,13 +468,13 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','void_requests'=>'Void Requests','renewals'=>'Renewal Requests','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="tenant-chip"><?=htmlspecialchars($business_name)?></span>
     </div>
     <div class="topbar-right">
       <?php if($active_page==='users'):?>
       <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="padding:7px 14px;font-size:.78rem;">
-        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Manager / Staff / Cashier
+        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Manager
       </button>
       <?php endif;?>
       <div class="topbar-icon">
@@ -561,19 +554,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
       </div>
     </div>
 
-    <!-- Attention Banner -->
-    <?php if(count($pending_voids)||count($pending_renewals)): ?>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px;">
-      <a href="?page=void_requests" class="attn-card">
-        <div class="attn-val"><?=count($pending_voids)?></div>
-        <div class="attn-label">⚠️ Pending Void Requests</div>
-      </a>
-      <a href="?page=renewals" class="attn-card blue">
-        <div class="attn-val"><?=count($pending_renewals)?></div>
-        <div class="attn-label">🔄 Pending Renewals</div>
-      </a>
-    </div>
-    <?php endif;?>
+
 
     <!-- Main Grid -->
     <div style="display:grid;grid-template-columns:1fr 320px;gap:18px;">
@@ -604,10 +585,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
               <span class="material-symbols-outlined" style="color:#93c5fd;">add_circle</span>
               <span>New Loan</span>
             </a>
-            <a href="?page=renewals" class="quick-btn">
-              <span class="material-symbols-outlined" style="color:#fcd34d;">currency_exchange</span>
-              <span>Renewal</span>
-            </a>
+
             <a href="?page=tickets" class="quick-btn">
               <span class="material-symbols-outlined" style="color:#6ee7b7;">shopping_bag</span>
               <span>Redeem</span>
@@ -678,31 +656,9 @@ tr:hover td{background:rgba(255,255,255,.03);}
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
-  <?php elseif($active_page==='void_requests'): ?>
-    <div class="card" style="overflow-x:auto;">
-      <?php if(empty($void_reqs)):?><div class="empty-state"><span class="material-symbols-outlined">cancel_presentation</span><p>No void requests.</p></div>
-      <?php else:?><table><thead><tr><th>Ticket</th><th>Requested By</th><th>Reason</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead><tbody>
-      <?php foreach($void_reqs as $v):?>
-      <tr><td><span class="ticket-tag"><?=htmlspecialchars($v['ticket_no'])?></span></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($v['req_name'])?></td><td style="max-width:180px;font-size:.76rem;"><?=htmlspecialchars($v['reason'])?></td><td><span class="badge <?=$v['status']==='approved'?'b-green':($v['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($v['status'])?></span></td><td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y h:i A',strtotime($v['requested_at']))?></td>
-      <td><?php if($v['status']==='pending'):?>
-        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="approve_void"><input type="hidden" name="void_id" value="<?=$v['id']?>"><input type="hidden" name="ticket_no" value="<?=htmlspecialchars($v['ticket_no'])?>"><button type="submit" class="btn-sm btn-success" onclick="return confirm('Approve void?')">Approve</button></form>
-        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="reject_void"><input type="hidden" name="void_id" value="<?=$v['id']?>"><button type="submit" class="btn-sm btn-danger" onclick="return confirm('Reject?')">Reject</button></form>
-      <?php else:?>—<?php endif;?></td></tr>
-      <?php endforeach;?></tbody></table><?php endif;?>
-    </div>
 
-  <?php elseif($active_page==='renewals'): ?>
-    <div class="card" style="overflow-x:auto;">
-      <?php if(empty($renewals)):?><div class="empty-state"><span class="material-symbols-outlined">update</span><p>No renewal requests.</p></div>
-      <?php else:?><table><thead><tr><th>Old Ticket</th><th>New Ticket</th><th>Customer</th><th>Channel</th><th>Payment</th><th>Verification</th><th>Date</th><th>Actions</th></tr></thead><tbody>
-      <?php foreach($renewals as $r):?>
-      <tr><td><span class="ticket-tag"><?=htmlspecialchars($r['old_ticket_no'])?></span></td><td><?=$r['new_ticket_no']?'<span class="ticket-tag">'.htmlspecialchars($r['new_ticket_no']).'</span>':'—'?></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($r['customer_name']??'—')?></td><td><span class="badge <?=$r['channel']==='online'?'b-blue':'b-gray'?>"><?=ucfirst($r['channel'])?></span></td><td><span class="badge <?=$r['payment_status']==='paid'?'b-green':'b-yellow'?>"><?=ucfirst($r['payment_status'])?></span></td><td><span class="badge <?=$r['verification_status']==='verified'?'b-green':($r['verification_status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($r['verification_status'])?></span></td><td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($r['created_at']))?></td>
-      <td><?php if($r['verification_status']==='pending'):?>
-        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="approve_renewal"><input type="hidden" name="renewal_id" value="<?=$r['id']?>"><button type="submit" class="btn-sm btn-success" onclick="return confirm('Approve renewal?')">Approve</button></form>
-        <form method="POST" style="display:inline;"><input type="hidden" name="action" value="reject_renewal"><input type="hidden" name="renewal_id" value="<?=$r['id']?>"><button type="submit" class="btn-sm btn-danger" onclick="return confirm('Reject?')">Reject</button></form>
-      <?php else:?>—<?php endif;?></td></tr>
-      <?php endforeach;?></tbody></table><?php endif;?>
-    </div>
+
+
 
   <?php elseif($active_page==='users'): ?>
     <div class="card" style="overflow-x:auto;">

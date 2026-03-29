@@ -916,19 +916,15 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                   <input type="text" name="starter_price" class="finput" value="<?=htmlspecialchars($ss['starter_price'])?>" placeholder="Free">
                 </div>
                 <div>
-                  <label class="flabel">Max Branches</label>
-                  <input type="number" name="starter_branches" class="finput" value="<?=(int)$ss['starter_branches']?>" min="1" max="99">
-                </div>
-                <div>
                   <label class="flabel">Max Staff + Cashiers</label>
                   <input type="number" name="starter_staff" class="finput" value="<?=(int)$ss['starter_staff']?>" min="1" max="999">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit</div>
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit per branch</div>
                 </div>
                 <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
+                  <div>✅ 1 Branch (fixed)</div>
                   <div>✅ Pawn tickets</div>
                   <div>✅ Customer management</div>
                   <div>✅ Basic reports</div>
-                  <div style="color:#dc2626;">❌ Multi-branch</div>
                 </div>
               </div>
             </div>
@@ -945,17 +941,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                   <input type="text" name="pro_price" class="finput" value="<?=htmlspecialchars($ss['pro_price'])?>" placeholder="₱999/mo">
                 </div>
                 <div>
-                  <label class="flabel">Max Branches</label>
-                  <input type="number" name="pro_branches" class="finput" value="<?=(int)$ss['pro_branches']?>" min="1" max="99">
-                </div>
-                <div>
                   <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
                   <input type="number" name="pro_staff" class="finput" value="<?=(int)$ss['pro_staff']?>" min="0">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 means no limit</div>
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 means no limit. Per branch.</div>
                 </div>
                 <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
+                  <div>✅ Up to 3 Branches</div>
                   <div>✅ Everything in Starter</div>
-                  <div>✅ Multi-branch support</div>
                   <div>✅ Unlimited staff</div>
                   <div>✅ Advanced reports</div>
                 </div>
@@ -974,14 +966,12 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                   <input type="text" name="ent_price" class="finput" value="<?=htmlspecialchars($ss['ent_price'])?>" placeholder="₱2,499/mo">
                 </div>
                 <div>
-                  <label class="flabel">Max Branches</label>
-                  <input type="number" name="ent_branches" class="finput" value="<?=(int)$ss['ent_branches']?>" min="1" max="999">
-                </div>
-                <div>
                   <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
                   <input type="number" name="ent_staff" class="finput" value="<?=(int)$ss['ent_staff']?>" min="0">
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 means no limit. Per branch.</div>
                 </div>
                 <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
+                  <div>✅ Up to 10 Branches</div>
                   <div>✅ Everything in Pro</div>
                   <div>✅ Dedicated support</div>
                   <div>✅ Custom branding</div>
@@ -998,30 +988,32 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <div class="card-hdr"><span class="card-title">👤 User Role Permissions</span></div>
           <div style="overflow-x:auto;">
             <table>
-              <thead><tr><th>Permission</th><th style="text-align:center;">Super Admin</th><th style="text-align:center;">Admin (Tenant)</th><th style="text-align:center;">Staff</th><th style="text-align:center;">Cashier</th></tr></thead>
+              <thead><tr><th>Permission</th><th style="text-align:center;">Super Admin</th><th style="text-align:center;">Admin (Owner)</th><th style="text-align:center;">Manager</th><th style="text-align:center;">Staff</th><th style="text-align:center;">Cashier</th></tr></thead>
               <tbody>
                 <?php
+                // [label, super_admin, admin/owner, manager, staff, cashier]
                 $perms = [
-                  ['Manage Tenants',          true,  false, false, false],
-                  ['Approve/Reject Tenants',  true,  false, false, false],
-                  ['View Sales Report',       true,  false, false, false],
-                  ['View Audit Logs',         true,  false, false, false],
-                  ['System Settings',         true,  false, false, false],
-                  ['Manage Staff/Cashiers',   false, true,  false, false],
-                  ['Approve Void Requests',   false, true,  false, false],
-                  ['Approve Renewals',        false, true,  false, false],
-                  ['Theme & Branding',        false, true,  false, false],
-                  ['View Tenant Reports',     false, true,  false, false],
-                  ['Create Pawn Tickets',     false, false, true,  false],
-                  ['Register Customers',      false, false, true,  false],
-                  ['Request Void',            false, false, true,  false],
-                  ['Process Payment',         false, false, true,  true ],
-                  ['View Ticket Status',      false, true,  true,  true ],
+                  ['Manage Tenants',          true,  false, false, false, false],
+                  ['Approve/Reject Tenants',  true,  false, false, false, false],
+                  ['View Sales Report',       true,  false, false, false, false],
+                  ['View Audit Logs',         true,  false, false, false, false],
+                  ['System Settings',         true,  false, false, false, false],
+                  ['Invite Managers',         false, true,  false, false, false],
+                  ['Theme & Branding',        false, true,  false, false, false],
+                  ['View Tenant Reports',     false, true,  false, false, false],
+                  ['Manage Staff/Cashiers',   false, false, true,  false, false],
+                  ['Approve Void Requests',   false, false, true,  false, false],
+                  ['Approve Renewals',        false, false, true,  false, false],
+                  ['Create Pawn Tickets',     false, false, false, true,  false],
+                  ['Register Customers',      false, false, false, true,  false],
+                  ['Request Void',            false, false, false, true,  false],
+                  ['Process Payment',         false, false, false, true,  true ],
+                  ['View Ticket Status',      false, true,  true,  true,  true ],
                 ];
-                foreach($perms as [$label,$sa,$ad,$st,$ca]):?>
+                foreach($perms as [$label,$sa,$ow,$mg,$st,$ca]):?>
                 <tr>
                   <td style="font-size:.8rem;font-weight:500;"><?=$label?></td>
-                  <?php foreach([$sa,$ad,$st,$ca] as $allowed):?>
+                  <?php foreach([$sa,$ow,$mg,$st,$ca] as $allowed):?>
                   <td style="text-align:center;">
                     <?php if($allowed):?>
                       <span style="color:#16a34a;font-size:1rem;">✓</span>
