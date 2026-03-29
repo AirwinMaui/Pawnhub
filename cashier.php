@@ -10,9 +10,14 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
-if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
+function redirectToTenantLogin(): void {
+    $slug = $_SESSION['user']['tenant_slug'] ?? '';
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : '/login.php'));
+    exit;
+}
+if (empty($_SESSION['user'])) { redirectToTenantLogin(); }
 $u = $_SESSION['user'];
-if ($u['role'] !== 'cashier') { header('Location: login.php'); exit; }
+if ($u['role'] !== 'cashier') { redirectToTenantLogin(); }
 
 $tid         = $u['tenant_id'];
 $active_page = $_GET['page'] ?? 'dashboard';

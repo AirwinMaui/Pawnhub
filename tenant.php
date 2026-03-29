@@ -3,26 +3,15 @@ session_start();
 require 'db.php';
 require 'theme_helper.php';
 
-// ── Session guard — redirect to tenant login, not super admin ──
-if (empty($_SESSION['user'])) {
-    // Try to get slug from URL path via router (REQUEST_URI)
-    $uri  = trim(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), '/');
-    $slug = $_GET['slug'] ?? $uri;
-    if ($slug && $slug !== 'tenant.php') {
-        header('Location: /' . rawurlencode($slug)); exit;
-    }
-    header('Location: login.php'); exit;
-}
-$u = $_SESSION['user'];
-if ($u['role'] !== 'admin') {
-    // Redirect to their proper page based on role
-    if ($u['role'] === 'manager') { header('Location: manager.php'); exit; }
-    if ($u['role'] === 'staff')   { header('Location: staff.php');   exit; }
-    if ($u['role'] === 'cashier') { header('Location: cashier.php'); exit; }
-    // Fallback: go to tenant login using slug from session
+// ── Session guard ──────────────────────────────────────────────
+function redirectToTenantLogin(): void {
     $slug = $_SESSION['user']['tenant_slug'] ?? '';
-    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : 'login.php')); exit;
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : '/login.php'));
+    exit;
 }
+if (empty($_SESSION['user'])) { redirectToTenantLogin(); }
+$u = $_SESSION['user'];
+if ($u['role'] !== 'admin') { redirectToTenantLogin(); }
 
 $tid         = $u['tenant_id'];
 $active_page = $_GET['page'] ?? 'dashboard';
