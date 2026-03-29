@@ -198,7 +198,7 @@ $customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER B
 $inventory    = $pdo->prepare("SELECT * FROM item_inventory WHERE tenant_id=? ORDER BY received_at DESC"); $inventory->execute([$tid]); $inventory=$inventory->fetchAll();
 $void_reqs    = $pdo->prepare("SELECT v.*,u.fullname as req_name FROM pawn_void_requests v JOIN users u ON v.requested_by=u.id WHERE v.tenant_id=? ORDER BY v.requested_at DESC"); $void_reqs->execute([$tid]); $void_reqs=$void_reqs->fetchAll();
 $renewals     = $pdo->prepare("SELECT * FROM renewal_requests WHERE tenant_id=? ORDER BY created_at DESC"); $renewals->execute([$tid]); $renewals=$renewals->fetchAll();
-$audit        = $pdo->prepare("SELECT * FROM audit_logs WHERE tenant_id=? ORDER BY created_at DESC LIMIT 50"); $audit->execute([$tid]); $audit=$audit->fetchAll();
+$audit        = $pdo->prepare("SELECT * FROM audit_logs WHERE tenant_id=? AND actor_role IN ('manager','staff','cashier') ORDER BY created_at DESC LIMIT 200"); $audit->execute([$tid]); $audit=$audit->fetchAll();
 
 $pending_voids    = array_filter($void_reqs, fn($v)=>$v['status']==='pending');
 $pending_renewals = array_filter($renewals,  fn($r)=>$r['verification_status']==='pending');
@@ -680,12 +680,26 @@ tr:hover td{background:rgba(255,255,255,.03);}
     </div>
 
   <?php elseif($active_page==='audit'): ?>
+    <div class="page-hdr"><div><h2>Audit Logs</h2><p>Activity from your branch team (managers, staff, cashiers)</p></div></div>
     <div class="card" style="overflow-x:auto;">
-      <?php if(empty($audit)):?><div class="empty-state"><span class="material-symbols-outlined">manage_search</span><p>No audit logs.</p></div>
-      <?php else:?><table><thead><tr><th>Date</th><th>Actor</th><th>Role</th><th>Action</th><th>Ticket</th><th>Message</th></tr></thead><tbody>
-      <?php foreach($audit as $a):?>
-      <tr><td style="font-size:.72rem;color:rgba(255,255,255,.35);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($a['created_at']))?></td><td style="font-weight:600;color:#fff;font-size:.78rem;"><?=htmlspecialchars($a['actor_username']??'')?></td><td><span class="badge b-blue" style="font-size:.62rem;"><?=$a['actor_role']??''?></span></td><td style="font-family:monospace;font-size:.72rem;color:#fcd34d;"><?=htmlspecialchars($a['action']??'')?></td><td><span class="ticket-tag" style="font-size:.72rem;"><?=htmlspecialchars($a['entity_id']??'—')?></span></td><td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($a['message']??'')?></td></tr>
-      <?php endforeach;?></tbody></table><?php endif;?>
+      <?php if(empty($audit)):?>
+        <div class="empty-state"><span class="material-symbols-outlined">manage_search</span><p>No audit logs yet.</p></div>
+      <?php else:?>
+      <table><thead><tr><th>Date</th><th>Actor</th><th>Role</th><th>Action</th><th>Ticket #</th><th>Message</th></tr></thead><tbody>
+      <?php foreach($audit as $a):
+        $role_colors = ['manager'=>'background:rgba(139,92,246,.25);color:#c4b5fd;','staff'=>'background:rgba(16,185,129,.2);color:#6ee7b7;','cashier'=>'background:rgba(245,158,11,.2);color:#fcd34d;'];
+        $rbadge = $role_colors[$a['actor_role']??''] ?? 'background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);';
+      ?>
+      <tr>
+        <td style="font-size:.72rem;color:rgba(255,255,255,.35);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($a['created_at']))?></td>
+        <td style="font-weight:600;color:#fff;font-size:.78rem;"><?=htmlspecialchars(ucfirst($a['actor_username']??''))?></td>
+        <td><span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:100px;text-transform:uppercase;letter-spacing:.05em;<?=$rbadge?>"><?=$a['actor_role']??''?></span></td>
+        <td style="font-family:monospace;font-size:.72rem;color:#fcd34d;"><?=htmlspecialchars($a['action']??'')?></td>
+        <td><span class="ticket-tag" style="font-size:.72rem;"><?=htmlspecialchars($a['entity_id']??'—')?></span></td>
+        <td style="font-size:.75rem;color:rgba(255,255,255,.45);max-width:320px;"><?=htmlspecialchars($a['message']??'')?></td>
+      </tr>
+      <?php endforeach;?></tbody></table>
+      <?php endif;?>
     </div>
 
   <?php elseif($active_page==='settings'): ?>

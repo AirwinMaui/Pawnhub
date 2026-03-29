@@ -134,6 +134,9 @@ $customers->execute([$tid]); $customers = $customers->fetchAll();
 $void_reqs   = $pdo->prepare("SELECT v.*,u.fullname as req_name FROM pawn_void_requests v JOIN users u ON v.requested_by=u.id WHERE v.tenant_id=? ORDER BY v.requested_at DESC");
 $void_reqs->execute([$tid]); $void_reqs = $void_reqs->fetchAll();
 
+$audit_logs  = $pdo->prepare("SELECT * FROM audit_logs WHERE tenant_id=? AND actor_role IN ('manager','staff','cashier') ORDER BY created_at DESC LIMIT 200");
+$audit_logs->execute([$tid]); $audit_logs = $audit_logs->fetchAll();
+
 $tickets_today  = count(array_filter($all_tickets, fn($t)=>substr($t['created_at'],0,10)===$today));
 $active_tickets = count(array_filter($all_tickets, fn($t)=>$t['status']==='Stored'));
 $pending_voids  = array_filter($void_reqs, fn($v)=>$v['status']==='pending');
@@ -337,6 +340,11 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <a href="?page=invite" class="sb-item <?=$active_page==='invite'?'active':''?>">
       <span class="material-symbols-outlined">person_add</span>Invite Member
     </a>
+
+    <div class="sb-section">Reports</div>
+    <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
+      <span class="material-symbols-outlined">manage_search</span>Audit Logs
+    </a>
   </nav>
 
   <div class="sb-footer">
@@ -349,7 +357,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member']; ?>
+      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs']; ?>
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
@@ -624,6 +632,36 @@ tr:hover td{background:rgba(255,255,255,.02);}
           </button>
         </form>
       </div>
+    </div>
+
+  <?php elseif($active_page==='audit'): ?>
+    <div class="page-hdr"><div><h2>Audit Logs</h2><p>Activity logs for your branch team</p></div></div>
+    <div class="card" style="overflow-x:auto;">
+      <?php if(empty($audit_logs)):?>
+        <div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,.3);">
+          <span class="material-symbols-outlined" style="font-size:3rem;display:block;margin-bottom:10px;">manage_search</span>
+          <p>No audit logs yet.</p>
+        </div>
+      <?php else:?>
+      <table>
+        <thead><tr><th>Date</th><th>Actor</th><th>Role</th><th>Action</th><th>Ref #</th><th>Message</th></tr></thead>
+        <tbody>
+        <?php foreach($audit_logs as $a):
+          $role_colors = ['manager'=>'background:rgba(139,92,246,.25);color:#c4b5fd;','staff'=>'background:rgba(16,185,129,.2);color:#6ee7b7;','cashier'=>'background:rgba(245,158,11,.2);color:#fcd34d;'];
+          $rbadge = $role_colors[$a['actor_role']??''] ?? 'background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);';
+        ?>
+        <tr>
+          <td style="font-size:.72rem;color:rgba(255,255,255,.35);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($a['created_at']))?></td>
+          <td style="font-weight:600;color:#fff;font-size:.78rem;"><?=htmlspecialchars(ucfirst($a['actor_username']??''))?></td>
+          <td><span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:100px;text-transform:uppercase;letter-spacing:.05em;<?=$rbadge?>"><?=$a['actor_role']??''?></span></td>
+          <td style="font-family:monospace;font-size:.72rem;color:#fcd34d;"><?=htmlspecialchars($a['action']??'')?></td>
+          <td style="font-size:.72rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($a['entity_id']??'—')?></td>
+          <td style="font-size:.75rem;color:rgba(255,255,255,.4);max-width:300px;"><?=htmlspecialchars($a['message']??'')?></td>
+        </tr>
+        <?php endforeach;?>
+        </tbody>
+      </table>
+      <?php endif;?>
     </div>
 
   <?php endif;?>
