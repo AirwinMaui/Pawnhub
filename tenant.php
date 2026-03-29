@@ -447,7 +447,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
     <div class="sb-section">Team</div>
     <a href="?page=users" class="sb-item <?=$active_page==='users'?'active':''?>">
-      <span class="material-symbols-outlined">badge</span>Managers, Staff &amp; Cashier
+      <span class="material-symbols-outlined">badge</span>Managers &amp;
     </a>
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
