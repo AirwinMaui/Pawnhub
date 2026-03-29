@@ -904,6 +904,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <!-- Plan Cards -->
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
 
+            <!-- PLAN MODEL NOTE -->
+            <div style="grid-column:1/-1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 16px;font-size:.78rem;color:#1d4ed8;margin-bottom:4px;">
+              📍 <strong>1 subscription = 1 branch.</strong> Tenants subscribe per branch — plan determines features, not branch count.
+            </div>
+
             <!-- STARTER -->
             <div style="border:2px solid #e2e8f0;border-radius:12px;overflow:hidden;">
               <div style="background:#f1f5f9;padding:14px 16px;border-bottom:1px solid #e2e8f0;">
@@ -918,13 +923,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <div>
                   <label class="flabel">Max Staff + Cashiers</label>
                   <input type="number" name="starter_staff" class="finput" value="<?=(int)$ss['starter_staff']?>" min="1" max="999">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit per branch</div>
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit</div>
                 </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
-                  <div>✅ 1 Branch (fixed)</div>
-                  <div>✅ Pawn tickets</div>
-                  <div>✅ Customer management</div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;">
+                  <div>✅ 1 Branch Manager</div>
+                  <div>✅ Pawn tickets &amp; customers</div>
+                  <div>✅ Inventory management</div>
                   <div>✅ Basic reports</div>
+                  <div>✅ Email support</div>
                 </div>
               </div>
             </div>
@@ -933,7 +939,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             <div style="border:2px solid #bfdbfe;border-radius:12px;overflow:hidden;">
               <div style="background:#eff6ff;padding:14px 16px;border-bottom:1px solid #bfdbfe;">
                 <div style="font-size:.9rem;font-weight:800;color:#1d4ed8;">Pro</div>
-                <div style="font-size:.75rem;color:#93c5fd;margin-top:2px;">Growing pawnshop business</div>
+                <div style="font-size:.75rem;color:#93c5fd;margin-top:2px;">For growing pawnshops</div>
               </div>
               <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
                 <div>
@@ -943,13 +949,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <div>
                   <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
                   <input type="number" name="pro_staff" class="finput" value="<?=(int)$ss['pro_staff']?>" min="0">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 means no limit. Per branch.</div>
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 = no limit</div>
                 </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
-                  <div>✅ Up to 3 Branches</div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;">
                   <div>✅ Everything in Starter</div>
-                  <div>✅ Unlimited staff</div>
-                  <div>✅ Advanced reports</div>
+                  <div>✅ Unlimited staff &amp; cashiers</div>
+                  <div>✅ Advanced reports &amp; analytics</div>
+                  <div>✅ Custom branding &amp; theme</div>
+                  <div>✅ Priority support</div>
                 </div>
               </div>
             </div>
@@ -958,7 +965,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             <div style="border:2px solid #ddd6fe;border-radius:12px;overflow:hidden;">
               <div style="background:#f3e8ff;padding:14px 16px;border-bottom:1px solid #ddd6fe;">
                 <div style="font-size:.9rem;font-weight:800;color:#7c3aed;">Enterprise</div>
-                <div style="font-size:.75rem;color:#c4b5fd;margin-top:2px;">Large pawnshop chains</div>
+                <div style="font-size:.75rem;color:#c4b5fd;margin-top:2px;">Large pawnshop operations</div>
               </div>
               <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
                 <div>
@@ -968,14 +975,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <div>
                   <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
                   <input type="number" name="ent_staff" class="finput" value="<?=(int)$ss['ent_staff']?>" min="0">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 means no limit. Per branch.</div>
+                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 = no limit</div>
                 </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);">
-                  <div>✅ Up to 10 Branches</div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;">
                   <div>✅ Everything in Pro</div>
-                  <div>✅ Dedicated support</div>
-                  <div>✅ Custom branding</div>
-                  <div>✅ Priority processing</div>
+                  <div>✅ White-label system name</div>
+                  <div>✅ Data export (CSV/PDF)</div>
+                  <div>✅ Dedicated account manager</div>
+                  <div>✅ 24/7 priority support</div>
                 </div>
               </div>
             </div>

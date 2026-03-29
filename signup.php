@@ -161,6 +161,9 @@ body { font-family: "Inter", sans-serif; }
     <!-- Plan Selector -->
     <div class="mb-7">
       <label class="block text-xs font-bold uppercase tracking-widest text-white/50 mb-3">Select Plan</label>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;font-size:0.72rem;color:rgba(255,255,255,0.35);margin-bottom:10px;">
+        📍 <strong style="color:rgba(255,255,255,0.5);">1 subscription = 1 branch.</strong> Need another branch? Subscribe again with any plan.
+      </div>
       <div class="flex gap-2">
         <button type="button" onclick="selectPlan('Starter')"   id="pill-Starter"    class="plan-pill <?= $selected_plan==='Starter'    ? 'active' : '' ?>">Starter — Free</button>
         <button type="button" onclick="selectPlan('Pro')"       id="pill-Pro"        class="plan-pill <?= $selected_plan==='Pro'        ? 'active' : '' ?>">Pro — ₱999/mo</button>
@@ -239,13 +242,19 @@ body { font-family: "Inter", sans-serif; }
         </div>
 
         <!-- Plan Summary -->
-        <div id="plan_summary" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:12px 16px;font-size:0.82rem;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div id="plan_summary" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:14px 16px;font-size:0.82rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div style="color:rgba(255,255,255,0.7);">Selected Plan: <strong style="color:#93c5fd;" id="summary_plan"><?= htmlspecialchars($selected_plan) ?></strong></div>
+            <div style="font-size:0.75rem;color:rgba(255,255,255,0.35);" id="summary_price"><?= $selected_plan === 'Starter' ? 'Free' : ($selected_plan === 'Pro' ? '₱999/mo' : '₱2,499/mo') ?></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.76rem;">
-            <div style="color:rgba(255,255,255,0.5);">📍 Branches: <strong style="color:#93c5fd;" id="summary_branches"><?= $plans[$selected_plan]['branches'] == 1 ? '1 Branch' : 'Up to '.$plans[$selected_plan]['branches'].' Branches' ?></strong></div>
-            <div style="color:rgba(255,255,255,0.5);">👥 Staff/Cashier: <strong style="color:#93c5fd;" id="summary_staff"><?= $plans[$selected_plan]['max_staff'] == 0 ? 'Unlimited' : 'Up to '.$plans[$selected_plan]['max_staff'] ?></strong></div>
+          <div id="summary_desc" style="font-size:0.76rem;color:rgba(147,197,253,0.8);line-height:1.6;">
+            <?php if($selected_plan === 'Starter'): ?>
+              ✅ 1 Manager &nbsp;·&nbsp; Up to 3 Staff/Cashier &nbsp;·&nbsp; Basic Reports &nbsp;·&nbsp; Core pawnshop features
+            <?php elseif($selected_plan === 'Pro'): ?>
+              ✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; Advanced Reports &nbsp;·&nbsp; Custom Branding &nbsp;·&nbsp; Priority Support
+            <?php else: ?>
+              ✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; White-Label &nbsp;·&nbsp; Data Export &nbsp;·&nbsp; Dedicated Account Manager
+            <?php endif; ?>
           </div>
         </div>
 
@@ -281,18 +290,18 @@ body { font-family: "Inter", sans-serif; }
 
 <script>
 const planData = {
-  Starter:    { branches: 1,  maxStaff: 3 },
-  Pro:        { branches: 3,  maxStaff: 0 },
-  Enterprise: { branches: 10, maxStaff: 0 },
+  Starter:    { price: 'Free',      desc: '✅ 1 Manager &nbsp;·&nbsp; Up to 3 Staff/Cashier &nbsp;·&nbsp; Basic Reports &nbsp;·&nbsp; Core pawnshop features' },
+  Pro:        { price: '₱999/mo',   desc: '✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; Advanced Reports &nbsp;·&nbsp; Custom Branding &nbsp;·&nbsp; Priority Support' },
+  Enterprise: { price: '₱2,499/mo', desc: '✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; White-Label &nbsp;·&nbsp; Data Export &nbsp;·&nbsp; Dedicated Account Manager' },
 };
 
 function selectPlan(name) {
   const p = planData[name];
-  document.getElementById('plan_input').value     = name;
-  document.getElementById('branches_input').value = p.branches;
-  document.getElementById('summary_plan').textContent     = name;
-  document.getElementById('summary_branches').textContent = p.branches === 1 ? '1 Branch' : 'Up to ' + p.branches + ' Branches';
-  document.getElementById('summary_staff').textContent    = p.maxStaff === 0 ? 'Unlimited' : 'Up to ' + p.maxStaff;
+  document.getElementById('plan_input').value          = name;
+  document.getElementById('branches_input').value      = 1;
+  document.getElementById('summary_plan').textContent  = name;
+  document.getElementById('summary_price').textContent = p.price;
+  document.getElementById('summary_desc').innerHTML    = p.desc;
   ['Starter','Pro','Enterprise'].forEach(n => {
     document.getElementById('pill-' + n).classList.toggle('active', n === name);
   });

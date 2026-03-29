@@ -324,16 +324,17 @@ section[id] { scroll-margin-top: 80px; }
 
     <!-- STARTER -->
     <div class="glass-dark p-8 rounded-[2rem] flex flex-col border border-white/10 hover:border-white/20 transition-all">
-      <div class="mb-6">
+      <div class="mb-2">
         <div class="text-xs font-bold text-white/50 uppercase tracking-widest mb-3">Starter</div>
         <div class="text-4xl font-extrabold text-white">Free</div>
-        <div class="text-white/40 text-sm mt-1">Perfect for new pawnshops</div>
+        <div class="text-white/40 text-sm mt-1 mb-2">Perfect for new pawnshops</div>
+        <div class="text-xs text-white/30 bg-white/5 rounded-lg px-3 py-2 mb-4">📍 1 subscription = 1 branch</div>
       </div>
       <ul class="space-y-3 text-white/65 text-sm mb-8 flex-1">
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>1 Branch</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Up to 3 Staff &amp; Cashiers</li>
         <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>1 Branch Manager</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Up to 3 Staff &amp; Cashiers</li>
         <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Pawn Tickets &amp; Customers</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Inventory Management</li>
         <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Basic Reports</li>
         <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Email Support</li>
       </ul>
@@ -343,36 +344,40 @@ section[id] { scroll-margin-top: 80px; }
     <!-- PRO -->
     <div class="relative glass-dark p-8 rounded-[2rem] flex flex-col border-2 border-blue-500 shadow-2xl shadow-blue-500/20">
       <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-5 py-1.5 rounded-full">⭐ Most Popular</div>
-      <div class="mb-6">
+      <div class="mb-2">
         <div class="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3">Pro</div>
         <div class="text-4xl font-extrabold text-white">₱999<span class="text-lg font-normal text-white/40">/mo</span></div>
-        <div class="text-white/40 text-sm mt-1">For growing businesses</div>
+        <div class="text-white/40 text-sm mt-1 mb-2">For growing pawnshops</div>
+        <div class="text-xs text-blue-300/50 bg-blue-500/10 rounded-lg px-3 py-2 mb-4">📍 1 subscription = 1 branch</div>
       </div>
       <ul class="space-y-3 text-white/65 text-sm mb-8 flex-1">
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Up to 3 Branches</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Everything in Starter</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>1 Branch Manager</li>
         <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Unlimited Staff &amp; Cashiers</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>1 Manager per Branch</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Advanced Reports</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Custom Branding</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Priority Support</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Advanced Reports &amp; Analytics</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Custom Branding &amp; Theme</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Renewal &amp; Void Management</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Priority Email Support</li>
       </ul>
       <a href="signup.php?plan=Pro" class="w-full py-3 rounded-xl font-bold text-center bg-blue-500 text-white hover:bg-blue-600 transition-all block">Get Pro</a>
     </div>
 
     <!-- ENTERPRISE -->
     <div class="glass-dark p-8 rounded-[2rem] flex flex-col border border-purple-500/30 hover:border-purple-500/50 transition-all">
-      <div class="mb-6">
+      <div class="mb-2">
         <div class="text-xs font-bold text-purple-400 uppercase tracking-widest mb-3">Enterprise</div>
         <div class="text-4xl font-extrabold text-white">₱2,499<span class="text-lg font-normal text-white/40">/mo</span></div>
-        <div class="text-white/40 text-sm mt-1">For large pawnshop chains</div>
+        <div class="text-white/40 text-sm mt-1 mb-2">For large pawnshop operations</div>
+        <div class="text-xs text-purple-300/50 bg-purple-500/10 rounded-lg px-3 py-2 mb-4">📍 1 subscription = 1 branch</div>
       </div>
       <ul class="space-y-3 text-white/65 text-sm mb-8 flex-1">
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Up to 10 Branches</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Unlimited Everything</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>1 Manager per Branch</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Dedicated Support</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Custom Branding</li>
-        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>API Access</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Everything in Pro</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>1 Branch Manager</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Unlimited Staff &amp; Cashiers</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>White-Label System Name</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Data Export (CSV/PDF)</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>Dedicated Account Manager</li>
+        <li class="flex items-center gap-2"><span class="material-symbols-outlined text-green-400 text-base">check_circle</span>24/7 Priority Support</li>
       </ul>
       <a href="signup.php?plan=Enterprise" class="w-full py-3 rounded-xl font-bold text-center text-white transition-all border border-purple-400/40 hover:bg-purple-500/20 block">Get Enterprise</a>
     </div>
