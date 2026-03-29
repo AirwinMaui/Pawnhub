@@ -119,8 +119,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
                 }
 
                 $success = true;
+                $slug = $inv['slug'] ?? '';
+                $redirect_url = $slug ? '/' . rawurlencode($slug) : '/login.php';
                 // Redirect to manager dashboard after 2 seconds
-                header('refresh:2;url=/manager.php');
+                header('refresh:2;url=' . $redirect_url);
             }
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -248,7 +250,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;position:
       <div class="state-icon err"><span class="ms">cancel</span></div>
       <div class="state-title">Invalid Invitation</div>
       <p class="state-sub"><?= htmlspecialchars($error) ?></p>
-      <a href="/login.php" class="btn-back">Back to Login</a>
+      <a href="<?= $login_href ?>" class="btn-back">Back to Login</a>
     </div>
   </div>
 
@@ -258,10 +260,10 @@ body{font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;position:
     <div class="state-box">
       <div class="state-icon ok"><span class="ms">check_circle</span></div>
       <div class="state-title">Manager Account Created! 🎉</div>
-      <p class="state-sub">Welcome to <strong><?= $biz_name ?></strong>!<br>Your Manager account is ready.<br><br>Redirecting you to your dashboard...</p>
+      <p class="state-sub">Welcome to <strong><?= $biz_name ?></strong>!<br>Your Manager account is ready.<br><br>Redirecting you to your branch login page...</p>
       <div class="state-redirect">
         ⏳ Redirecting in 2 seconds...<br>
-        <a href="/manager.php">Click here if not redirected</a>
+        <a href="<?= $inv_slug ? '/' . htmlspecialchars($inv_slug) : '/login.php' ?>">Click here if not redirected</a>
       </div>
     </div>
   </div>
