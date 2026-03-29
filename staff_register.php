@@ -96,17 +96,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
                 error_log('Welcome email failed: ' . $e->getMessage());
             }
 
-            // 4. Auto login — include tenant_slug for proper logout redirect
-            session_regenerate_id(true);
-            $_SESSION['user'] = [
-                'id'          => $new_uid,
-                'name'        => $fullname,
-                'username'    => $username,
-                'role'        => $inv['role'],
-                'tenant_id'   => $inv['tenant_id'],
-                'tenant_name' => $inv['business_name'],
-                'tenant_slug' => $inv['slug'] ?? '',
-            ];
+            // 4. Auto login — only set session if no existing admin session
+            if (empty($_SESSION['user'])) {
+                session_regenerate_id(true);
+                $_SESSION['user'] = [
+                    'id'          => $new_uid,
+                    'name'        => $fullname,
+                    'username'    => $username,
+                    'role'        => $inv['role'],
+                    'tenant_id'   => $inv['tenant_id'],
+                    'tenant_name' => $inv['business_name'],
+                    'tenant_slug' => $inv['slug'] ?? '',
+                ];
+            }
 
             $success      = true;
             $redirect_url = getStaffRedirectUrl($inv['role'], $inv['slug'] ?? '');

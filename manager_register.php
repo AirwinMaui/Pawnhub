@@ -104,17 +104,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
                     error_log('Manager welcome email failed: ' . $e->getMessage());
                 }
 
-                // 4. Auto-login
-                session_regenerate_id(true);
-                $_SESSION['user'] = [
-                    'id'          => $new_uid,
-                    'name'        => $fullname,
-                    'username'    => $username,
-                    'role'        => 'manager',
-                    'tenant_id'   => $inv['tenant_id'],
-                    'tenant_name' => $inv['business_name'],
-                    'tenant_slug' => $inv['slug'] ?? '',
-                ];
+                // 4. Auto-login — only set session if no existing admin session
+                if (empty($_SESSION['user'])) {
+                    session_regenerate_id(true);
+                    $_SESSION['user'] = [
+                        'id'          => $new_uid,
+                        'name'        => $fullname,
+                        'username'    => $username,
+                        'role'        => 'manager',
+                        'tenant_id'   => $inv['tenant_id'],
+                        'tenant_name' => $inv['business_name'],
+                        'tenant_slug' => $inv['slug'] ?? '',
+                    ];
+                }
 
                 $success = true;
                 // Redirect to manager dashboard after 2 seconds
