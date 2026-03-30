@@ -1,9 +1,12 @@
 <?php
-// ── Session config — 8 hours lifetime ─────────────────────────
-ini_set('session.gc_maxlifetime', 28800);
-ini_set('session.cookie_lifetime', 28800);
-session_set_cookie_params(['lifetime'=>28800,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
-session_start();
+// ── Session config — only if not already set by router.php ────
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.gc_maxlifetime', 28800);
+    ini_set('session.cookie_lifetime', 28800);
+    session_set_cookie_params(['lifetime'=>28800,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
+    session_name('PAWNHUB_TENANT');
+    session_start();
+}
 require 'db.php';
 
 $slug  = trim($_GET['slug'] ?? '');
