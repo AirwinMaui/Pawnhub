@@ -1,10 +1,6 @@
 <?php
-// ── Session config — 8 hours lifetime ─────────────────────────
-ini_set('session.gc_maxlifetime', 28800);
-ini_set('session.cookie_lifetime', 28800);
-session_set_cookie_params(['lifetime'=>28800,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
-session_name('PAWNHUB_TENANT');
-session_start();
+require_once __DIR__ . '/session_helper.php';
+pawnhub_session_start('admin');
 require 'db.php';
 require 'theme_helper.php';
 
