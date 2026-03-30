@@ -3,6 +3,7 @@
 ini_set('session.gc_maxlifetime', 28800);
 ini_set('session.cookie_lifetime', 28800);
 session_set_cookie_params(['lifetime'=>28800,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
+session_name('PAWNHUB_TENANT');
 session_start();
 require 'db.php';
 require 'theme_helper.php';
@@ -350,7 +351,7 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="logout.php" class="sb-logout">
+    <a href="logout.php?role=tenant" class="sb-logout">
       <span class="material-symbols-outlined">logout</span>Sign Out
     </a>
   </div>

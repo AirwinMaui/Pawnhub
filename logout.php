@@ -1,4 +1,15 @@
 <?php
+ini_set('session.gc_maxlifetime', 28800);
+ini_set('session.cookie_lifetime', 28800);
+session_set_cookie_params(['lifetime'=>28800,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
+
+// Determine which session to destroy based on role hint in URL
+$role_hint = $_GET['role'] ?? '';
+if ($role_hint === 'super_admin') {
+    session_name('PAWNHUB_SUPERADMIN');
+} else {
+    session_name('PAWNHUB_TENANT');
+}
 session_start();
 
 $redirect = 'login.php'; // default: super admin login

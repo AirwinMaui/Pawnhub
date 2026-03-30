@@ -3,6 +3,7 @@
 ini_set('session.gc_maxlifetime', 28800);
 ini_set('session.cookie_lifetime', 28800);
 session_set_cookie_params(['lifetime'=>28800,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
+session_name('PAWNHUB_SUPERADMIN');
 session_start();
 require 'db.php';
 require 'mailer.php';
@@ -588,7 +589,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="logout.php" class="sb-logout">
+    <a href="logout.php?role=super_admin" class="sb-logout">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out
     </a>
   </div>
