@@ -211,18 +211,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     if ($_POST['action'] === 'deactivate_tenant') {
-        $tid = intval($_POST['tenant_id']);
-        $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")->execute([$tid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'DEACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Deactivated tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-        $success_msg = 'Tenant deactivated.';
+        $target_tid = intval($_POST['tenant_id']);
+        // Deactivate the tenant
+        $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")->execute([$target_tid]);
+        // Suspend all non-admin users of this tenant so they cannot login
+        $pdo->prepare("UPDATE users SET is_suspended=1, suspended_at=NOW(), suspension_reason='Tenant deactivated by Super Admin.' WHERE tenant_id=? AND role != 'admin'")->execute([$target_tid]);
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'DEACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$target_tid,$u['id'],$u['username'],'super_admin',$target_tid,"Deactivated tenant ID $target_tid — all users suspended.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+        $success_msg = 'Tenant deactivated. All branch users have been suspended.';
         $active_page = 'tenants';
     }
 
     if ($_POST['action'] === 'activate_tenant') {
-        $tid = intval($_POST['tenant_id']);
-        $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'ACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Activated tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-        $success_msg = 'Tenant activated.';
+        $target_tid = intval($_POST['tenant_id']);
+        // Activate the tenant
+        $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$target_tid]);
+        // Unsuspend all users that were suspended due to deactivation
+        $pdo->prepare("UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL WHERE tenant_id=? AND suspension_reason='Tenant deactivated by Super Admin.'")->execute([$target_tid]);
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'ACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$target_tid,$u['id'],$u['username'],'super_admin',$target_tid,"Activated tenant ID $target_tid — all users unsuspended.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+        $success_msg = 'Tenant activated. All branch users have been unsuspended.';
         $active_page = 'tenants';
     }
 }

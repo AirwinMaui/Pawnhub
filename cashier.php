@@ -25,6 +25,17 @@ $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = '';
 $error_msg   = '';
 
+// ── Block if tenant is deactivated ────────────────────────────
+try {
+    $chk = $pdo->prepare("SELECT status FROM tenants WHERE id=? LIMIT 1");
+    $chk->execute([$tid]);
+    $t_status = $chk->fetchColumn();
+    if ($t_status === 'inactive') {
+        session_unset(); session_destroy();
+        redirectToTenantLogin();
+    }
+} catch (Throwable $e) {}
+
 $theme    = getTenantTheme($pdo, $tid);
 $sys_name = $theme['system_name'] ?? 'PawnHub';
 $logo_text = $theme['logo_text'] ?: $sys_name;

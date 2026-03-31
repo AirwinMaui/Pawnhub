@@ -25,6 +25,11 @@ if (!$tenant) {
     exit;
 }
 
+// Block login if tenant is deactivated
+if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
+    $error = 'This branch has been deactivated. Please contact PawnHub support.';
+}
+
 // ── Check if token is present → registration mode ─────────────
 if ($token) {
     // Step 1: Find the invitation by token alone (no tenant_id restriction)
@@ -116,7 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
 }
 
 // ── Handle LOGIN POST ─────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login'
+    && (!isset($tenant['status']) || $tenant['status'] !== 'inactive')) {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 

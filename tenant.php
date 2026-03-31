@@ -18,6 +18,17 @@ $tid         = $u['tenant_id'];
 $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = $error_msg = '';
 
+// ── Block if tenant is deactivated ────────────────────────────
+try {
+    $chk = $pdo->prepare("SELECT status FROM tenants WHERE id=? LIMIT 1");
+    $chk->execute([$tid]);
+    $t_status = $chk->fetchColumn();
+    if ($t_status === 'inactive') {
+        session_unset(); session_destroy();
+        header('Location: login.php?deactivated=1'); exit;
+    }
+} catch (Throwable $e) {}
+
 // Load theme
 $theme = getTenantTheme($pdo, $tid);
 
