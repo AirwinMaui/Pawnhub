@@ -5,7 +5,12 @@ require_once __DIR__ . '/session_helper.php';
 $role_hint = $_GET['role'] ?? '';
 pawnhub_session_start($role_hint);
 
-$redirect = 'login.php'; // default: super admin login
+// Default redirect based on role
+if ($role_hint === 'super_admin') {
+    $redirect = 'login.php';
+} else {
+    $redirect = 'login.php'; // will be overridden below if slug is found
+}
 
 if (!empty($_SESSION['user'])) {
     require 'db.php';
@@ -15,7 +20,6 @@ if (!empty($_SESSION['user'])) {
     if (!empty($u['tenant_slug'])) {
         $redirect = '/' . rawurlencode($u['tenant_slug']);
     } elseif (!empty($u['tenant_id']) && $u['role'] !== 'super_admin') {
-        // Fallback: look up slug from DB in case it wasn't in session
         try {
             $s = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
             $s->execute([$u['tenant_id']]);
@@ -31,6 +35,23 @@ if (!empty($_SESSION['user'])) {
         $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'USER_LOGOUT','user',?,?,?,NOW())")
             ->execute([$u['tenant_id']??null, $u['id'], $u['username'], $u['role'], (string)$u['id'], $u['name'].' logged out.', $_SERVER['REMOTE_ADDR']??'::1']);
     } catch (PDOException $e) {}
+} elseif ($role_hint !== 'super_admin') {
+    // Session expired but we know it's a tenant user — try to get slug from DB via referer
+    require 'db.php';
+    $ref = $_SERVER['HTTP_REFERER'] ?? '';
+    if ($ref) {
+        $path = trim(parse_url($ref, PHP_URL_PATH), '/');
+        if ($path && !in_array($path, ['login.php','logout.php','superadmin.php','tenant.php','manager.php','staff.php','cashier.php'])) {
+            try {
+                $s = $pdo->prepare("SELECT slug FROM tenants WHERE slug = ? LIMIT 1");
+                $s->execute([$path]);
+                $row = $s->fetch();
+                if (!empty($row['slug'])) {
+                    $redirect = '/' . rawurlencode($row['slug']);
+                }
+            } catch (Throwable $e) {}
+        }
+    }
 }
 
 session_unset();

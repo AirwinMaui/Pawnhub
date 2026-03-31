@@ -347,7 +347,7 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="logout.php?role=tenant" class="sb-logout">
+    <a href="logout.php?role=staff" class="sb-logout">
       <span class="material-symbols-outlined">logout</span>Sign Out
     </a>
   </div>

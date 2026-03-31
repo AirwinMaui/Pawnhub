@@ -354,7 +354,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
   </nav>
 
   <div class="sb-footer">
-    <a href="logout.php?role=tenant" class="sb-logout">      <span class="material-symbols-outlined">logout</span>Sign Out
+    <a href="logout.php?role=manager" class="sb-logout">      <span class="material-symbols-outlined">logout</span>Sign Out
     </a>
   </div>
 </aside>
