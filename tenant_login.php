@@ -412,6 +412,10 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
           </div>
 
           <button type="submit" class="btn">Sign In</button>
+
+          <div style="text-align:center;margin-top:12px;">
+            <a href="/forgot_password.php?slug=<?=urlencode($slug)?>" style="font-size:.78rem;color:var(--t-primary,#2563eb);font-weight:600;text-decoration:none;">Forgot your password?</a>
+          </div>
         </form>
 
         <div class="card-foot">
