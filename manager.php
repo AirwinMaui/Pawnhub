@@ -369,7 +369,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
     </a>
     <?php if($mgr_can_export):?>
-    <a href="export.php" class="sb-item" target="_blank">
+    <a href="?page=export" class="sb-item <?=$active_page==='export'?'active':''?>">
       <span class="material-symbols-outlined">download</span>Export to PDF
     </a>
     <?php endif;?>
@@ -384,7 +384,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs']; ?>
+      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF']; ?>
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
@@ -702,6 +702,102 @@ tr:hover td{background:rgba(255,255,255,.02);}
         </tbody>
       </table>
       <?php endif;?>
+    </div>
+
+  <?php elseif($active_page==='export' && $mgr_can_export): ?>
+    <?php
+      $exp_type = $_GET['exp_type'] ?? 'tickets';
+      $exp_from = $_GET['exp_from'] ?? date('Y-m-01');
+      $exp_to   = $_GET['exp_to']   ?? date('Y-m-d');
+      $valid_exp_types = ['tickets','customers','inventory','audit','payments'];
+      if (!in_array($exp_type, $valid_exp_types)) $exp_type = 'tickets';
+      $exp_rows=[]; $exp_cols=[]; $exp_title='';
+      $exp_primary   = $theme['primary_color']   ?? '#059669';
+      $exp_secondary = $theme['secondary_color'] ?? '#064e3b';
+      try {
+        switch($exp_type) {
+          case 'tickets':
+            $exp_title='Pawn Tickets'; $exp_cols=['Ticket No.','Customer','Contact','Category','Description','Loan Amount','Total Redeem','Maturity Date','Status','Date'];
+            $s=$pdo->prepare("SELECT ticket_no,customer_name,contact_number,item_category,item_description,loan_amount,total_redeem,maturity_date,status,created_at FROM pawn_transactions WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
+            $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
+          case 'customers':
+            $exp_title='Customer Records'; $exp_cols=['Full Name','Contact','Email','Gender','Address','ID Type','ID Number','Registered'];
+            $s=$pdo->prepare("SELECT full_name,contact_number,email,gender,address,valid_id_type,valid_id_number,created_at FROM customers WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY full_name");
+            $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
+          case 'inventory':
+            $exp_title='Item Inventory'; $exp_cols=['Ticket No.','Item','Category','Serial No.','Condition','Appraisal','Loan Amount','Status','Date'];
+            $s=$pdo->prepare("SELECT ticket_no,item_name,item_category,serial_no,condition_notes,appraisal_value,loan_amount,status,created_at FROM item_inventory WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
+            $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
+          case 'audit':
+            $exp_title='Audit Logs'; $exp_cols=['Date & Time','Actor','Role','Action','Ref #','Message'];
+            $s=$pdo->prepare("SELECT created_at,actor_username,actor_role,action,entity_id,message FROM audit_logs WHERE tenant_id=? AND actor_role IN ('manager','staff','cashier') AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
+            $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
+          case 'payments':
+            $exp_title='Payment History'; $exp_cols=['Date','Ticket No.','Action','OR No.','Amount Due','Cash Received','Change','Staff'];
+            $s=$pdo->prepare("SELECT created_at,ticket_no,action,or_no,amount_due,cash_received,change_amount,staff_username FROM payment_transactions WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
+            $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
+        }
+      } catch(Throwable $e) { $error_msg='Export error: '.$e->getMessage(); }
+    ?>
+    <style>@media print{.sidebar,.topbar,.content>.alert,.export-controls{display:none!important;}.main{margin-left:0!important;}.export-doc{box-shadow:none!important;border-radius:0!important;}}</style>
+    <div class="export-controls" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+      <form method="GET" id="exp-form" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;">
+        <input type="hidden" name="page" value="export">
+        <div><div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.35);margin-bottom:4px;">Report Type</div>
+        <select name="exp_type" class="finput" style="width:auto;padding:7px 12px;" onchange="document.getElementById('exp-form').submit()">
+          <option value="tickets"   <?=$exp_type==='tickets'  ?'selected':''?>>📋 Pawn Tickets</option>
+          <option value="customers" <?=$exp_type==='customers'?'selected':''?>>👥 Customers</option>
+          <option value="inventory" <?=$exp_type==='inventory'?'selected':''?>>📦 Inventory</option>
+          <option value="audit"     <?=$exp_type==='audit'    ?'selected':''?>>🔍 Audit Logs</option>
+          <option value="payments"  <?=$exp_type==='payments' ?'selected':''?>>💳 Payment History</option>
+        </select></div>
+        <div><div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.35);margin-bottom:4px;">Date From</div>
+        <input type="date" name="exp_from" class="finput" style="width:auto;padding:7px 12px;" value="<?=htmlspecialchars($exp_from)?>" onchange="document.getElementById('exp-form').submit()"></div>
+        <div><div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.35);margin-bottom:4px;">Date To</div>
+        <input type="date" name="exp_to" class="finput" style="width:auto;padding:7px 12px;" value="<?=htmlspecialchars($exp_to)?>" onchange="document.getElementById('exp-form').submit()"></div>
+      </form>
+      <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;font-family:inherit;white-space:nowrap;">
+        <span class="material-symbols-outlined" style="font-size:17px;">print</span>Print / Save as PDF
+      </button>
+    </div>
+    <div class="export-doc card" style="padding:0;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:1.1rem;font-weight:800;color:#fff;"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.6);margin-top:3px;">PawnHub — Branch Report</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:1.3rem;font-weight:800;color:#fff;"><?=htmlspecialchars($exp_title)?></div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.6);margin-top:3px;">📅 <?=date('M d, Y',strtotime($exp_from))?> — <?=date('M d, Y',strtotime($exp_to))?></div>
+          <div style="font-size:.67rem;color:rgba(255,255,255,.4);margin-top:2px;">Generated: <?=date('F j, Y g:i A')?></div>
+        </div>
+      </div>
+      <div style="padding:10px 24px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.06);display:flex;gap:20px;flex-wrap:wrap;">
+        <span style="font-size:.74rem;color:rgba(255,255,255,.4);">Total Records: <strong style="color:#fff;"><?=count($exp_rows)?></strong></span>
+        <span style="font-size:.74rem;color:rgba(255,255,255,.4);">Prepared by: <strong style="color:#fff;"><?=htmlspecialchars($u['name'])?></strong> (Manager)</span>
+      </div>
+      <div style="padding:16px 20px;overflow-x:auto;">
+        <?php if(empty($exp_rows)):?>
+        <div style="text-align:center;padding:40px;color:rgba(255,255,255,.3);"><span class="material-symbols-outlined" style="font-size:48px;display:block;margin-bottom:12px;">inbox</span><p>No records found for the selected period.</p></div>
+        <?php else:?>
+        <table><thead><tr><?php foreach($exp_cols as $c):?><th><?=htmlspecialchars($c)?></th><?php endforeach;?></tr></thead><tbody>
+        <?php foreach($exp_rows as $row): $vals=array_values($row); ?>
+        <tr><?php foreach($vals as $i=>$val):
+          $col=strtolower($exp_cols[$i]??'');
+          if(str_contains($col,'ticket no')): echo '<td><span class="ticket-tag">'.htmlspecialchars($val??'—').'</span></td>';
+          elseif(str_contains($col,'status')): $sc=['stored'=>'b-blue','released'=>'b-green','renewed'=>'b-yellow','voided'=>'b-red','pawned'=>'b-blue','redeemed'=>'b-green']; echo '<td><span class="badge '.($sc[strtolower($val??'')] ?? 'b-gray').'">'.htmlspecialchars($val??'—').'</span></td>';
+          elseif(str_contains($col,'amount')||str_contains($col,'loan')||str_contains($col,'redeem')||str_contains($col,'cash')||str_contains($col,'change')||str_contains($col,'appraisal')): echo '<td>₱'.number_format((float)($val??0),2).'</td>';
+          elseif(str_contains($col,'date')||str_contains($col,'registered')||str_contains($col,'time')||str_contains($col,'at')): echo '<td style="font-size:.73rem;color:rgba(255,255,255,.4);">'.($val ? date(str_contains($col,'time')?'M d, Y h:i A':'M d, Y',strtotime($val)) : '—').'</td>';
+          else: echo '<td>'.htmlspecialchars($val??'—').'</td>';
+          endif;
+        endforeach;?></tr>
+        <?php endforeach;?></tbody></table>
+        <?php endif;?>
+      </div>
+      <div style="padding:12px 24px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;font-size:.69rem;color:rgba(255,255,255,.25);">
+        <span>© <?=date('Y')?> <?=htmlspecialchars($tenant['business_name']??'Branch')?> · Powered by PawnHub</span>
+        <span><?=count($exp_rows)?> records · <?=date('F j, Y g:i A')?></span>
+      </div>
     </div>
 
   <?php endif;?>
