@@ -69,6 +69,7 @@ $restricted_pages = [];
 if (!$features['theme_branding']) $restricted_pages[] = 'settings';
 if (!$features['managers'])       $restricted_pages[] = 'users';
 if (!$features['audit_logs'])     $restricted_pages[] = 'audit';
+if (!$features['data_export'])    $restricted_pages[] = 'export';
 
 if (in_array($active_page, $restricted_pages)) {
     $active_page = 'dashboard';
@@ -543,6 +544,13 @@ tr:hover td{background:rgba(255,255,255,.03);}
       </div>
       <div style="font-size:.62rem;color:rgba(255,255,255,.15);margin-top:3px;margin-left:28px;">Upgrade to Pro</div>
     </div>
+    <?php endif;?>
+
+    <?php if($features['data_export']):?>
+    <div class="sb-section">Export</div>
+    <a href="export.php" class="sb-item" target="_blank">
+      <span class="material-symbols-outlined">download</span>Export to PDF
+    </a>
     <?php endif;?>
   </nav>
   <div class="sb-footer">

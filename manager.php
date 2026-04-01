@@ -25,6 +25,12 @@ $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = '';
 $error_msg   = '';
 
+// ── Plan feature check for data export ───────────────────────
+$plan_chk = $pdo->prepare("SELECT plan FROM tenants WHERE id=? LIMIT 1");
+$plan_chk->execute([$tid]);
+$tenant_plan_mgr = strtolower($plan_chk->fetchColumn() ?? 'starter');
+$mgr_can_export  = ($tenant_plan_mgr === 'enterprise');
+
 // ── Block if tenant is deactivated ────────────────────────────
 try {
     $chk = $pdo->prepare("SELECT status FROM tenants WHERE id=? LIMIT 1");
@@ -362,6 +368,11 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
     </a>
+    <?php if($mgr_can_export):?>
+    <a href="export.php" class="sb-item" target="_blank">
+      <span class="material-symbols-outlined">download</span>Export to PDF
+    </a>
+    <?php endif;?>
   </nav>
 
   <div class="sb-footer">
