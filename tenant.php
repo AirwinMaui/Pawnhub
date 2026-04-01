@@ -29,6 +29,52 @@ try {
     }
 } catch (Throwable $e) {}
 
+// ── Plan Features — what each plan can access ─────────────────
+// Load tenant plan
+$plan_row = $pdo->prepare("SELECT plan FROM tenants WHERE id=? LIMIT 1");
+$plan_row->execute([$tid]);
+$tenant_plan = strtolower($plan_row->fetchColumn() ?? 'starter');
+
+// Define features per plan
+$plan_features = [
+    'starter'    => [
+        'theme_branding' => false,  // No Theme & Branding
+        'managers'       => false,  // No invite managers
+        'audit_logs'     => false,  // No audit logs
+        'reports'        => false,  // No advanced reports
+        'data_export'    => false,  // No data export
+        'white_label'    => false,  // No white label
+    ],
+    'pro'        => [
+        'theme_branding' => true,
+        'managers'       => true,
+        'audit_logs'     => true,
+        'reports'        => true,
+        'data_export'    => false,  // No data export
+        'white_label'    => false,
+    ],
+    'enterprise' => [
+        'theme_branding' => true,
+        'managers'       => true,
+        'audit_logs'     => true,
+        'reports'        => true,
+        'data_export'    => true,
+        'white_label'    => true,
+    ],
+];
+$features = $plan_features[$tenant_plan] ?? $plan_features['starter'];
+
+// Block direct URL access to restricted pages
+$restricted_pages = [];
+if (!$features['theme_branding']) $restricted_pages[] = 'settings';
+if (!$features['managers'])       $restricted_pages[] = 'users';
+if (!$features['audit_logs'])     $restricted_pages[] = 'audit';
+
+if (in_array($active_page, $restricted_pages)) {
+    $active_page = 'dashboard';
+    $error_msg   = '⚠️ This feature is not available on your current plan. Please upgrade to access it.';
+}
+
 // Load theme
 $theme = getTenantTheme($pdo, $tid);
 
@@ -36,6 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // Invite Staff or Cashier via Email
     if ($_POST['action'] === 'invite_staff') {
+        if (!$features['managers']) {
+            $error_msg = 'Inviting Managers is not available on your current plan. Please upgrade to Pro or Enterprise.';
+        } else {
         $email = trim($_POST['email'] ?? '');
         $name  = trim($_POST['name']  ?? '');
         // Admin/Owner can ONLY invite Managers — Managers handle Staff/Cashier themselves
@@ -81,6 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $active_page = 'users';
             }
         }
+        } // end plan check
     }
 
     if ($_POST['action'] === 'toggle_user') {
@@ -121,6 +171,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     if ($_POST['action'] === 'save_theme') {
+        if (!$features['theme_branding']) {
+            $error_msg = 'Theme & Branding is not available on your current plan. Please upgrade to Pro or Enterprise.';
+        } else {
         $primary   = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['primary_color']??'')   ? $_POST['primary_color']   : '#2563eb';
         $secondary = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['secondary_color']??'') ? $_POST['secondary_color'] : '#1e3a8a';
         $accent    = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['accent_color']??'')    ? $_POST['accent_color']    : '#10b981';
@@ -205,6 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $success_msg = '✅ Theme saved! Staff and cashier dashboards will now reflect the new design.';
             $theme = getTenantTheme($pdo, $tid);
         }
+        } // end plan check
         $active_page = 'settings';
     }
 }
@@ -465,16 +519,31 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
 
     <div class="sb-section">Team</div>
+    <?php if($features['managers']):?>
     <a href="?page=users" class="sb-item <?=$active_page==='users'?'active':''?>">
       <span class="material-symbols-outlined">badge</span>Managers 
     </a>
+    <?php endif;?>
+    <?php if($features['audit_logs']):?>
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
     </a>
+    <?php endif;?>
+    <?php if($features['theme_branding']):?>
     <div class="sb-section">Customize</div>
     <a href="?page=settings" class="sb-item <?=$active_page==='settings'?'active':''?>">
       <span class="material-symbols-outlined">palette</span>Theme &amp; Branding
     </a>
+    <?php else:?>
+    <div class="sb-section">Customize</div>
+    <div style="margin:2px 8px;padding:9px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:default;">
+      <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.2);font-size:.82rem;">
+        <span class="material-symbols-outlined" style="font-size:18px;">lock</span>
+        Theme &amp; Branding
+      </div>
+      <div style="font-size:.62rem;color:rgba(255,255,255,.15);margin-top:3px;margin-left:28px;">Upgrade to Pro</div>
+    </div>
+    <?php endif;?>
   </nav>
   <div class="sb-footer">
     <a href="logout.php?role=admin" class="sb-logout">      <span class="material-symbols-outlined">logout</span>Sign Out
@@ -515,6 +584,20 @@ tr:hover td{background:rgba(255,255,255,.03);}
   <?php if($error_msg):?><div class="alert alert-error"><span class="material-symbols-outlined" style="font-size:18px;">warning</span><?=htmlspecialchars($error_msg)?></div><?php endif;?>
 
   <?php if($active_page==='dashboard'): ?>
+    <?php if($tenant_plan === 'starter'): ?>
+    <div style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(234,88,12,.1));border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.2rem;">⭐</span>
+        <div>
+          <div style="font-size:.8rem;font-weight:700;color:#fcd34d;">You're on the Starter Plan</div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px;">Upgrade to Pro to unlock Theme & Branding, Manager invitations, Audit Logs and more.</div>
+        </div>
+      </div>
+      <div style="font-size:.72rem;font-weight:700;color:#fcd34d;background:rgba(245,158,11,.2);padding:5px 14px;border-radius:100px;border:1px solid rgba(245,158,11,.3);white-space:nowrap;">
+        <?=htmlspecialchars($tenant['plan'])?> Plan
+      </div>
+    </div>
+    <?php endif;?>
     <!-- Branch Info Banner -->
     <div style="background:linear-gradient(135deg,rgba(30,58,138,.6),rgba(37,99,235,.3));border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:16px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
