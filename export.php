@@ -1,8 +1,4 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 /**
  * export.php — PawnHub Data Export (Print-to-PDF)
  * Accessible by: admin (Enterprise only), manager (Enterprise only)
@@ -70,24 +66,24 @@ $title   = '';
 switch ($type) {
     case 'tickets':
         $title   = 'Pawn Tickets';
-        $columns = ['Ticket No.', 'Customer', 'Contact', 'Item', 'Category', 'Loan Amount', 'Total Redeem', 'Maturity Date', 'Expiry Date', 'Status', 'Date Created'];
-        $stmt    = $pdo->prepare("SELECT ticket_no, customer_name, contact_number, item_name, item_category, loan_amount, total_redeem, maturity_date, expiry_date, status, created_at FROM pawn_transactions WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
+        $columns = ['Ticket No.', 'Customer', 'Contact', 'Item Category', 'Item Description', 'Loan Amount', 'Total Redeem', 'Maturity Date', 'Expiry Date', 'Status', 'Date Created'];
+        $stmt    = $pdo->prepare("SELECT ticket_no, customer_name, contact_number, item_category, item_description, loan_amount, total_redeem, maturity_date, expiry_date, status, created_at FROM pawn_transactions WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
         $stmt->execute([$tid, $date_from, $date_to]);
         $rows = $stmt->fetchAll();
         break;
 
     case 'customers':
         $title   = 'Customer Records';
-        $columns = ['Full Name', 'Contact', 'Email', 'Gender', 'Address', 'ID Type', 'ID Number', 'Registered'];
-        $stmt    = $pdo->prepare("SELECT full_name, contact_number, email, gender, address, valid_id_type, valid_id_number, registered_at FROM customers WHERE tenant_id=? AND DATE(registered_at) BETWEEN ? AND ? ORDER BY full_name ASC");
+        $columns = ['Full Name', 'Contact', 'Email', 'Gender', 'Address', 'Valid ID Type', 'Valid ID Number', 'Registered'];
+        $stmt    = $pdo->prepare("SELECT full_name, contact_number, email, gender, address, valid_id_type, valid_id_number, created_at FROM customers WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY full_name ASC");
         $stmt->execute([$tid, $date_from, $date_to]);
         $rows = $stmt->fetchAll();
         break;
 
     case 'inventory':
         $title   = 'Item Inventory';
-        $columns = ['Ticket No.', 'Item Name', 'Category', 'Appraisal Value', 'Loan Amount', 'Status', 'Date Received'];
-        $stmt    = $pdo->prepare("SELECT ticket_no, item_name, item_category, appraisal_value, loan_amount, status, received_at FROM item_inventory WHERE tenant_id=? AND DATE(received_at) BETWEEN ? AND ? ORDER BY received_at DESC");
+        $columns = ['Ticket No.', 'Item Name', 'Category', 'Serial No.', 'Condition', 'Appraisal Value', 'Loan Amount', 'Status', 'Date Received'];
+        $stmt    = $pdo->prepare("SELECT ticket_no, item_name, item_category, serial_no, condition_notes, appraisal_value, loan_amount, status, created_at FROM item_inventory WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
         $stmt->execute([$tid, $date_from, $date_to]);
         $rows = $stmt->fetchAll();
         break;
@@ -99,8 +95,6 @@ switch ($type) {
         $stmt->execute([$tid, $date_from, $date_to]);
         $rows = $stmt->fetchAll();
         break;
-
-    case 'payments':
         $title   = 'Payment History';
         $columns = ['Date', 'Ticket No.', 'Action', 'OR No.', 'Amount Due', 'Cash Received', 'Change', 'Staff', 'Role'];
         $stmt    = $pdo->prepare("SELECT created_at, ticket_no, action, or_no, amount_due, cash_received, change_amount, staff_username, staff_role FROM payment_transactions WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC");
