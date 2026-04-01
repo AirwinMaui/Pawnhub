@@ -1,11 +1,15 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 /**
  * export.php — PawnHub Data Export (Print-to-PDF)
  * Accessible by: admin (Enterprise only), manager (Enterprise only)
  */
 
 if (!file_exists(__DIR__ . '/session_helper.php')) {
-    die('session_helper.php not found. Please upload it.');
+    die('ERROR: session_helper.php not found. Please upload it to the root folder.');
 }
 require_once __DIR__ . '/session_helper.php';
 
