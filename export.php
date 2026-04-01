@@ -2,7 +2,6 @@
 /**
  * export.php — PawnHub Data Export (Print-to-PDF)
  * Accessible by: admin (Enterprise only), manager (Enterprise only)
- * Records: Pawn Tickets, Customers, Inventory, Audit Logs, Payment History
  */
 
 if (!file_exists(__DIR__ . '/session_helper.php')) {
@@ -10,20 +9,25 @@ if (!file_exists(__DIR__ . '/session_helper.php')) {
 }
 require_once __DIR__ . '/session_helper.php';
 
-// Try admin session first
-pawnhub_session_start('admin');
+// Use role hint from URL to pick correct session
+$role_hint = in_array($_GET['role'] ?? '', ['admin', 'manager']) ? $_GET['role'] : 'admin';
+pawnhub_session_start($role_hint);
+
 $u = $_SESSION['user'] ?? null;
 
-// If no admin session, try manager session
+// Validate session
 if (!$u || !in_array($u['role'] ?? '', ['admin', 'manager'])) {
+    // Try the other role as fallback
     session_write_close();
-    pawnhub_session_start('manager');
+    $fallback = ($role_hint === 'admin') ? 'manager' : 'admin';
+    pawnhub_session_start($fallback);
     $u = $_SESSION['user'] ?? null;
 }
 
-// If still no valid session, redirect to login
 if (!$u || !in_array($u['role'] ?? '', ['admin', 'manager'])) {
-    header('Location: login.php'); exit;
+    $slug = $_GET['slug'] ?? '';
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : 'login.php'));
+    exit;
 }
 
 $tid = $u['tenant_id'];
@@ -241,7 +245,7 @@ tr:nth-child(even) td { background: #fafafa; }
 
 <!-- Controls (hidden on print) -->
 <div class="controls">
-    <a href="<?= $u['role'] === 'manager' ? 'manager.php' : 'tenant.php' ?>?page=export" class="btn-back">
+    <a href="<?= $u['role'] === 'manager' ? 'manager.php' : 'tenant.php' ?>" class="btn-back">
         ← Back
     </a>
     <div class="controls-left">
