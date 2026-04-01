@@ -5,25 +5,28 @@
  * Records: Pawn Tickets, Customers, Inventory, Audit Logs, Payment History
  */
 
+if (!file_exists(__DIR__ . '/session_helper.php')) {
+    die('session_helper.php not found. Please upload it.');
+}
 require_once __DIR__ . '/session_helper.php';
 
-// Detect role from session — try admin first, then manager
+// Try admin session first
 pawnhub_session_start('admin');
-if (empty($_SESSION['user'])) {
+$u = $_SESSION['user'] ?? null;
+
+// If no admin session, try manager session
+if (!$u || !in_array($u['role'] ?? '', ['admin', 'manager'])) {
     session_write_close();
     pawnhub_session_start('manager');
+    $u = $_SESSION['user'] ?? null;
 }
 
-if (empty($_SESSION['user'])) {
+// If still no valid session, redirect to login
+if (!$u || !in_array($u['role'] ?? '', ['admin', 'manager'])) {
     header('Location: login.php'); exit;
 }
 
-$u   = $_SESSION['user'];
 $tid = $u['tenant_id'];
-
-if (!in_array($u['role'], ['admin', 'manager'])) {
-    header('Location: login.php'); exit;
-}
 
 require 'db.php';
 require 'theme_helper.php';
