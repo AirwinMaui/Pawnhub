@@ -12,7 +12,6 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
 }
 
 if (empty($_SESSION['user'])) {
-    // Try to get tenant slug from DB via session is empty — fallback to home
     header('Location: home.php'); exit;
 }
 $u = $_SESSION['user'];
@@ -55,17 +54,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $business     = trim($_POST['business_office_school'] ?? '');
         $id_type      = trim($_POST['valid_id_type'] ?? '');
         $id_number    = trim($_POST['valid_id_number'] ?? '');
+        // Mobile app credentials
+        $mob_username = trim($_POST['mob_username'] ?? '');
+        $mob_password = trim($_POST['mob_password'] ?? '');
 
         if ($full_name && $contact) {
+            // Check if mobile username already taken
+            if ($mob_username !== '') {
+                $chk = $pdo->prepare("SELECT id FROM mobile_customers WHERE tenant_id=? AND username=? LIMIT 1");
+                $chk->execute([$tid, $mob_username]);
+                if ($chk->fetch()) {
+                    $error_msg = 'Mobile username already taken. Please choose another.';
+                    $active_page = 'register_customer';
+                    goto skip_register;
+                }
+            }
+
+            $pdo->beginTransaction();
+
+            // Save to customers table (existing)
             $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                 ->execute([$tid,$full_name,$contact,$email,$birthdate?:null,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
-            write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$pdo->lastInsertId(),"Registered customer: $full_name.",$tid);
-            $success_msg = "Customer \"$full_name\" registered successfully!";
+            $cust_id = (int)$pdo->lastInsertId();
+
+            // Also save to mobile_customers if username+password provided
+            if ($mob_username !== '' && strlen($mob_password) >= 8) {
+                $pdo->prepare("
+                    INSERT INTO mobile_customers
+                        (tenant_id, full_name, username, email, password, contact_number, birthdate, address, gender, nationality, created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,NOW())
+                ")->execute([
+                    $tid, $full_name, $mob_username, $email ?: null,
+                    password_hash($mob_password, PASSWORD_BCRYPT),
+                    $contact ?: null, $birthdate ?: null,
+                    $address ?: null, $gender ?: null, $nationality,
+                ]);
+            }
+
+            $pdo->commit();
+
+            write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$cust_id,"Registered customer: $full_name.",$tid);
+            $success_msg = "Customer \"$full_name\" registered successfully!" . ($mob_username !== '' && strlen($mob_password) >= 8 ? ' Mobile account created.' : '');
             $active_page = 'customers';
         } else {
             $error_msg = 'Full name and contact number are required.';
         }
-    }
+        skip_register:
 
     if ($_POST['action'] === 'create_ticket') {
         $customer_name  = trim($_POST['customer_name']   ?? '');
@@ -543,6 +577,12 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
             <div class="fgroup"><label class="flabel">Business / Office / School</label><input type="text" name="business_office_school" class="finput" placeholder="Employer or School name"></div>
             <div class="fgroup"><label class="flabel">Valid ID Type</label><select name="valid_id_type" class="finput"><option>Passport</option><option>Driver's License</option><option>PhilSys ID</option><option>UMID</option><option>Voter's ID</option><option>Postal ID</option></select></div>
             <div class="fgroup"><label class="flabel">ID Number</label><input type="text" name="valid_id_number" class="finput" placeholder="ID Number"></div>
+            <!-- Mobile App Credentials -->
+            <div class="fgroup" style="grid-column:1/-1;margin-top:10px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);">
+              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:10px;">📱 Mobile App Login (Optional)</div>
+            </div>
+            <div class="fgroup"><label class="flabel">Mobile Username</label><input type="text" name="mob_username" class="finput" placeholder="e.g. juandelacruz"></div>
+            <div class="fgroup"><label class="flabel">Mobile Password <span style="font-weight:400;color:rgba(255,255,255,.3)">(min. 8 chars)</span></label><input type="password" name="mob_password" class="finput" placeholder="Customer can reset later"></div>
           </div>
           <div style="display:flex;justify-content:flex-end;gap:9px;margin-top:6px;">
             <a href="?page=customers" class="btn-xs">Cancel</a>
