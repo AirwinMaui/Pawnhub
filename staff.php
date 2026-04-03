@@ -58,6 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $mob_username = trim($_POST['mob_username'] ?? '');
         $mob_password = trim($_POST['mob_password'] ?? '');
 
+        // Normalize optional date fields — use null-safe fallback
+        $birthdate = $birthdate !== '' ? $birthdate : null;
+
         // Check if mobile username already taken
         $mob_username_taken = false;
         if ($full_name && $contact && $mob_username !== '') {
@@ -75,11 +78,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             // Save to customers table (existing)
             $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([$tid,$full_name,$contact,$email,$birthdate?:null,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
+                ->execute([$tid,$full_name,$contact,$email,$birthdate,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
             $cust_id = (int)$pdo->lastInsertId();
 
             // Also save to mobile_customers if username+password provided
             if ($mob_username !== '' && strlen($mob_password) >= 8) {
+                // Ensure mobile_customers table exists
+                $pdo->exec("
+                    CREATE TABLE IF NOT EXISTS mobile_customers (
+                        id              INT AUTO_INCREMENT PRIMARY KEY,
+                        tenant_id       INT NOT NULL,
+                        full_name       VARCHAR(200) NOT NULL,
+                        username        VARCHAR(100) NOT NULL,
+                        email           VARCHAR(200) DEFAULT NULL,
+                        password        VARCHAR(255) NOT NULL,
+                        contact_number  VARCHAR(30)  DEFAULT NULL,
+                        birthdate       DATE         DEFAULT NULL,
+                        address         TEXT         DEFAULT NULL,
+                        gender          VARCHAR(20)  DEFAULT NULL,
+                        nationality     VARCHAR(50)  DEFAULT 'Filipino',
+                        profile_photo   VARCHAR(500) DEFAULT NULL,
+                        is_active       TINYINT(1)   NOT NULL DEFAULT 1,
+                        last_login_at   DATETIME     DEFAULT NULL,
+                        created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        UNIQUE KEY uq_tenant_username (tenant_id, username),
+                        INDEX idx_tenant_email (tenant_id, email)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                ");
                 $pdo->prepare("
                     INSERT INTO mobile_customers
                         (tenant_id, full_name, username, email, password, contact_number, birthdate, address, gender, nationality, created_at)
@@ -138,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $interest_amount = round($loan_amount * $interest_rate, 2);
         $total_redeem    = $loan_amount + $interest_amount;
         $ticket_no       = 'TP-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid()), 0, 6));
+        $birthdate       = $birthdate !== '' ? $birthdate : null;
 
         if ($customer_name && $item_category && $appraisal > 0 && $loan_amount > 0) {
             $pdo->prepare("INSERT INTO pawn_transactions (tenant_id,ticket_no,customer_name,contact_number,email,address,birthdate,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,item_category,item_description,item_condition,item_weight,item_karat,serial_number,appraisal_value,loan_amount,interest_rate,claim_term,interest_amount,total_redeem,pawn_date,maturity_date,expiry_date,status,created_by,assigned_staff_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?)")
@@ -182,7 +209,7 @@ $active_count     = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE 
 
 $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $all_tickets->execute([$tid]); $all_tickets=$all_tickets->fetchAll();
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
-$customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
+$customers    = $pdo->prepare("SELECT *, COALESCE(registered_at, created_at) AS registered_at FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
 $my_void_reqs = $pdo->prepare("SELECT * FROM pawn_void_requests WHERE tenant_id=? AND requested_by=? ORDER BY requested_at DESC"); $my_void_reqs->execute([$tid,$u['id']]); $my_void_reqs=$my_void_reqs->fetchAll();
 $business_name = $tenant['business_name'] ?? 'My Branch';
 ?>
@@ -443,7 +470,11 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     <div class="stats-row">
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(59,130,246,.15);"><span class="material-symbols-outlined" style="color:#93c5fd;">confirmation_number</span></div></div><div class="stat-value"><?=$my_tickets_today?></div><div class="stat-label">Tickets Today</div></div>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(236,72,153,.15);"><span class="material-symbols-outlined" style="color:#f9a8d4;">shield</span></div></div><div class="stat-value"><?=$active_count?></div><div class="stat-label">My Active Tickets</div></div>
-      <?php $cust_today=(int)$pdo->query("SELECT COUNT(*) FROM customers WHERE tenant_id=$tid AND created_by={$u['id']} AND DATE(registered_at)='$today'")->fetchColumn(); ?>
+      <?php
+        $cust_today_stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND created_by=? AND DATE(COALESCE(registered_at, created_at))=?");
+        $cust_today_stmt->execute([$tid, $u['id'], $today]);
+        $cust_today = (int)$cust_today_stmt->fetchColumn();
+      ?>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">person_add</span></div></div><div class="stat-value"><?=$cust_today?></div><div class="stat-label">Customers Today</div></div>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(139,92,246,.15);"><span class="material-symbols-outlined" style="color:#c4b5fd;">cancel_presentation</span></div></div><div class="stat-value"><?=count($my_void_reqs)?></div><div class="stat-label">Void Requests</div></div>
     </div>
