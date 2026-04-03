@@ -33,47 +33,6 @@ if ($tid) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-    // ── Set / Update Mobile App Account ──────────────────────
-    if ($_POST['action'] === 'set_mobile_account') {
-        $cid      = intval($_POST['customer_id'] ?? 0);
-        $username = strtolower(trim($_POST['mobile_username'] ?? ''));
-        $password = trim($_POST['mobile_password'] ?? '');
-
-        if (!$cid || !$username || !$password) {
-            $error_msg = 'Please fill in username and password.';
-        } elseif (strlen($username) < 4) {
-            $error_msg = 'Username must be at least 4 characters.';
-        } elseif (strlen($password) < 8) {
-            $error_msg = 'Password must be at least 8 characters.';
-        } else {
-            // Check if username already taken by another customer
-            $chk = $pdo->prepare("SELECT id FROM customers WHERE username=? AND id != ? LIMIT 1");
-            $chk->execute([$username, $cid]);
-            if ($chk->fetch()) {
-                $error_msg = 'Username already taken. Please choose another.';
-            } else {
-                $hash = password_hash($password, PASSWORD_BCRYPT);
-                $pdo->prepare("UPDATE customers SET username=?, password_hash=?, is_active=1 WHERE id=? AND tenant_id=?")
-                    ->execute([$username, $hash, $cid, $tid]);
-                write_audit($pdo,$u['id'],$u['username'],'staff','MOBILE_ACCOUNT_SET','customer',(string)$cid,"Set mobile account for customer ID $cid (username: $username)",$tid);
-                $success_msg = 'Mobile account set successfully! Customer can now log in to the mobile app.';
-            }
-        }
-        $active_page = 'customers';
-    }
-
-    // ── Remove Mobile App Account ─────────────────────────────
-    if ($_POST['action'] === 'remove_mobile_account') {
-        $cid = intval($_POST['customer_id'] ?? 0);
-        if ($cid) {
-            $pdo->prepare("UPDATE customers SET username=NULL, password_hash=NULL, is_active=0 WHERE id=? AND tenant_id=?")
-                ->execute([$cid, $tid]);
-            write_audit($pdo,$u['id'],$u['username'],'staff','MOBILE_ACCOUNT_REMOVED','customer',(string)$cid,"Removed mobile account for customer ID $cid",$tid);
-            $success_msg = 'Mobile account removed.';
-        }
-        $active_page = 'customers';
-    }
-
     if ($_POST['action'] === 'register_customer') {
         $full_name    = trim($_POST['full_name']    ?? '');
         $contact      = trim($_POST['contact_number'] ?? '');
@@ -148,6 +107,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address) VALUES (?,?,?,?,'PAWN_CREATE','pawn_transaction',?,?,?)")
                 ->execute([$tid,$u['id'],$u['username'],'staff',$ticket_no,"Created pawn ticket",$_SERVER['REMOTE_ADDR']??'::1']);
+
+            // ── Notify mobile app ─────────────────────────────
+            require_once __DIR__ . '/session_helper.php';
+            write_pawn_update($pdo, $tid, $ticket_no, 'PAWNED',
+                "Your item has been successfully pawned. Ticket #$ticket_no — Loan: ₱" . number_format($loan_amount, 2) . ". Maturity: $maturity_date.");
 
             $success_msg = "Pawn ticket $ticket_no created successfully!";
             $active_page = 'tickets';
@@ -277,7 +241,6 @@ tr:hover td{background:rgba(255,255,255,.03);}
 .btn-xs:hover{background:rgba(255,255,255,.12);}
 .btn-primary-xs{background:var(--t-primary,#2563eb);color:#fff;border-color:transparent;}
 .btn-danger-xs{background:rgba(239,68,68,.8);color:#fff;border-color:transparent;}
-.btn-warning-xs{background:rgba(245,158,11,.8);color:#fff;border-color:transparent;}
 
 .qa-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;font-family:inherit;font-size:.83rem;font-weight:600;cursor:pointer;border:none;width:100%;text-align:left;transition:all .18s;margin-bottom:8px;text-decoration:none;color:#fff;}
 .qa-primary{background:var(--t-primary,#2563eb);}
@@ -546,37 +509,9 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div><a href="?page=register_customer" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ Register</a></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
-      <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Mobile App</th><th>Registered</th><th>Actions</th></tr></thead><tbody>
+      <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Registered</th></tr></thead><tbody>
       <?php foreach($customers as $c):?>
-      <tr>
-        <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
-        <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
-        <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
-        <td><?=$c['gender']?></td>
-        <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
-        <td>
-          <?php if(!empty($c['username'])):?>
-            <span class="badge b-green"><span class="b-dot"></span>Active</span>
-            <div style="font-size:.65rem;color:rgba(255,255,255,.3);margin-top:2px;font-family:monospace;">@<?=htmlspecialchars($c['username'])?></div>
-          <?php else:?>
-            <span class="badge b-gray">No account</span>
-          <?php endif;?>
-        </td>
-        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
-        <td>
-          <button onclick="openMobileModal(<?=$c['id']?>, '<?=htmlspecialchars($c['full_name'], ENT_QUOTES)?>', '<?=htmlspecialchars($c['username']??'', ENT_QUOTES)?>')"
-            class="btn-xs <?=!empty($c['username'])?'btn-warning-xs':'btn-primary-xs'?>" style="font-size:.7rem;padding:4px 10px;">
-            <?=!empty($c['username'])?'✏️ Edit':'📱 Set Mobile'?>
-          </button>
-          <?php if(!empty($c['username'])):?>
-          <form method="POST" style="display:inline;" onsubmit="return confirm('Remove mobile account for <?=htmlspecialchars($c['full_name'], ENT_QUOTES)?>?')">
-            <input type="hidden" name="action" value="remove_mobile_account">
-            <input type="hidden" name="customer_id" value="<?=$c['id']?>">
-            <button type="submit" class="btn-xs btn-danger-xs" style="font-size:.7rem;padding:4px 10px;">🗑️</button>
-          </form>
-          <?php endif;?>
-        </td>
-      </tr>
+      <tr><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td><td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td><td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td><td><?=$c['gender']?></td><td><?=htmlspecialchars($c['valid_id_type']??'—')?></td><td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
@@ -643,55 +578,9 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
   </div>
 </div>
 
-<!-- MOBILE ACCOUNT MODAL -->
-<div class="modal-overlay" id="mobileModal">
-  <div class="modal" style="width:420px;">
-    <div class="mhdr">
-      <div class="mtitle">📱 Set Mobile App Account</div>
-      <button class="mclose" onclick="document.getElementById('mobileModal').classList.remove('open')">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-    <div class="mbody">
-      <div id="mobile-customer-name" style="font-size:.85rem;font-weight:700;color:#fff;margin-bottom:14px;padding:10px 13px;background:rgba(255,255,255,.05);border-radius:10px;border:1px solid rgba(255,255,255,.08);"></div>
-      <form method="POST">
-        <input type="hidden" name="action" value="set_mobile_account">
-        <input type="hidden" name="customer_id" id="mobile_customer_id">
-        <div class="fgroup">
-          <label class="flabel">Mobile App Username *</label>
-          <input type="text" name="mobile_username" id="mobile_username_input" class="finput" placeholder="e.g. juan.delacruz" required minlength="4" autocomplete="off">
-          <div style="font-size:.69rem;color:rgba(255,255,255,.3);margin-top:4px;">Lowercase letters, numbers, dots allowed. Min 4 characters.</div>
-        </div>
-        <div class="fgroup">
-          <label class="flabel">Password *</label>
-          <div style="position:relative;">
-            <input type="password" name="mobile_password" id="mobile_pw" class="finput" placeholder="Min. 8 characters" required minlength="8" autocomplete="new-password" style="padding-right:42px;">
-            <button type="button" onclick="const f=document.getElementById('mobile_pw');f.type=f.type==='password'?'text':'password';" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);font-size:16px;">👁</button>
-          </div>
-        </div>
-        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:11px 14px;font-size:.76rem;color:rgba(147,197,253,.8);margin-bottom:14px;line-height:1.6;">
-          📱 The customer will use this username and password to log in to the <strong>PawnHub mobile app</strong>.
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:9px;">
-          <button type="button" class="btn-xs" onclick="document.getElementById('mobileModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-xs btn-primary-xs" style="padding:7px 16px;">💾 Save Account</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
 <script>
 function openVoid(tn){document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;document.getElementById('voidModal').classList.add('open');}
 document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
-document.getElementById('mobileModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
-function openMobileModal(id, name, existingUsername) {
-  document.getElementById('mobile_customer_id').value = id;
-  document.getElementById('mobile-customer-name').textContent = '👤 ' + name;
-  document.getElementById('mobile_username_input').value = existingUsername || '';
-  document.getElementById('mobile_pw').value = '';
-  document.getElementById('mobileModal').classList.add('open');
-}
 function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
 function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
 </script>

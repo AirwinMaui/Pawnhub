@@ -130,6 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE pawn_transactions SET status='Voided' WHERE ticket_no=? AND tenant_id=?")->execute([$ticket_no,$tid]);
         $pdo->prepare("UPDATE item_inventory SET status='voided' WHERE ticket_no=? AND tenant_id=?")->execute([$ticket_no,$tid]);
         write_audit($pdo, $u['id'], $u['username'], 'manager', 'PAWN_VOID_APPROVE', 'pawn_transaction', $ticket_no, "Void approved: $ticket_no", $tid);
+
+        // ── Notify mobile app ─────────────────────────────────
+        write_pawn_update($pdo, $tid, $ticket_no, 'VOIDED',
+            "Your pawn ticket #$ticket_no has been voided/cancelled. Please contact the branch for more information.");
         $success_msg = 'Void approved.';
         $active_page = 'void_requests';
     }

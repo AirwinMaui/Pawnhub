@@ -163,11 +163,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'approve_renewal') {
         $rrid = intval($_POST['renewal_id']);
         $pdo->prepare("UPDATE renewal_requests SET verification_status='verified',verified_by_admin_id=?,verified_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$rrid,$tid]);
+        // Notify mobile
+        try {
+            $rr = $pdo->prepare("SELECT old_ticket_no FROM renewal_requests WHERE id=? LIMIT 1");
+            $rr->execute([$rrid]); $rrow = $rr->fetch();
+            if ($rrow) write_pawn_update($pdo, $tid, $rrow['old_ticket_no'], 'RENEWAL_APPROVED',
+                "Your renewal request for ticket #{$rrow['old_ticket_no']} has been approved! Please proceed to the branch for processing.");
+        } catch(Throwable $e) {}
         $success_msg = 'Renewal approved.'; $active_page = 'renewals';
     }
     if ($_POST['action'] === 'reject_renewal') {
         $rrid = intval($_POST['renewal_id']);
         $pdo->prepare("UPDATE renewal_requests SET verification_status='rejected',verified_by_admin_id=?,verified_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$rrid,$tid]);
+        // Notify mobile
+        try {
+            $rr = $pdo->prepare("SELECT old_ticket_no FROM renewal_requests WHERE id=? LIMIT 1");
+            $rr->execute([$rrid]); $rrow = $rr->fetch();
+            if ($rrow) write_pawn_update($pdo, $tid, $rrow['old_ticket_no'], 'RENEWAL_REJECTED',
+                "Your renewal request for ticket #{$rrow['old_ticket_no']} was not approved. Please contact the branch for details.");
+        } catch(Throwable $e) {}
         $success_msg = 'Renewal rejected.'; $active_page = 'renewals';
     }
 

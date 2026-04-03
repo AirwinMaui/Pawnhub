@@ -1,6 +1,5 @@
 <?php
-require_once __DIR__ . '/session_helper.php';
-pawnhub_session_start('cashier');
+session_start();
 require 'db.php';
 require 'theme_helper.php';
 
@@ -11,30 +10,14 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
-function redirectToTenantLogin(): void {
-    $slug = $_SESSION['user']['tenant_slug'] ?? '';
-    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : '/login.php'));
-    exit;
-}
-if (empty($_SESSION['user'])) { redirectToTenantLogin(); }
+if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
-if ($u['role'] !== 'cashier') { redirectToTenantLogin(); }
+if ($u['role'] !== 'cashier') { header('Location: login.php'); exit; }
 
 $tid         = $u['tenant_id'];
 $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = '';
 $error_msg   = '';
-
-// ── Block if tenant is deactivated ────────────────────────────
-try {
-    $chk = $pdo->prepare("SELECT status FROM tenants WHERE id=? LIMIT 1");
-    $chk->execute([$tid]);
-    $t_status = $chk->fetchColumn();
-    if ($t_status === 'inactive') {
-        session_unset(); session_destroy();
-        redirectToTenantLogin();
-    }
-} catch (Throwable $e) {}
 
 $theme    = getTenantTheme($pdo, $tid);
 $sys_name = $theme['system_name'] ?? 'PawnHub';
@@ -68,6 +51,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ->execute([$pay_action==='release'?'redeemed':'pawned',$ticket_no,$tid]);
             $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?)")
                 ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
+
+            // ── Notify mobile app ─────────────────────────────
+            require_once __DIR__ . '/session_helper.php';
+            if ($pay_action === 'release') {
+                write_pawn_update($pdo, $tid, $ticket_no, 'REDEEMED',
+                    "Your item has been released/redeemed. Ticket #$ticket_no is now closed. Thank you!");
+            } else {
+                write_pawn_update($pdo, $tid, $ticket_no, 'RENEWED',
+                    "Your pawn ticket #$ticket_no has been renewed successfully. Please check your updated maturity date.");
+            }
             $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
             $active_page = 'tickets';
         } else {
@@ -302,7 +295,7 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="logout.php?role=cashier" class="sb-logout">
+    <a href="logout.php" class="sb-logout">
       <span class="material-symbols-outlined">logout</span>Sign Out
     </a>
   </div>
