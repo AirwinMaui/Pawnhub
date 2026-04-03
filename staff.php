@@ -209,7 +209,7 @@ $active_count     = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE 
 
 $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $all_tickets->execute([$tid]); $all_tickets=$all_tickets->fetchAll();
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
-$customers    = $pdo->prepare("SELECT *, COALESCE(registered_at, created_at) AS registered_at FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
+$customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
 $my_void_reqs = $pdo->prepare("SELECT * FROM pawn_void_requests WHERE tenant_id=? AND requested_by=? ORDER BY requested_at DESC"); $my_void_reqs->execute([$tid,$u['id']]); $my_void_reqs=$my_void_reqs->fetchAll();
 $business_name = $tenant['business_name'] ?? 'My Branch';
 ?>
@@ -471,7 +471,7 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(59,130,246,.15);"><span class="material-symbols-outlined" style="color:#93c5fd;">confirmation_number</span></div></div><div class="stat-value"><?=$my_tickets_today?></div><div class="stat-label">Tickets Today</div></div>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(236,72,153,.15);"><span class="material-symbols-outlined" style="color:#f9a8d4;">shield</span></div></div><div class="stat-value"><?=$active_count?></div><div class="stat-label">My Active Tickets</div></div>
       <?php
-        $cust_today_stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND created_by=? AND DATE(COALESCE(registered_at, created_at))=?");
+        $cust_today_stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND created_by=? AND DATE(registered_at)=?");
         $cust_today_stmt->execute([$tid, $u['id'], $today]);
         $cust_today = (int)$cust_today_stmt->fetchColumn();
       ?>
