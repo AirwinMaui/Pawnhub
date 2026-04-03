@@ -100,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } elseif (!$mob_username_taken) {
             $error_msg = 'Full name and contact number are required.';
         }
+    }
 
     if ($_POST['action'] === 'create_ticket') {
         $customer_name  = trim($_POST['customer_name']   ?? '');
