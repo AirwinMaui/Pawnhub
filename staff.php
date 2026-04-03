@@ -74,55 +74,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         if ($full_name && $contact && !$mob_username_taken) {
-            $pdo->beginTransaction();
+            try {
+                // Insert into customers table (no transaction — avoids implicit commit issues)
+                $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([$tid,$full_name,$contact,$email,$birthdate,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
+                $cust_id = (int)$pdo->lastInsertId();
 
-            // Save to customers table (existing)
-            $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([$tid,$full_name,$contact,$email,$birthdate,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
-            $cust_id = (int)$pdo->lastInsertId();
+                // Save to mobile_customers if username+password provided
+                if ($mob_username !== '' && strlen($mob_password) >= 8) {
+                    $pdo->prepare("
+                        INSERT INTO mobile_customers
+                            (tenant_id, full_name, username, email, password, contact_number, birthdate, address, gender, nationality, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,NOW())
+                    ")->execute([
+                        $tid, $full_name, $mob_username, $email ?: null,
+                        password_hash($mob_password, PASSWORD_BCRYPT),
+                        $contact ?: null, $birthdate ?: null,
+                        $address ?: null, $gender ?: null, $nationality,
+                    ]);
+                }
 
-            // Also save to mobile_customers if username+password provided
-            if ($mob_username !== '' && strlen($mob_password) >= 8) {
-                // Ensure mobile_customers table exists
-                $pdo->exec("
-                    CREATE TABLE IF NOT EXISTS mobile_customers (
-                        id              INT AUTO_INCREMENT PRIMARY KEY,
-                        tenant_id       INT NOT NULL,
-                        full_name       VARCHAR(200) NOT NULL,
-                        username        VARCHAR(100) NOT NULL,
-                        email           VARCHAR(200) DEFAULT NULL,
-                        password        VARCHAR(255) NOT NULL,
-                        contact_number  VARCHAR(30)  DEFAULT NULL,
-                        birthdate       DATE         DEFAULT NULL,
-                        address         TEXT         DEFAULT NULL,
-                        gender          VARCHAR(20)  DEFAULT NULL,
-                        nationality     VARCHAR(50)  DEFAULT 'Filipino',
-                        profile_photo   VARCHAR(500) DEFAULT NULL,
-                        is_active       TINYINT(1)   NOT NULL DEFAULT 1,
-                        last_login_at   DATETIME     DEFAULT NULL,
-                        created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        UNIQUE KEY uq_tenant_username (tenant_id, username),
-                        INDEX idx_tenant_email (tenant_id, email)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-                ");
-                $pdo->prepare("
-                    INSERT INTO mobile_customers
-                        (tenant_id, full_name, username, email, password, contact_number, birthdate, address, gender, nationality, created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,NOW())
-                ")->execute([
-                    $tid, $full_name, $mob_username, $email ?: null,
-                    password_hash($mob_password, PASSWORD_BCRYPT),
-                    $contact ?: null, $birthdate ?: null,
-                    $address ?: null, $gender ?: null, $nationality,
-                ]);
+                write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$cust_id,"Registered customer: $full_name.",$tid);
+                $success_msg = "Customer $full_name registered successfully!" . ($mob_username !== '' && strlen($mob_password) >= 8 ? ' Mobile account created.' : '');
+                $active_page = 'customers';
+
+            } catch (Throwable $e) {
+                $error_msg = 'Registration failed: ' . $e->getMessage();
+                $active_page = 'register_customer';
             }
-
-            $pdo->commit();
-
-            write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$cust_id,"Registered customer: $full_name.",$tid);
-            $success_msg = "Customer \"$full_name\" registered successfully!" . ($mob_username !== '' && strlen($mob_password) >= 8 ? ' Mobile account created.' : '');
-            $active_page = 'customers';
         } elseif (!$mob_username_taken) {
             $error_msg = 'Full name and contact number are required.';
         }
