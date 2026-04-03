@@ -58,18 +58,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $mob_username = trim($_POST['mob_username'] ?? '');
         $mob_password = trim($_POST['mob_password'] ?? '');
 
-        if ($full_name && $contact) {
-            // Check if mobile username already taken
-            if ($mob_username !== '') {
-                $chk = $pdo->prepare("SELECT id FROM mobile_customers WHERE tenant_id=? AND username=? LIMIT 1");
-                $chk->execute([$tid, $mob_username]);
-                if ($chk->fetch()) {
-                    $error_msg = 'Mobile username already taken. Please choose another.';
-                    $active_page = 'register_customer';
-                    goto skip_register;
-                }
+        // Check if mobile username already taken
+        $mob_username_taken = false;
+        if ($full_name && $contact && $mob_username !== '') {
+            $chk = $pdo->prepare("SELECT id FROM mobile_customers WHERE tenant_id=? AND username=? LIMIT 1");
+            $chk->execute([$tid, $mob_username]);
+            if ($chk->fetch()) {
+                $mob_username_taken = true;
+                $error_msg = 'Mobile username already taken. Please choose another.';
+                $active_page = 'register_customer';
             }
+        }
 
+        if ($full_name && $contact && !$mob_username_taken) {
             $pdo->beginTransaction();
 
             // Save to customers table (existing)
@@ -96,10 +97,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$cust_id,"Registered customer: $full_name.",$tid);
             $success_msg = "Customer \"$full_name\" registered successfully!" . ($mob_username !== '' && strlen($mob_password) >= 8 ? ' Mobile account created.' : '');
             $active_page = 'customers';
-        } else {
+        } elseif (!$mob_username_taken) {
             $error_msg = 'Full name and contact number are required.';
         }
-        skip_register:
 
     if ($_POST['action'] === 'create_ticket') {
         $customer_name  = trim($_POST['customer_name']   ?? '');
