@@ -9,7 +9,7 @@ pawnhub_session_start($role_hint);
 if ($role_hint === 'super_admin') {
     $redirect = 'login.php';
 } else {
-    $redirect = 'login.php'; // will be overridden below if slug is found
+    $redirect = 'home.php'; // will be overridden below if slug is found
 }
 
 if (!empty($_SESSION['user'])) {
