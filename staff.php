@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_helper.php';
+pawnhub_session_start('staff');
 require 'db.php';
 require 'theme_helper.php';
 
@@ -10,9 +11,15 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
-if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
+if (empty($_SESSION['user'])) {
+    // Try to get tenant slug from DB via session is empty — fallback to home
+    header('Location: home.php'); exit;
+}
 $u = $_SESSION['user'];
-if ($u['role'] !== 'staff') { header('Location: login.php'); exit; }
+if ($u['role'] !== 'staff') {
+    $slug = $u['tenant_slug'] ?? '';
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : 'home.php')); exit;
+}
 
 $tid         = $u['tenant_id'];
 $active_page = $_GET['page'] ?? 'dashboard';
