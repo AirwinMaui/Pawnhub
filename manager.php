@@ -144,6 +144,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $success_msg = 'Void rejected.';
         $active_page = 'void_requests';
     }
+
+    // ── SHOP: Add/Edit Category ───────────────────────────────
+    if ($_POST['action'] === 'save_category') {
+        $cat_id   = intval($_POST['cat_id'] ?? 0);
+        $cat_name = trim($_POST['cat_name'] ?? '');
+        $cat_icon = trim($_POST['cat_icon'] ?? 'category');
+        if ($cat_name !== '') {
+            if ($cat_id > 0) {
+                $pdo->prepare("UPDATE shop_categories SET name=?,icon=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
+                    ->execute([$cat_name, $cat_icon, $cat_id, $tid]);
+                $success_msg = 'Category updated.';
+            } else {
+                $pdo->prepare("INSERT INTO shop_categories (tenant_id,name,icon,is_active,sort_order,created_at) VALUES (?,?,?,1,0,NOW())")
+                    ->execute([$tid, $cat_name, $cat_icon]);
+                $success_msg = 'Category added.';
+            }
+        }
+        $active_page = 'shop_categories';
+    }
+
+    if ($_POST['action'] === 'delete_category') {
+        $cat_id = intval($_POST['cat_id'] ?? 0);
+        $pdo->prepare("DELETE FROM shop_categories WHERE id=? AND tenant_id=?")->execute([$cat_id, $tid]);
+        $success_msg = 'Category deleted.';
+        $active_page = 'shop_categories';
+    }
+
+    // ── SHOP: Toggle item visibility / update shop fields ─────
+    if ($_POST['action'] === 'update_shop_item') {
+        $item_id        = intval($_POST['item_id'] ?? 0);
+        $is_visible     = intval($_POST['is_shop_visible'] ?? 0);
+        $is_featured    = intval($_POST['is_featured'] ?? 0);
+        $display_price  = floatval($_POST['display_price'] ?? 0);
+        $category_id    = intval($_POST['category_id'] ?? 0) ?: null;
+        $stock_qty      = intval($_POST['stock_qty'] ?? 1);
+
+        // Handle photo upload
+        $photo_path = null;
+        if (!empty($_FILES['item_photo']['name'])) {
+            $upload_dir = __DIR__ . '/uploads/shop/';
+            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+            $ext = strtolower(pathinfo($_FILES['item_photo']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg','jpeg','png','webp'];
+            if (in_array($ext, $allowed)) {
+                $filename = 'shop_' . $item_id . '_' . time() . '.' . $ext;
+                if (move_uploaded_file($_FILES['item_photo']['tmp_name'], $upload_dir . $filename)) {
+                    $photo_path = 'uploads/shop/' . $filename;
+                }
+            }
+        }
+
+        if ($photo_path) {
+            $pdo->prepare("UPDATE item_inventory SET is_shop_visible=?,is_featured=?,display_price=?,category_id=?,stock_qty=?,item_photo_path=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
+                ->execute([$is_visible,$is_featured,$display_price,$category_id,$stock_qty,$photo_path,$item_id,$tid]);
+        } else {
+            $pdo->prepare("UPDATE item_inventory SET is_shop_visible=?,is_featured=?,display_price=?,category_id=?,stock_qty=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
+                ->execute([$is_visible,$is_featured,$display_price,$category_id,$stock_qty,$item_id,$tid]);
+        }
+        write_audit($pdo,$u['id'],$u['username'],'manager','SHOP_ITEM_UPDATE','item_inventory',(string)$item_id,"Shop item updated: visibility=$is_visible",$tid);
+        $success_msg = 'Shop item updated.';
+        $active_page = 'shop_items';
+    }
+
+    // Quick toggle visibility
+    if ($_POST['action'] === 'toggle_shop_visible') {
+        $item_id    = intval($_POST['item_id'] ?? 0);
+        $new_visible = intval($_POST['new_visible'] ?? 0);
+        $pdo->prepare("UPDATE item_inventory SET is_shop_visible=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
+            ->execute([$new_visible, $item_id, $tid]);
+        $success_msg = $new_visible ? 'Item is now visible in shop.' : 'Item hidden from shop.';
+        $active_page = 'shop_items';
+    }
+
 }
 
 // ── Fetch data ─────────────────────────────────────────────────
@@ -167,6 +240,15 @@ $audit_logs->execute([$tid]); $audit_logs = $audit_logs->fetchAll();
 $tickets_today  = count(array_filter($all_tickets, fn($t)=>substr($t['created_at'],0,10)===$today));
 $active_tickets = count(array_filter($all_tickets, fn($t)=>$t['status']==='Stored'));
 $pending_voids  = array_filter($void_reqs, fn($v)=>$v['status']==='pending');
+
+$shop_items      = $pdo->prepare("SELECT i.*, c.name AS cat_name FROM item_inventory i LEFT JOIN shop_categories c ON c.id=i.category_id WHERE i.tenant_id=? ORDER BY i.is_shop_visible DESC, i.is_featured DESC, i.id DESC LIMIT 200");
+$shop_items->execute([$tid]); $shop_items = $shop_items->fetchAll();
+
+$shop_categories_list = $pdo->prepare("SELECT * FROM shop_categories WHERE tenant_id=? ORDER BY sort_order ASC, name ASC");
+$shop_categories_list->execute([$tid]); $shop_categories_list = $shop_categories_list->fetchAll();
+
+$shop_visible_count  = count(array_filter($shop_items, fn($i)=>(int)$i['is_shop_visible']===1));
+$shop_featured_count = count(array_filter($shop_items, fn($i)=>(int)$i['is_featured']===1));
 
 $business_name = $tenant['business_name'] ?? 'My Branch';
 ?>
@@ -368,6 +450,14 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <span class="material-symbols-outlined">person_add</span>Invite Member
     </a>
 
+    <div class="sb-section">Shop Management</div>
+    <a href="?page=shop_items" class="sb-item <?=$active_page==='shop_items'?'active':''?>">
+      <span class="material-symbols-outlined">storefront</span>Shop Items
+    </a>
+    <a href="?page=shop_categories" class="sb-item <?=$active_page==='shop_categories'?'active':''?>">
+      <span class="material-symbols-outlined">category</span>Categories
+    </a>
+
     <div class="sb-section">Reports</div>
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
@@ -388,7 +478,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF']; ?>
+      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF','shop_items'=>'Shop Items','shop_categories'=>'Shop Categories']; ?>
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
@@ -459,6 +549,13 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <div class="stat-card">
         <div class="stat-top"><div class="stat-icon" style="background:rgba(139,92,246,.15);"><span class="material-symbols-outlined" style="color:#c4b5fd;">badge</span></div></div>
         <div class="stat-value"><?=count($my_team)?></div><div class="stat-label">Staff &amp; Cashiers</div>
+      </div>
+      <div class="stat-card" style="grid-column:span 2;">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">storefront</span></div></div>
+        <div style="display:flex;gap:24px;">
+          <div><div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div></div>
+          <div><div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured</div></div>
+        </div>
       </div>
     </div>
 
@@ -708,6 +805,116 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <?php endif;?>
     </div>
 
+
+  <?php elseif($active_page==='shop_items'): ?>
+    <div class="page-hdr">
+      <div><h2>Shop Items</h2><p><?=$shop_visible_count?> visible · <?=count($shop_items)?> total items</p></div>
+      <a href="?page=shop_categories" class="btn-sm btn-primary">
+        <span class="material-symbols-outlined" style="font-size:15px;">category</span>Manage Categories
+      </a>
+    </div>
+
+    <?php if(empty($shop_items)): ?>
+      <div class="empty-state"><span class="material-symbols-outlined">storefront</span><p>No items in inventory yet. Items appear here once staff creates pawn tickets.</p></div>
+    <?php else: ?>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Photo</th><th>Item</th><th>Category</th><th>Appraisal</th><th>Display Price</th><th>Stock</th><th>Featured</th><th>Visible</th><th>Action</th></tr></thead>
+        <tbody>
+        <?php foreach($shop_items as $item): ?>
+        <tr>
+          <td>
+            <?php if(!empty($item['item_photo_path'])): ?>
+              <img src="<?=htmlspecialchars($item['item_photo_path'])?>" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.1);">
+            <?php else: ?>
+              <div style="width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;">
+                <span class="material-symbols-outlined" style="font-size:20px;color:rgba(255,255,255,.2);">image</span>
+              </div>
+            <?php endif; ?>
+          </td>
+          <td>
+            <div style="font-weight:600;color:#fff;font-size:.83rem;"><?=htmlspecialchars($item['item_name']??$item['ticket_no']??'—')?></div>
+            <div style="font-size:.7rem;color:rgba(255,255,255,.3);font-family:monospace;"><?=htmlspecialchars($item['ticket_no']??'')?></div>
+          </td>
+          <td>
+            <?php if($item['cat_name']): ?>
+              <span class="badge b-blue"><?=htmlspecialchars($item['cat_name'])?></span>
+            <?php else: ?>
+              <span style="font-size:.75rem;color:rgba(255,255,255,.3);"><?=htmlspecialchars($item['item_category']??'—')?></span>
+            <?php endif; ?>
+          </td>
+          <td style="font-size:.82rem;">₱<?=number_format($item['appraisal_value'],2)?></td>
+          <td style="font-weight:700;color:#6ee7b7;">
+            <?= $item['display_price'] > 0 ? '₱'.number_format($item['display_price'],2) : '<span style="color:rgba(255,255,255,.25);">not set</span>' ?>
+          </td>
+          <td style="font-size:.82rem;"><?=$item['stock_qty']?></td>
+          <td>
+            <?php if($item['is_featured']): ?>
+              <span class="badge b-yellow"><span class="b-dot"></span>Yes</span>
+            <?php else: ?>
+              <span style="color:rgba(255,255,255,.2);font-size:.75rem;">—</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <form method="POST" style="display:inline;">
+              <input type="hidden" name="action" value="toggle_shop_visible">
+              <input type="hidden" name="item_id" value="<?=$item['id']?>">
+              <input type="hidden" name="new_visible" value="<?=$item['is_shop_visible']?0:1?>">
+              <button type="submit" class="btn-sm <?=$item['is_shop_visible']?'btn-success':'b-gray'?>" style="font-size:.7rem;<?=!$item['is_shop_visible']?'background:rgba(255,255,255,.06);color:rgba(255,255,255,.4);':''?>">
+                <?=$item['is_shop_visible']?'● Visible':'○ Hidden'?>
+              </button>
+            </form>
+          </td>
+          <td>
+            <button onclick="openShopEdit(<?=htmlspecialchars(json_encode($item))?>, <?=htmlspecialchars(json_encode($shop_categories_list))?>)" class="btn-sm" style="font-size:.7rem;">
+              <span class="material-symbols-outlined" style="font-size:13px;">edit</span>Edit
+            </button>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+
+  <?php elseif($active_page==='shop_categories'): ?>
+    <div class="page-hdr">
+      <div><h2>Shop Categories</h2><p><?=count($shop_categories_list)?> categories</p></div>
+      <button onclick="document.getElementById('addCatModal').classList.add('open')" class="btn-sm btn-primary">
+        <span class="material-symbols-outlined" style="font-size:15px;">add</span>Add Category
+      </button>
+    </div>
+
+    <?php if(empty($shop_categories_list)): ?>
+      <div class="empty-state"><span class="material-symbols-outlined">category</span><p>No categories yet. Add one to organize your shop items.</p></div>
+    <?php else: ?>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Name</th><th>Icon</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
+        <tbody>
+        <?php foreach($shop_categories_list as $cat): ?>
+        <tr>
+          <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($cat['name'])?></td>
+          <td style="font-family:monospace;font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($cat['icon']??'—')?></td>
+          <td><span class="badge <?=$cat['is_active']?'b-green':'b-gray'?>"><?=$cat['is_active']?'Active':'Inactive'?></span></td>
+          <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($cat['created_at']))?></td>
+          <td style="display:flex;gap:6px;">
+            <button onclick="openEditCat(<?=$cat['id']?>,'<?=addslashes($cat['name'])?>','<?=addslashes($cat['icon']??'')?>')" class="btn-sm" style="font-size:.7rem;">
+              <span class="material-symbols-outlined" style="font-size:13px;">edit</span>Edit
+            </button>
+            <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this category?')">
+              <input type="hidden" name="action" value="delete_category">
+              <input type="hidden" name="cat_id" value="<?=$cat['id']?>">
+              <button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">Delete</button>
+            </form>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+
   <?php elseif($active_page==='export' && $mgr_can_export): ?>
     <?php
       $exp_type = $_GET['exp_type'] ?? 'tickets';
@@ -856,5 +1063,158 @@ document.getElementById('inviteModal').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('open');
 });
 </script>
+
+<!-- SHOP ITEM EDIT MODAL -->
+<div class="modal-overlay" id="shopEditModal">
+  <div class="modal" style="width:520px;">
+    <div class="mhdr">
+      <div class="mtitle">Edit Shop Item</div>
+      <button class="mclose" onclick="document.getElementById('shopEditModal').classList.remove('open')">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="mbody">
+      <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="update_shop_item">
+        <input type="hidden" name="item_id" id="edit_item_id">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="fgroup" style="grid-column:1/-1;">
+            <label class="flabel">Item Name</label>
+            <input type="text" id="edit_item_name" class="finput" readonly style="opacity:.5;cursor:not-allowed;">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Display Price (₱) *</label>
+            <input type="number" name="display_price" id="edit_display_price" class="finput" placeholder="0.00" step="0.01" min="0">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Stock Qty</label>
+            <input type="number" name="stock_qty" id="edit_stock_qty" class="finput" value="1" min="0">
+          </div>
+          <div class="fgroup" style="grid-column:1/-1;">
+            <label class="flabel">Category</label>
+            <select name="category_id" id="edit_category_id" class="finput">
+              <option value="">— No category —</option>
+            </select>
+          </div>
+          <div class="fgroup" style="grid-column:1/-1;">
+            <label class="flabel">Item Photo</label>
+            <input type="file" name="item_photo" class="finput" accept="image/jpeg,image/png,image/webp" style="padding:8px;">
+            <div id="edit_current_photo" style="margin-top:8px;"></div>
+          </div>
+          <div class="fgroup">
+            <label class="flabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" name="is_shop_visible" id="edit_is_visible" value="1" style="width:16px;height:16px;accent-color:#059669;">
+              Visible in Shop
+            </label>
+          </div>
+          <div class="fgroup">
+            <label class="flabel" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" name="is_featured" id="edit_is_featured" value="1" style="width:16px;height:16px;accent-color:#f59e0b;">
+              Featured Item
+            </label>
+          </div>
+        </div>
+        <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.15);border-radius:10px;padding:10px 13px;font-size:.75rem;color:rgba(110,231,183,.7);margin-bottom:14px;">
+          💡 Set a Display Price and mark as Visible for it to appear in the mobile shop.
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('shopEditModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT CATEGORY MODAL -->
+<div class="modal-overlay" id="addCatModal">
+  <div class="modal" style="width:420px;">
+    <div class="mhdr">
+      <div class="mtitle" id="cat_modal_title">Add Category</div>
+      <button class="mclose" onclick="document.getElementById('addCatModal').classList.remove('open')">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="mbody">
+      <form method="POST">
+        <input type="hidden" name="action" value="save_category">
+        <input type="hidden" name="cat_id" id="cat_id_field" value="0">
+        <div class="fgroup">
+          <label class="flabel">Category Name *</label>
+          <input type="text" name="cat_name" id="cat_name_field" class="finput" placeholder="e.g. Jewelry, Electronics" required>
+        </div>
+        <div class="fgroup">
+          <label class="flabel">Icon Name</label>
+          <select name="cat_icon" id="cat_icon_field" class="finput">
+            <option value="category">category (default)</option>
+            <option value="diamond">diamond (Jewelry/Gold)</option>
+            <option value="smartphone">smartphone (Phone)</option>
+            <option value="laptop">laptop (Laptop/PC)</option>
+            <option value="watch">watch (Watch)</option>
+            <option value="photo_camera">photo_camera (Camera)</option>
+            <option value="shopping_bag">shopping_bag (Bag)</option>
+            <option value="checkroom">checkroom (Clothing)</option>
+            <option value="videogame_asset">videogame_asset (Gaming)</option>
+            <option value="headphones">headphones (Audio)</option>
+            <option value="tv">tv (Appliance)</option>
+          </select>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('addCatModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openShopEdit(item, categories) {
+  document.getElementById('edit_item_id').value = item.id;
+  document.getElementById('edit_item_name').value = item.item_name || item.ticket_no || '';
+  document.getElementById('edit_display_price').value = item.display_price > 0 ? item.display_price : '';
+  document.getElementById('edit_stock_qty').value = item.stock_qty || 1;
+  document.getElementById('edit_is_visible').checked = parseInt(item.is_shop_visible) === 1;
+  document.getElementById('edit_is_featured').checked = parseInt(item.is_featured) === 1;
+
+  // Populate categories
+  const sel = document.getElementById('edit_category_id');
+  sel.innerHTML = '<option value="">— No category —</option>';
+  categories.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    if (parseInt(item.category_id) === parseInt(c.id)) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  // Show current photo
+  const photoDiv = document.getElementById('edit_current_photo');
+  if (item.item_photo_path) {
+    photoDiv.innerHTML = '<img src="' + item.item_photo_path + '" style="height:60px;border-radius:8px;border:1px solid rgba(255,255,255,.1);" onerror="this.style.display='none'">';
+  } else {
+    photoDiv.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.25);">No photo uploaded yet.</span>';
+  }
+
+  document.getElementById('shopEditModal').classList.add('open');
+}
+
+function openEditCat(id, name, icon) {
+  document.getElementById('cat_modal_title').textContent = 'Edit Category';
+  document.getElementById('cat_id_field').value = id;
+  document.getElementById('cat_name_field').value = name;
+  const sel = document.getElementById('cat_icon_field');
+  for (let o of sel.options) { if (o.value === icon) { o.selected = true; break; } }
+  document.getElementById('addCatModal').classList.add('open');
+}
+
+document.getElementById('shopEditModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+document.getElementById('addCatModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+</script>
+
 </body>
 </html>
