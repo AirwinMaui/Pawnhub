@@ -207,6 +207,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'shop_items';
     }
 
+
+    // ── SHOP: Add New Item directly ───────────────────────────
+    if ($_POST['action'] === 'add_shop_item') {
+        $item_name     = trim($_POST['item_name']     ?? '');
+        $item_category = trim($_POST['item_category'] ?? '');
+        $category_id   = intval($_POST['category_id'] ?? 0) ?: null;
+        $display_price = floatval($_POST['display_price'] ?? 0);
+        $condition     = trim($_POST['condition_notes'] ?? '');
+        $description   = trim($_POST['item_description'] ?? '');
+        $stock_qty     = intval($_POST['stock_qty'] ?? 1);
+        $is_featured   = intval($_POST['is_featured'] ?? 0);
+
+        if ($item_name === '' || $display_price <= 0) {
+            $error_msg = 'Item name and display price are required.';
+            $active_page = 'add_shop_item';
+        } else {
+            // Handle photo upload
+            $photo_path = null;
+            if (!empty($_FILES['item_photo']['name'])) {
+                $upload_dir = __DIR__ . '/uploads/shop/';
+                if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+                $ext = strtolower(pathinfo($_FILES['item_photo']['name'], PATHINFO_EXTENSION));
+                $allowed = ['jpg','jpeg','png','webp'];
+                if (in_array($ext, $allowed) && $_FILES['item_photo']['size'] <= 5242880) {
+                    $filename = 'shop_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                    if (move_uploaded_file($_FILES['item_photo']['tmp_name'], $upload_dir . $filename)) {
+                        $photo_path = 'uploads/shop/' . $filename;
+                    }
+                } else {
+                    $error_msg = 'Invalid photo. Use JPG/PNG/WEBP under 5MB.';
+                    $active_page = 'add_shop_item';
+                }
+            }
+
+            if (!$error_msg) {
+                $pdo->prepare("
+                    INSERT INTO item_inventory
+                        (tenant_id, item_name, item_category, category_id, condition_notes,
+                         display_price, appraisal_value, stock_qty, item_photo_path,
+                         is_shop_visible, is_featured, status, received_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NOW())
+                ")->execute([
+                    $tid, $item_name, $item_category, $category_id, $condition,
+                    $display_price, $display_price, $stock_qty, $photo_path,
+                    $is_featured, 'available'
+                ]);
+                $new_id = (int)$pdo->lastInsertId();
+                write_audit($pdo,$u['id'],$u['username'],'manager','SHOP_ITEM_ADD','item_inventory',(string)$new_id,"Added shop item: $item_name",$tid);
+                $success_msg = "Item $item_name added to shop!";
+                $active_page = 'shop_items';
+                // Refresh shop items
+                $shop_items_stmt = $pdo->prepare("SELECT i.*, c.name AS cat_name FROM item_inventory i LEFT JOIN shop_categories c ON c.id=i.category_id WHERE i.tenant_id=? ORDER BY i.is_shop_visible DESC, i.is_featured DESC, i.id DESC LIMIT 200");
+                $shop_items_stmt->execute([$tid]);
+                $shop_items = $shop_items_stmt->fetchAll();
+            }
+        }
+    }
+
     // Quick toggle visibility
     if ($_POST['action'] === 'toggle_shop_visible') {
         $item_id    = intval($_POST['item_id'] ?? 0);
@@ -454,6 +512,9 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <a href="?page=shop_items" class="sb-item <?=$active_page==='shop_items'?'active':''?>">
       <span class="material-symbols-outlined">storefront</span>Shop Items
     </a>
+    <a href="?page=add_shop_item" class="sb-item <?=$active_page==='add_shop_item'?'active':''?>">
+      <span class="material-symbols-outlined">add_box</span>Add Shop Item
+    </a>
     <a href="?page=shop_categories" class="sb-item <?=$active_page==='shop_categories'?'active':''?>">
       <span class="material-symbols-outlined">category</span>Categories
     </a>
@@ -478,7 +539,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF','shop_items'=>'Shop Items','shop_categories'=>'Shop Categories']; ?>
+      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF','shop_items'=>'Shop Items','shop_categories'=>'Shop Categories','add_shop_item'=>'Add Shop Item']; ?>
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
@@ -809,9 +870,14 @@ tr:hover td{background:rgba(255,255,255,.02);}
   <?php elseif($active_page==='shop_items'): ?>
     <div class="page-hdr">
       <div><h2>Shop Items</h2><p><?=$shop_visible_count?> visible · <?=count($shop_items)?> total items</p></div>
-      <a href="?page=shop_categories" class="btn-sm btn-primary">
-        <span class="material-symbols-outlined" style="font-size:15px;">category</span>Manage Categories
-      </a>
+      <div style="display:flex;gap:8px;">
+        <a href="?page=shop_categories" class="btn-sm">
+          <span class="material-symbols-outlined" style="font-size:15px;">category</span>Categories
+        </a>
+        <a href="?page=add_shop_item" class="btn-sm btn-primary">
+          <span class="material-symbols-outlined" style="font-size:15px;">add</span>Add Item
+        </a>
+      </div>
     </div>
 
     <?php if(empty($shop_items)): ?>
@@ -876,6 +942,93 @@ tr:hover td{background:rgba(255,255,255,.02);}
       </table>
     </div>
     <?php endif; ?>
+
+
+  <?php elseif($active_page==='add_shop_item'): ?>
+    <div class="page-hdr">
+      <div><h2>Add Shop Item</h2><p>Add a new item directly to the mobile shop</p></div>
+      <a href="?page=shop_items" class="btn-sm">
+        <span class="material-symbols-outlined" style="font-size:15px;">arrow_back</span>Back to Shop Items
+      </a>
+    </div>
+    <div style="max-width:700px;">
+      <div class="card">
+        <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="action" value="add_shop_item">
+          <div class="card-title">📦 Item Details</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+            <div class="fgroup" style="grid-column:1/-1;">
+              <label class="flabel">Item Name *</label>
+              <input type="text" name="item_name" class="finput" placeholder="e.g. Gold Ring 18k, iPhone 14 Pro" required>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Category</label>
+              <select name="category_id" class="finput">
+                <option value="">— Select category —</option>
+                <?php foreach($shop_categories_list as $cat): ?>
+                <option value="<?=$cat['id']?>"><?=htmlspecialchars($cat['name'])?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Item Type / Label</label>
+              <input type="text" name="item_category" class="finput" placeholder="e.g. Jewelry, Gadget, Watch">
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Display Price (₱) *</label>
+              <input type="number" name="display_price" class="finput" placeholder="0.00" step="0.01" min="0.01" required>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Stock Quantity</label>
+              <input type="number" name="stock_qty" class="finput" value="1" min="1">
+            </div>
+
+            <div class="fgroup" style="grid-column:1/-1;">
+              <label class="flabel">Condition</label>
+              <select name="condition_notes" class="finput">
+                <option value="Excellent">Excellent</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Poor">Poor</option>
+              </select>
+            </div>
+
+            <div class="fgroup" style="grid-column:1/-1;">
+              <label class="flabel">Item Photo *</label>
+              <input type="file" name="item_photo" class="finput" accept="image/jpeg,image/png,image/webp" style="padding:10px;" onchange="previewPhoto(this)">
+              <div style="margin-top:10px;">
+                <img id="photo_preview" src="" style="display:none;max-height:160px;border-radius:10px;border:1px solid rgba(255,255,255,.1);object-fit:cover;">
+              </div>
+              <div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">JPG, PNG, or WEBP · Max 5MB</div>
+            </div>
+
+            <div class="fgroup" style="grid-column:1/-1;display:flex;gap:24px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.83rem;color:rgba(255,255,255,.6);">
+                <input type="checkbox" name="is_featured" value="1" style="width:16px;height:16px;accent-color:#f59e0b;">
+                ⭐ Mark as Featured
+              </label>
+            </div>
+
+          </div>
+
+          <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.15);border-radius:10px;padding:11px 14px;font-size:.76rem;color:rgba(110,231,183,.75);margin:14px 0;line-height:1.7;">
+            💡 Items added here will be <strong>immediately visible</strong> in the mobile shop. Make sure to set the correct price and upload a clear photo.
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:9px;margin-top:6px;">
+            <a href="?page=shop_items" class="btn-sm">Cancel</a>
+            <button type="submit" class="btn-sm btn-primary" style="padding:9px 22px;">
+              <span class="material-symbols-outlined" style="font-size:15px;">add_shopping_cart</span>Add to Shop
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
   <?php elseif($active_page==='shop_categories'): ?>
     <div class="page-hdr">
@@ -1216,5 +1369,18 @@ document.getElementById('addCatModal').addEventListener('click', function(e) {
 });
 </script>
 
+<script>
+function previewPhoto(input) {
+  const preview = document.getElementById('photo_preview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+</script>
 </body>
 </html>
