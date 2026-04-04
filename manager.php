@@ -963,19 +963,35 @@ tr:hover td{background:rgba(255,255,255,.02);}
               <input type="text" name="item_name" class="finput" placeholder="e.g. Gold Ring 18k, iPhone 14 Pro" required>
             </div>
 
-            <div class="fgroup">
-              <label class="flabel">Category</label>
-              <select name="category_id" class="finput">
-                <option value="">— Select category —</option>
-                <?php foreach($shop_categories_list as $cat): ?>
-                <option value="<?=$cat['id']?>"><?=htmlspecialchars($cat['name'])?></option>
+            <div class="fgroup" style="grid-column:1/-1;position:relative;">
+              <label class="flabel">Category *</label>
+              <input type="text" name="item_category" id="cat_input" class="finput"
+                placeholder="e.g. Gadget, Jewelry, Gold, Watch..."
+                autocomplete="off"
+                oninput="filterCatSuggestions(this.value)"
+                onfocus="showCatSuggestions()"
+                onblur="setTimeout(()=>document.getElementById('cat_suggestions').style.display='none',200)"
+                required>
+              <input type="hidden" name="category_id" id="cat_id_hidden" value="">
+              <div id="cat_suggestions" style="display:none;position:absolute;z-index:99;background:#0a150e;border:1px solid rgba(255,255,255,.15);border-radius:10px;margin-top:4px;width:100%;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5);">
+                <?php
+                $default_cats = ['Gadget','Jewelry','Gold','Silver','Watch','Laptop','Phone','Camera','Appliance','Bag','Clothing','Others'];
+                $all_cat_names = array_merge(
+                  array_column($shop_categories_list, 'name'),
+                  array_diff($default_cats, array_column($shop_categories_list, 'name'))
+                );
+                foreach($all_cat_names as $cn):
+                  $cat_id = '';
+                  foreach($shop_categories_list as $sc) { if($sc['name']==$cn) { $cat_id=$sc['id']; break; } }
+                ?>
+                <div class="cat-opt" data-name="<?=htmlspecialchars($cn)?>" data-id="<?=$cat_id?>"
+                  onclick="selectCat('<?=htmlspecialchars(addslashes($cn))?>','<?=$cat_id?>')"
+                  style="padding:9px 14px;cursor:pointer;font-size:.83rem;color:rgba(255,255,255,.8);display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.04);">
+                  <?php if($cat_id): ?><span style="font-size:.65rem;background:rgba(5,150,105,.2);color:#6ee7b7;padding:1px 7px;border-radius:100px;">saved</span><?php endif; ?>
+                  <?=htmlspecialchars($cn)?>
+                </div>
                 <?php endforeach; ?>
-              </select>
-            </div>
-
-            <div class="fgroup">
-              <label class="flabel">Item Type / Label</label>
-              <input type="text" name="item_category" class="finput" placeholder="e.g. Jewelry, Gadget, Watch">
+              </div>
             </div>
 
             <div class="fgroup">
@@ -1369,6 +1385,27 @@ document.getElementById('addCatModal').addEventListener('click', function(e) {
 });
 </script>
 
+<script>
+function showCatSuggestions() {
+  document.getElementById('cat_suggestions').style.display = 'block';
+}
+function filterCatSuggestions(val) {
+  const opts = document.querySelectorAll('.cat-opt');
+  const q = val.toLowerCase();
+  let anyVisible = false;
+  opts.forEach(o => {
+    const match = o.dataset.name.toLowerCase().includes(q);
+    o.style.display = match ? 'flex' : 'none';
+    if (match) anyVisible = true;
+  });
+  document.getElementById('cat_suggestions').style.display = anyVisible || val === '' ? 'block' : 'none';
+}
+function selectCat(name, id) {
+  document.getElementById('cat_input').value = name;
+  document.getElementById('cat_id_hidden').value = id;
+  document.getElementById('cat_suggestions').style.display = 'none';
+}
+</script>
 <script>
 function previewPhoto(input) {
   const preview = document.getElementById('photo_preview');
