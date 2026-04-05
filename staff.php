@@ -40,30 +40,37 @@ if ($tid) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($_POST['action'] === 'register_customer') {
-        $full_name    = trim($_POST['full_name']    ?? '');
+        $full_name    = trim($_POST['full_name']      ?? '');
         $contact      = trim($_POST['contact_number'] ?? '');
-        $email        = trim($_POST['email']        ?? '');
-        $birthdate    = trim($_POST['birthdate']    ?? '');
-        $address      = trim($_POST['address']      ?? '');
-        $gender       = trim($_POST['gender']       ?? '');
-        $nationality  = trim($_POST['nationality']  ?? 'Filipino');
-        $birthplace   = trim($_POST['birthplace']   ?? '');
-        $src_income   = trim($_POST['source_of_income'] ?? '');
-        $nature_work  = trim($_POST['nature_of_work']   ?? '');
-        $occupation   = trim($_POST['occupation']   ?? '');
-        $business     = trim($_POST['business_office_school'] ?? '');
-        $id_type      = trim($_POST['valid_id_type'] ?? '');
-        $id_number    = trim($_POST['valid_id_number'] ?? '');
-        // Mobile app credentials
-        $mob_username = trim($_POST['mob_username'] ?? '');
-        $mob_password = trim($_POST['mob_password'] ?? '');
+        $email        = trim($_POST['email']          ?? '');
+        $birthdate    = trim($_POST['birthdate']      ?? '');
+        $address      = trim($_POST['address']        ?? '');
+        $id_type      = trim($_POST['valid_id_type']  ?? '');
+        $id_number    = trim($_POST['valid_id_number']?? '');
+        $mob_username = trim($_POST['mob_username']   ?? '');
+        $mob_password = trim($_POST['mob_password']   ?? '');
 
-        // Normalize optional date fields — use null-safe fallback
-        $birthdate = $birthdate !== '' ? $birthdate : null;
+        // Handle valid ID photo upload
+        $valid_id_image = null;
+        if (!empty($_FILES['valid_id_photo']['name'])) {
+            $upload_dir = __DIR__ . '/uploads/valid_ids/';
+            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+            $ext = strtolower(pathinfo($_FILES['valid_id_photo']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg','jpeg','png','webp'];
+            if (in_array($ext, $allowed) && $_FILES['valid_id_photo']['size'] <= 5242880) {
+                $filename = 'id_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                if (move_uploaded_file($_FILES['valid_id_photo']['tmp_name'], $upload_dir . $filename)) {
+                    $valid_id_image = 'uploads/valid_ids/' . $filename;
+                }
+            } else {
+                $error_msg = 'Invalid ID photo. Use JPG/PNG/WEBP under 5MB.';
+                $active_page = 'register_customer';
+            }
+        }
 
-        // Check if mobile username already taken
+        // Check mobile username uniqueness
         $mob_username_taken = false;
-        if ($full_name && $contact && $mob_username !== '') {
+        if (!$error_msg && $mob_username !== '') {
             $chk = $pdo->prepare("SELECT id FROM mobile_customers WHERE tenant_id=? AND username=? LIMIT 1");
             $chk->execute([$tid, $mob_username]);
             if ($chk->fetch()) {
@@ -73,25 +80,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
 
-        if ($full_name && $contact && !$mob_username_taken) {
+        if ($full_name && $contact && !$error_msg) {
             try {
-                // Insert into customers table (no transaction — avoids implicit commit issues)
-                $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$tid,$full_name,$contact,$email,$birthdate,$address,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$id_type,$id_number,$u['id']]);
+                $birthdate_val = $birthdate !== '' ? $birthdate : null;
+
+                $pdo->prepare("INSERT INTO customers (tenant_id,full_name,contact_number,email,birthdate,address,valid_id_type,valid_id_number,valid_id_image,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([$tid,$full_name,$contact,$email ?: null,$birthdate_val,$address ?: null,$id_type,$id_number,$valid_id_image,$u['id']]);
                 $cust_id = (int)$pdo->lastInsertId();
 
-                // Save to mobile_customers if username+password provided
                 if ($mob_username !== '' && strlen($mob_password) >= 8) {
-                    $pdo->prepare("
-                        INSERT INTO mobile_customers
-                            (tenant_id, full_name, username, email, password, contact_number, birthdate, address, gender, nationality, created_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,NOW())
-                    ")->execute([
-                        $tid, $full_name, $mob_username, $email ?: null,
-                        password_hash($mob_password, PASSWORD_BCRYPT),
-                        $contact ?: null, $birthdate ?: null,
-                        $address ?: null, $gender ?: null, $nationality,
-                    ]);
+                    $pdo->prepare("INSERT INTO mobile_customers (tenant_id,full_name,username,email,password,contact_number,birthdate,address,created_at) VALUES (?,?,?,?,?,?,?,?,NOW())")
+                        ->execute([$tid,$full_name,$mob_username,$email ?: null,password_hash($mob_password,PASSWORD_BCRYPT),$contact ?: null,$birthdate_val,$address ?: null]);
                 }
 
                 write_audit($pdo,$u['id'],$u['username'],'staff','CUSTOMER_CREATE','customer',(string)$cust_id,"Registered customer: $full_name.",$tid);
@@ -102,8 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error_msg = 'Registration failed: ' . $e->getMessage();
                 $active_page = 'register_customer';
             }
-        } elseif (!$mob_username_taken) {
+        } elseif (!$error_msg) {
             $error_msg = 'Full name and contact number are required.';
+            $active_page = 'register_customer';
         }
     }
 
@@ -143,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $interest_amount = round($loan_amount * $interest_rate, 2);
         $total_redeem    = $loan_amount + $interest_amount;
         $ticket_no       = 'TP-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid()), 0, 6));
-        $birthdate       = $birthdate !== '' ? $birthdate : null;
 
         if ($customer_name && $item_category && $appraisal > 0 && $loan_amount > 0) {
             $pdo->prepare("INSERT INTO pawn_transactions (tenant_id,ticket_no,customer_name,contact_number,email,address,birthdate,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,item_category,item_description,item_condition,item_weight,item_karat,serial_number,appraisal_value,loan_amount,interest_rate,claim_term,interest_amount,total_redeem,pawn_date,maturity_date,expiry_date,status,created_by,assigned_staff_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?)")
@@ -449,11 +448,7 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     <div class="stats-row">
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(59,130,246,.15);"><span class="material-symbols-outlined" style="color:#93c5fd;">confirmation_number</span></div></div><div class="stat-value"><?=$my_tickets_today?></div><div class="stat-label">Tickets Today</div></div>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(236,72,153,.15);"><span class="material-symbols-outlined" style="color:#f9a8d4;">shield</span></div></div><div class="stat-value"><?=$active_count?></div><div class="stat-label">My Active Tickets</div></div>
-      <?php
-        $cust_today_stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND created_by=? AND DATE(registered_at)=?");
-        $cust_today_stmt->execute([$tid, $u['id'], $today]);
-        $cust_today = (int)$cust_today_stmt->fetchColumn();
-      ?>
+      <?php $cust_today=(int)$pdo->query("SELECT COUNT(*) FROM customers WHERE tenant_id=$tid AND created_by={$u['id']} AND DATE(registered_at)='$today'")->fetchColumn(); ?>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">person_add</span></div></div><div class="stat-value"><?=$cust_today?></div><div class="stat-label">Customers Today</div></div>
       <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(139,92,246,.15);"><span class="material-symbols-outlined" style="color:#c4b5fd;">cancel_presentation</span></div></div><div class="stat-value"><?=count($my_void_reqs)?></div><div class="stat-label">Void Requests</div></div>
     </div>
@@ -561,43 +556,104 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div><a href="?page=register_customer" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ Register</a></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
-      <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Registered</th></tr></thead><tbody>
+      <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>ID Type</th><th>ID Photo</th><th>Registered</th></tr></thead><tbody>
       <?php foreach($customers as $c):?>
-      <tr><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td><td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td><td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td><td><?=$c['gender']?></td><td><?=htmlspecialchars($c['valid_id_type']??'—')?></td><td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td></tr>
+      <tr>
+        <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
+        <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
+        <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
+        <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
+        <td><?php if(!empty($c['valid_id_image'])):?>
+          <a href="<?=htmlspecialchars($c['valid_id_image'])?>" target="_blank" style="display:inline-block;">
+            <img src="<?=htmlspecialchars($c['valid_id_image'])?>" style="height:36px;border-radius:5px;border:1px solid rgba(255,255,255,.1);object-fit:cover;" onerror="this.style.display='none'">
+          </a>
+        <?php else:?><span style="color:rgba(255,255,255,.2);font-size:.73rem;">—</span><?php endif;?></td>
+        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
+      </tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
   <?php elseif($active_page==='register_customer'): ?>
-    <div style="max-width:700px;">
+    <div style="max-width:680px;">
       <div class="card">
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
           <input type="hidden" name="action" value="register_customer">
           <div class="card-title">Register New Customer</div>
           <div class="form-grid2">
-            <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Full Name * (Last, First M.)</label><input type="text" name="full_name" class="finput" placeholder="Rivera, Leala Vieann P." required></div>
-            <div class="fgroup"><label class="flabel">Contact Number *</label><input type="text" name="contact_number" class="finput" placeholder="+63XXXXXXXXX" required></div>
-            <div class="fgroup"><label class="flabel">Email</label><input type="email" name="email" class="finput" placeholder="email@example.com"></div>
-            <div class="fgroup"><label class="flabel">Birthdate</label><input type="date" name="birthdate" class="finput"></div>
-            <div class="fgroup"><label class="flabel">Gender</label><select name="gender" class="finput"><option>Male</option><option>Female</option><option>Other</option></select></div>
-            <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Address</label><input type="text" name="address" class="finput" placeholder="Street, City, Province"></div>
-            <div class="fgroup"><label class="flabel">Nationality</label><input type="text" name="nationality" class="finput" value="Filipino"></div>
-            <div class="fgroup"><label class="flabel">Birthplace</label><input type="text" name="birthplace" class="finput" placeholder="City, Province"></div>
-            <div class="fgroup"><label class="flabel">Source of Income</label><input type="text" name="source_of_income" class="finput" placeholder="Salary / Business / Allowance"></div>
-            <div class="fgroup"><label class="flabel">Nature of Work</label><input type="text" name="nature_of_work" class="finput" placeholder="Private / Government / Student"></div>
-            <div class="fgroup"><label class="flabel">Occupation</label><input type="text" name="occupation" class="finput" placeholder="e.g. Teacher / Student"></div>
-            <div class="fgroup"><label class="flabel">Business / Office / School</label><input type="text" name="business_office_school" class="finput" placeholder="Employer or School name"></div>
-            <div class="fgroup"><label class="flabel">Valid ID Type</label><select name="valid_id_type" class="finput"><option>Passport</option><option>Driver's License</option><option>PhilSys ID</option><option>UMID</option><option>Voter's ID</option><option>Postal ID</option></select></div>
-            <div class="fgroup"><label class="flabel">ID Number</label><input type="text" name="valid_id_number" class="finput" placeholder="ID Number"></div>
-            <!-- Mobile App Credentials -->
-            <div class="fgroup" style="grid-column:1/-1;margin-top:10px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);">
-              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:10px;">📱 Mobile App Login (Optional)</div>
+
+            <div class="fgroup" style="grid-column:1/-1;">
+              <label class="flabel">Full Name * (Last, First M.)</label>
+              <input type="text" name="full_name" class="finput" placeholder="Rivera, Juan D." required>
             </div>
-            <div class="fgroup"><label class="flabel">Mobile Username</label><input type="text" name="mob_username" class="finput" placeholder="e.g. juandelacruz"></div>
-            <div class="fgroup"><label class="flabel">Mobile Password <span style="font-weight:400;color:rgba(255,255,255,.3)">(min. 8 chars)</span></label><input type="password" name="mob_password" class="finput" placeholder="Customer can reset later"></div>
+
+            <div class="fgroup">
+              <label class="flabel">Contact Number *</label>
+              <input type="text" name="contact_number" class="finput" placeholder="+63XXXXXXXXX" required>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Email</label>
+              <input type="email" name="email" class="finput" placeholder="email@example.com">
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Birthdate</label>
+              <input type="date" name="birthdate" class="finput">
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Address</label>
+              <input type="text" name="address" class="finput" placeholder="Street, City, Province">
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Valid ID Type</label>
+              <select name="valid_id_type" class="finput">
+                <option value="">— Select —</option>
+                <option>Passport</option>
+                <option>Driver's License</option>
+                <option>PhilSys ID</option>
+                <option>UMID</option>
+                <option>Voter's ID</option>
+                <option>Postal ID</option>
+                <option>SSS ID</option>
+                <option>PRC ID</option>
+              </select>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">ID Number</label>
+              <input type="text" name="valid_id_number" class="finput" placeholder="ID Number">
+            </div>
+
+            <div class="fgroup" style="grid-column:1/-1;">
+              <label class="flabel">Valid ID Photo</label>
+              <input type="file" name="valid_id_photo" class="finput" accept="image/jpeg,image/png,image/webp" style="padding:8px;" onchange="previewId(this)">
+              <div style="margin-top:8px;">
+                <img id="id_preview" src="" style="display:none;max-height:140px;border-radius:8px;border:1px solid rgba(255,255,255,.12);object-fit:cover;">
+              </div>
+              <div style="font-size:.7rem;color:rgba(255,255,255,.25);margin-top:4px;">JPG, PNG, or WEBP · Max 5MB</div>
+            </div>
+
+            <!-- Mobile App Credentials -->
+            <div class="fgroup" style="grid-column:1/-1;margin-top:8px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);">
+              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.3);margin-bottom:10px;">📱 Mobile App Login <span style="font-weight:400;opacity:.6;">(Optional)</span></div>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Mobile Username</label>
+              <input type="text" name="mob_username" class="finput" placeholder="e.g. juandelacruz">
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Mobile Password <span style="font-weight:400;color:rgba(255,255,255,.3)">(min. 8 chars)</span></label>
+              <input type="password" name="mob_password" class="finput" placeholder="Customer sets this">
+            </div>
+
           </div>
-          <div style="display:flex;justify-content:flex-end;gap:9px;margin-top:6px;">
+          <div style="display:flex;justify-content:flex-end;gap:9px;margin-top:10px;">
             <a href="?page=customers" class="btn-xs">Cancel</a>
-            <button type="submit" class="btn-xs btn-primary-xs" style="padding:7px 16px;">Save Customer</button>
+            <button type="submit" class="btn-xs btn-primary-xs" style="padding:7px 18px;">Save Customer</button>
           </div>
         </form>
       </div>
@@ -637,6 +693,14 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
 </div>
 
 <script>
+function previewId(input) {
+  const preview = document.getElementById('id_preview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
 function openVoid(tn){document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;document.getElementById('voidModal').classList.add('open');}
 document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
