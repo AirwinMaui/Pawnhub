@@ -242,6 +242,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             if (!$error_msg) {
+                // Auto-create category if typed but not yet in shop_categories
+                if ($item_category !== '' && !$category_id) {
+                    // Check if category already exists for this tenant
+                    $chk_cat = $pdo->prepare("SELECT id FROM shop_categories WHERE tenant_id=? AND LOWER(name)=LOWER(?) LIMIT 1");
+                    $chk_cat->execute([$tid, $item_category]);
+                    $existing_cat = $chk_cat->fetchColumn();
+                    if ($existing_cat) {
+                        $category_id = $existing_cat;
+                    } else {
+                        // Auto-detect icon based on category name
+                        $cat_lower = strtolower($item_category);
+                        $auto_icon = match(true) {
+                            str_contains($cat_lower,'phone') || str_contains($cat_lower,'gadget') || str_contains($cat_lower,'mobile') => 'smartphone',
+                            str_contains($cat_lower,'laptop') || str_contains($cat_lower,'computer') => 'laptop',
+                            str_contains($cat_lower,'jewel') || str_contains($cat_lower,'ring') || str_contains($cat_lower,'necklace') => 'diamond',
+                            str_contains($cat_lower,'gold') || str_contains($cat_lower,'silver') => 'diamond',
+                            str_contains($cat_lower,'watch') => 'watch',
+                            str_contains($cat_lower,'camera') => 'photo_camera',
+                            str_contains($cat_lower,'bag') => 'shopping_bag',
+                            str_contains($cat_lower,'appliance') || str_contains($cat_lower,'tv') => 'tv',
+                            default => 'category',
+                        };
+                        $pdo->prepare("INSERT INTO shop_categories (tenant_id,name,icon,is_active,sort_order,created_at) VALUES (?,?,?,1,0,NOW())")
+                            ->execute([$tid, $item_category, $auto_icon]);
+                        $category_id = (int)$pdo->lastInsertId();
+                    }
+                }
+
                 $pdo->prepare("
                     INSERT INTO item_inventory
                         (tenant_id, item_name, item_category, category_id, condition_notes,
