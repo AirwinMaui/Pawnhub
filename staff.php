@@ -124,6 +124,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $item_weight    = floatval($_POST['item_weight'] ?? 0);
         $item_karat     = trim($_POST['item_karat']      ?? '');
         $serial_number  = trim($_POST['serial_number']   ?? '');
+
+        // Handle item photo upload
+        $item_photo_path = null;
+        if (!empty($_FILES['item_photo']['name'])) {
+            $upload_dir = __DIR__ . '/uploads/pawn_items/';
+            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+            $ext = strtolower(pathinfo($_FILES['item_photo']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg','jpeg','png','webp'];
+            if (in_array($ext, $allowed) && $_FILES['item_photo']['size'] <= 5242880) {
+                $filename = 'item_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                if (move_uploaded_file($_FILES['item_photo']['tmp_name'], $upload_dir . $filename)) {
+                    $item_photo_path = 'uploads/pawn_items/' . $filename;
+                }
+            }
+        }
         $appraisal      = floatval($_POST['appraisal_value'] ?? 0);
         $loan_amount    = floatval($_POST['loan_amount']     ?? 0);
         $interest_rate  = floatval($_POST['interest_rate']   ?? 0.02);
@@ -145,8 +160,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ->execute([$tid,$ticket_no,$customer_name,$contact_number,$email,$address,$birthdate?:null,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$valid_id_type,$valid_id_no,$item_category,$item_desc,$item_condition,$item_weight,$item_karat,$serial_number,$appraisal,$loan_amount,$interest_rate,$claim_term,$interest_amount,$total_redeem,$pawn_date,$maturity_date,$expiry_date,$u['id'],$u['id']]);
 
             $inv_id = $pdo->lastInsertId();
-            $pdo->prepare("INSERT INTO item_inventory (tenant_id,pawn_id,ticket_no,item_name,item_category,serial_no,condition_notes,appraisal_value,loan_amount,status) VALUES (?,?,?,?,?,?,?,?,?,'pawned')")
-                ->execute([$tid,$inv_id,$ticket_no,$item_desc,$item_category,$serial_number,$item_condition,$appraisal,$loan_amount]);
+            $pdo->prepare("INSERT INTO item_inventory (tenant_id,pawn_id,ticket_no,item_name,item_category,serial_no,condition_notes,appraisal_value,loan_amount,item_photo_path,status) VALUES (?,?,?,?,?,?,?,?,?,?,'pawned')")
+                ->execute([$tid,$inv_id,$ticket_no,$item_desc,$item_category,$serial_number,$item_condition,$appraisal,$loan_amount,$item_photo_path]);
 
             $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address) VALUES (?,?,?,?,'PAWN_CREATE','pawn_transaction',?,?,?)")
                 ->execute([$tid,$u['id'],$u['username'],'staff',$ticket_no,"Created pawn ticket",$_SERVER['REMOTE_ADDR']??'::1']);
@@ -481,7 +496,7 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     </div>
 
   <?php elseif($active_page==='create_ticket'): ?>
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="create_ticket">
       <input type="hidden" name="customer_id" id="selected_customer_id" value="">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:1020px;">
@@ -544,6 +559,14 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
               <div class="fgroup"><label class="flabel">Weight (g)</label><input type="number" name="item_weight" class="finput" placeholder="0.00" step="0.01"></div>
               <div class="fgroup"><label class="flabel">Karat</label><input type="text" name="item_karat" class="finput" placeholder="18k / 24k"></div>
               <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Serial No.</label><input type="text" name="serial_number" class="finput" placeholder="Serial / Reference No."></div>
+              <div class="fgroup" style="grid-column:1/-1;">
+                <label class="flabel">Item Photo</label>
+                <input type="file" name="item_photo" class="finput" accept="image/jpeg,image/png,image/webp" style="padding:8px;" onchange="previewItemPhoto(this)">
+                <div style="margin-top:8px;">
+                  <img id="item_photo_preview" src="" style="display:none;max-height:130px;border-radius:8px;border:1px solid rgba(255,255,255,.12);object-fit:cover;">
+                </div>
+                <div style="font-size:.7rem;color:rgba(255,255,255,.25);margin-top:4px;">JPG, PNG, or WEBP · Max 5MB</div>
+              </div>
             </div>
           </div>
           <div class="card" style="margin-bottom:16px;">
@@ -725,13 +748,15 @@ function searchCustomers(val) {
   const q = val.toLowerCase();
   let any = false;
   opts.forEach(o => {
-    const match = o.dataset.name.toLowerCase().includes(q) || 
-                  o.dataset.contact.includes(q);
+    const name = o.dataset.name.toLowerCase();
+    const contact = o.dataset.contact;
+    // Match if any word in name starts with query, or contact includes query
+    const words = name.split(/[\s,]+/);
+    const match = words.some(w => w.startsWith(q)) || contact.includes(q);
     o.style.display = match ? 'block' : 'none';
     if (match) any = true;
   });
   dropdown.style.display = any ? 'block' : 'none';
-  // Clear selected customer if typing new name
   document.getElementById('selected_customer_id').value = '';
 }
 
@@ -754,6 +779,14 @@ function selectCustomer(el) {
   document.getElementById('cust_dropdown').style.display = 'none';
 }
 
+function previewItemPhoto(input) {
+  const preview = document.getElementById('item_photo_preview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
 function previewId(input) {
   const preview = document.getElementById('id_preview');
   if (input.files && input.files[0]) {
