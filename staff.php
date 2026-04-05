@@ -113,15 +113,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $email          = trim($_POST['email']           ?? '');
         $address        = trim($_POST['address']         ?? '');
         $birthdate      = trim($_POST['birthdate']       ?? '');
-        $gender         = trim($_POST['gender']          ?? 'Male');
-        $nationality    = trim($_POST['nationality']     ?? 'Filipino');
-        $birthplace     = trim($_POST['birthplace']      ?? '');
-        $src_income     = trim($_POST['source_of_income']?? '');
-        $nature_work    = trim($_POST['nature_of_work']  ?? '');
-        $occupation     = trim($_POST['occupation']      ?? '');
-        $business       = trim($_POST['business_office_school'] ?? '');
         $valid_id_type  = trim($_POST['valid_id_type']   ?? '');
         $valid_id_no    = trim($_POST['valid_id_number'] ?? '');
+        // Unused fields — kept as empty for DB compatibility
+        $gender      = ''; $nationality = 'Filipino'; $birthplace  = '';
+        $src_income  = ''; $nature_work = ''; $occupation  = ''; $business = '';
         $item_category  = trim($_POST['item_category']   ?? '');
         $item_desc      = trim($_POST['item_description']?? '');
         $item_condition = trim($_POST['item_condition']  ?? 'Excellent');
@@ -487,25 +483,54 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
   <?php elseif($active_page==='create_ticket'): ?>
     <form method="POST">
       <input type="hidden" name="action" value="create_ticket">
+      <input type="hidden" name="customer_id" id="selected_customer_id" value="">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:1020px;">
         <div>
           <div class="card" style="margin-bottom:16px;">
             <div class="card-title">Customer Information</div>
             <div class="form-grid2">
-              <div class="fgroup"><label class="flabel">Customer Name *</label><input type="text" name="customer_name" class="finput" placeholder="Last, First M." required></div>
-              <div class="fgroup"><label class="flabel">Contact Number *</label><input type="text" name="contact_number" class="finput" placeholder="+63XXXXXXXXX" required></div>
-              <div class="fgroup"><label class="flabel">Email</label><input type="email" name="email" class="finput" placeholder="email@example.com"></div>
-              <div class="fgroup"><label class="flabel">Birthdate</label><input type="date" name="birthdate" class="finput"></div>
-              <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Address</label><input type="text" name="address" class="finput" placeholder="Street, City, Province"></div>
-              <div class="fgroup"><label class="flabel">Gender</label><select name="gender" class="finput"><option>Male</option><option>Female</option><option>Other</option></select></div>
-              <div class="fgroup"><label class="flabel">Nationality</label><input type="text" name="nationality" class="finput" value="Filipino"></div>
-              <div class="fgroup"><label class="flabel">Birthplace</label><input type="text" name="birthplace" class="finput" placeholder="City, Province"></div>
-              <div class="fgroup"><label class="flabel">Source of Income</label><input type="text" name="source_of_income" class="finput" placeholder="Salary / Business"></div>
-              <div class="fgroup"><label class="flabel">Nature of Work</label><input type="text" name="nature_of_work" class="finput" placeholder="Private / Government"></div>
-              <div class="fgroup"><label class="flabel">Occupation</label><input type="text" name="occupation" class="finput" placeholder="e.g. Teacher"></div>
-              <div class="fgroup"><label class="flabel">Business / School</label><input type="text" name="business_office_school" class="finput" placeholder="Employer / School"></div>
-              <div class="fgroup"><label class="flabel">Valid ID Type *</label><select name="valid_id_type" class="finput"><option>Passport</option><option>Driver's License</option><option>PhilSys ID</option><option>UMID</option><option>Voter's ID</option><option>Postal ID</option></select></div>
-              <div class="fgroup"><label class="flabel">ID Number *</label><input type="text" name="valid_id_number" class="finput" placeholder="ID Number" required></div>
+
+              <!-- Customer Name with autocomplete -->
+              <div class="fgroup" style="grid-column:1/-1;position:relative;">
+                <label class="flabel">Customer Name * <span style="font-weight:400;color:rgba(255,255,255,.3);">(type to search registered customers)</span></label>
+                <input type="text" name="customer_name" id="cust_name_input" class="finput"
+                  placeholder="Last, First M." required autocomplete="off"
+                  oninput="searchCustomers(this.value)"
+                  onblur="setTimeout(()=>document.getElementById('cust_dropdown').style.display='none',200)">
+                <div id="cust_dropdown" style="display:none;position:absolute;z-index:999;background:#0a0d14;border:1px solid rgba(255,255,255,.15);border-radius:10px;margin-top:4px;width:100%;max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.6);">
+                  <?php foreach($customers as $c): ?>
+                  <div class="cust-opt"
+                    data-name="<?=htmlspecialchars($c['full_name'])?>"
+                    data-contact="<?=htmlspecialchars($c['contact_number']??'')?>"
+                    data-email="<?=htmlspecialchars($c['email']??'')?>"
+                    data-birthdate="<?=htmlspecialchars($c['birthdate']??'')?>"
+                    data-address="<?=htmlspecialchars($c['address']??'')?>"
+                    data-id_type="<?=htmlspecialchars($c['valid_id_type']??'')?>"
+                    data-id_number="<?=htmlspecialchars($c['valid_id_number']??'')?>"
+                    data-id="<?=$c['id']?>"
+                    onclick="selectCustomer(this)"
+                    style="padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);">
+                    <div style="font-size:.83rem;font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></div>
+                    <div style="font-size:.72rem;color:rgba(255,255,255,.4);font-family:monospace;"><?=htmlspecialchars($c['contact_number']??'')?></div>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+
+              <div class="fgroup"><label class="flabel">Contact Number *</label><input type="text" name="contact_number" id="cust_contact" class="finput" placeholder="+63XXXXXXXXX" required></div>
+              <div class="fgroup"><label class="flabel">Email</label><input type="email" name="email" id="cust_email" class="finput" placeholder="email@example.com"></div>
+              <div class="fgroup"><label class="flabel">Birthdate</label><input type="date" name="birthdate" id="cust_birthdate" class="finput"></div>
+              <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Address</label><input type="text" name="address" id="cust_address" class="finput" placeholder="Street, City, Province"></div>
+              <div class="fgroup"><label class="flabel">Valid ID Type</label>
+                <select name="valid_id_type" id="cust_id_type" class="finput">
+                  <option value="">— Select —</option>
+                  <option>Passport</option><option>Driver's License</option>
+                  <option>PhilSys ID</option><option>UMID</option>
+                  <option>Voter's ID</option><option>Postal ID</option>
+                  <option>SSS ID</option><option>PRC ID</option>
+                </select>
+              </div>
+              <div class="fgroup"><label class="flabel">ID Number</label><input type="text" name="valid_id_number" id="cust_id_number" class="finput" placeholder="ID Number"></div>
             </div>
           </div>
         </div>
@@ -693,6 +718,42 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
 </div>
 
 <script>
+function searchCustomers(val) {
+  const dropdown = document.getElementById('cust_dropdown');
+  const opts = document.querySelectorAll('.cust-opt');
+  if (val.length < 1) { dropdown.style.display = 'none'; return; }
+  const q = val.toLowerCase();
+  let any = false;
+  opts.forEach(o => {
+    const match = o.dataset.name.toLowerCase().includes(q) || 
+                  o.dataset.contact.includes(q);
+    o.style.display = match ? 'block' : 'none';
+    if (match) any = true;
+  });
+  dropdown.style.display = any ? 'block' : 'none';
+  // Clear selected customer if typing new name
+  document.getElementById('selected_customer_id').value = '';
+}
+
+function selectCustomer(el) {
+  document.getElementById('cust_name_input').value    = el.dataset.name;
+  document.getElementById('cust_contact').value       = el.dataset.contact;
+  document.getElementById('cust_email').value         = el.dataset.email;
+  document.getElementById('cust_birthdate').value     = el.dataset.birthdate;
+  document.getElementById('cust_address').value       = el.dataset.address;
+  document.getElementById('selected_customer_id').value = el.dataset.id;
+
+  // Set ID type dropdown
+  const idSel = document.getElementById('cust_id_type');
+  for (let o of idSel.options) {
+    if (o.value === el.dataset.id_type || o.text === el.dataset.id_type) {
+      o.selected = true; break;
+    }
+  }
+  document.getElementById('cust_id_number').value = el.dataset.id_number;
+  document.getElementById('cust_dropdown').style.display = 'none';
+}
+
 function previewId(input) {
   const preview = document.getElementById('id_preview');
   if (input.files && input.files[0]) {
