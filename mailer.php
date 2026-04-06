@@ -385,15 +385,15 @@ function sendSubscriptionExpiring(
     int    $daysLeft,
     string $slug
 ): bool {
-    $loginLink    = APP_URL . '/' . urlencode($slug);
-    $formatted    = date('F d, Y', strtotime($expiryDate));
-    $urgencyColor = $daysLeft <= 1 ? '#dc2626' : ($daysLeft <= 3 ? '#ea580c' : '#d97706');
-    $urgencyBg    = $daysLeft <= 1 ? '#fef2f2' : ($daysLeft <= 3 ? '#fff7ed' : '#fffbeb');
-    $urgencyBorder= $daysLeft <= 1 ? '#fecaca' : ($daysLeft <= 3 ? '#fed7aa' : '#fde68a');
-    $dayWord      = $daysLeft === 1 ? '1 day'  : "{$daysLeft} days";
-    $subject      = $daysLeft <= 1
+    $loginLink     = APP_URL . '/' . urlencode($slug);
+    $formatted     = date('F d, Y', strtotime($expiryDate));
+    $dayWord       = $daysLeft === 1 ? '1 day' : "{$daysLeft} days";
+    $urgencyColor  = $daysLeft <= 1 ? '#dc2626' : ($daysLeft <= 3 ? '#ea580c' : '#d97706');
+    $urgencyBg     = $daysLeft <= 1 ? '#fef2f2' : ($daysLeft <= 3 ? '#fff7ed' : '#fffbeb');
+    $urgencyBorder = $daysLeft <= 1 ? '#fecaca' : ($daysLeft <= 3 ? '#fed7aa' : '#fde68a');
+    $subject       = $daysLeft <= 1
         ? "⚠️ URGENT: Your PawnHub subscription expires TOMORROW!"
-        : "⏰ Your PawnHub subscription expires in {$dayWord}";
+        : "⏰ Your PawnHub subscription expires in {$dayWord} — {$businessName}";
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -408,15 +408,13 @@ function sendSubscriptionExpiring(
       <div style="padding:36px;">
         <div style="background:' . $urgencyBg . ';border:1px solid ' . $urgencyBorder . ';border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
           <p style="font-size:2rem;margin:0 0 6px;">⏰</p>
-          <p style="color:' . $urgencyColor . ';font-size:1.1rem;font-weight:800;margin:0 0 4px;">
-            Subscription Expiring in ' . $dayWord . '
-          </p>
+          <p style="color:' . $urgencyColor . ';font-size:1.1rem;font-weight:800;margin:0 0 4px;">Subscription Expiring in ' . $dayWord . '</p>
           <p style="color:' . $urgencyColor . ';font-size:.84rem;margin:0;">Expires on <strong>' . $formatted . '</strong></p>
         </div>
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
           This is a reminder that your <strong>' . htmlspecialchars($businessName) . '</strong> subscription
-          on PawnHub (<strong>' . htmlspecialchars($plan) . ' Plan</strong>) will expire in
+          (<strong>' . htmlspecialchars($plan) . ' Plan</strong>) will expire in
           <strong style="color:' . $urgencyColor . ';">' . $dayWord . '</strong>.<br><br>
           To avoid any interruption to your service, please renew your subscription as soon as possible.
         </p>
@@ -424,10 +422,10 @@ function sendSubscriptionExpiring(
           <p style="color:#334155;font-size:.85rem;font-weight:700;margin:0 0 10px;">📋 How to Renew:</p>
           <ol style="color:#475569;font-size:.84rem;line-height:1.9;margin:0;padding-left:18px;">
             <li>Sign in to your dashboard</li>
-            <li>Go to <strong>Settings → Subscription</strong></li>
+            <li>Click <strong>Subscription</strong> in the sidebar</li>
             <li>Click <strong>Request Renewal</strong></li>
-            <li>Upload your proof of payment</li>
-            <li>Wait for Super Admin confirmation</li>
+            <li>Fill in your payment details and submit</li>
+            <li>Wait for Super Admin confirmation (usually within 24 hours)</li>
           </ol>
         </div>
         <div style="text-align:center;margin:28px 0;">
@@ -472,21 +470,22 @@ function sendSubscriptionExpired(
       <div style="padding:36px;">
         <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
           <p style="font-size:2rem;margin:0 0 6px;">🔴</p>
-          <p style="color:#dc2626;font-size:1.1rem;font-weight:800;margin:0;">Subscription Expired</p>
+          <p style="color:#dc2626;font-size:1.1rem;font-weight:800;margin:0;">Your Subscription Has Expired</p>
         </div>
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
           Your <strong>' . htmlspecialchars($businessName) . '</strong> subscription
           (<strong>' . htmlspecialchars($plan) . ' Plan</strong>) on PawnHub has <strong style="color:#dc2626;">expired</strong>.<br><br>
-          Your account is currently in a limited state. Please renew your subscription to restore full access.
+          Your account is now in limited access mode. You have a short grace period to renew before your account is fully locked.
+          Please renew your subscription to restore full access.
         </p>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
           <p style="color:#334155;font-size:.85rem;font-weight:700;margin:0 0 10px;">📋 How to Renew:</p>
           <ol style="color:#475569;font-size:.84rem;line-height:1.9;margin:0;padding-left:18px;">
             <li>Sign in to your dashboard</li>
-            <li>Go to <strong>Settings → Subscription</strong></li>
+            <li>Click <strong>Subscription</strong> in the sidebar</li>
             <li>Click <strong>Request Renewal</strong></li>
-            <li>Upload your proof of payment</li>
+            <li>Fill in your payment details and submit</li>
             <li>Wait for Super Admin confirmation (usually within 24 hours)</li>
           </ol>
         </div>
@@ -542,6 +541,7 @@ function sendSubscriptionRenewed(
           Great news! Your <strong>' . htmlspecialchars($businessName) . '</strong> subscription
           (<strong>' . htmlspecialchars($plan) . ' Plan</strong>) has been successfully renewed.<br><br>
           Your account is now fully active and valid until <strong style="color:#15803d;">' . $formatted . '</strong>.
+          Thank you for continuing with PawnHub!
         </p>
         <div style="text-align:center;margin:28px 0;">
           <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
