@@ -1077,7 +1077,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
   <?php elseif($active_page==='shop_categories'): ?>
     <div class="page-hdr">
       <div><h2>Shop Categories</h2><p><?=count($shop_categories_list)?> categories</p></div>
-      <button onclick="document.getElementById('addCatModal').classList.add('open')" class="btn-sm btn-primary">
+      <button onclick="openAddCat()" class="btn-sm btn-primary">
         <span class="material-symbols-outlined" style="font-size:15px;">add</span>Add Category
       </button>
     </div>
@@ -1096,7 +1096,10 @@ tr:hover td{background:rgba(255,255,255,.02);}
           <td><span class="badge <?=$cat['is_active']?'b-green':'b-gray'?>"><?=$cat['is_active']?'Active':'Inactive'?></span></td>
           <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($cat['created_at']))?></td>
           <td style="display:flex;gap:6px;">
-            <button onclick="openEditCat(<?=$cat['id']?>,'<?=addslashes($cat['name'])?>','<?=addslashes($cat['icon']??'')?>')" class="btn-sm" style="font-size:.7rem;">
+            <button class="btn-sm btn-edit-cat" style="font-size:.7rem;"
+              data-id="<?=$cat['id']?>"
+              data-name="<?=htmlspecialchars($cat['name'],ENT_QUOTES)?>"
+              data-icon="<?=htmlspecialchars($cat['icon']??'',ENT_QUOTES)?>">
               <span class="material-symbols-outlined" style="font-size:13px;">edit</span>Edit
             </button>
             <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this category?')">
@@ -1388,7 +1391,7 @@ function openShopEdit(item, categories) {
   // Show current photo
   const photoDiv = document.getElementById('edit_current_photo');
   if (item.item_photo_path) {
-    photoDiv.innerHTML = '<img src="' + item.item_photo_path + '" style="height:60px;border-radius:8px;border:1px solid rgba(255,255,255,.1);" onerror="this.style.display='none'">';
+    photoDiv.innerHTML = '<img src="' + item.item_photo_path + '" style="height:60px;border-radius:8px;border:1px solid rgba(255,255,255,.1);" onerror="this.style.display=\'none\'">';
   } else {
     photoDiv.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.25);">No photo uploaded yet.</span>';
   }
@@ -1396,14 +1399,31 @@ function openShopEdit(item, categories) {
   document.getElementById('shopEditModal').classList.add('open');
 }
 
+function openAddCat() {
+  document.getElementById('cat_modal_title').textContent = 'Add Category';
+  document.getElementById('cat_id_field').value = '0';
+  document.getElementById('cat_name_field').value = '';
+  const sel = document.getElementById('cat_icon_field');
+  sel.value = 'category';
+  document.getElementById('addCatModal').classList.add('open');
+}
+
 function openEditCat(id, name, icon) {
   document.getElementById('cat_modal_title').textContent = 'Edit Category';
   document.getElementById('cat_id_field').value = id;
   document.getElementById('cat_name_field').value = name;
   const sel = document.getElementById('cat_icon_field');
-  for (let o of sel.options) { if (o.value === icon) { o.selected = true; break; } }
+  sel.value = icon || 'category';
   document.getElementById('addCatModal').classList.add('open');
 }
+
+// Delegate edit-cat button clicks (safe with any characters in name/icon)
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-edit-cat');
+  if (btn) {
+    openEditCat(btn.dataset.id, btn.dataset.name, btn.dataset.icon);
+  }
+});
 
 document.getElementById('shopEditModal').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('open');
