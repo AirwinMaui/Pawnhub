@@ -21,3 +21,8 @@ server {
 }
 EOF
 service nginx reload
+
+# ── Subscription Expiry Cron (runs daily at 8:00 AM UTC / 4:00 PM PHT) ──
+echo "0 8 * * * root php /home/site/wwwroot/subscription_cron.php --cron >> /home/site/wwwroot/cron.log 2>&1" > /etc/cron.d/pawnhub_subscription
+chmod 0644 /etc/cron.d/pawnhub_subscription
+service cron start

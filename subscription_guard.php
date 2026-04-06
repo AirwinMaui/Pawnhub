@@ -53,7 +53,7 @@ if ($now > $grace_end) {
     $page   = $_GET['page'] ?? '';
     if ($script === 'logout.php') return;
     if ($script === 'tenant_subscription.php') return;
-    if ($page === 'subscription') return; // tenant.php?page=subscription
+    if ($page === 'subscription') return; // tenant.php?page=subscription (fallback)
 
     http_response_code(402);
     ?>
@@ -106,7 +106,7 @@ h1{font-size:1.6rem;font-weight:800;color:#fff;margin:16px 0 8px;}
   </div>
   <div class="btn-row">
     <?php if ($role === 'admin'): ?>
-    <a href="/<?= urlencode($slug) ?>?page=subscription" class="btn btn-primary">🔄 Renew Subscription</a>
+    <a href="/tenant_subscription.php" class="btn btn-primary">🔄 Renew Subscription</a>
     <?php else: ?>
     <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:14px 18px;font-size:.82rem;color:rgba(255,255,255,.6);text-align:center;max-width:340px;">
       Please contact your branch administrator to renew your subscription.
@@ -167,7 +167,7 @@ function renderSubscriptionBanner(): string {
     }
 
     $renew_btn = $role === 'admin'
-        ? "<a href='{$link}' style='display:inline-flex;align-items:center;gap:5px;background:{$btn};color:#fff;text-decoration:none;padding:6px 16px;border-radius:8px;font-size:.78rem;font-weight:700;white-space:nowrap;flex-shrink:0;'>🔄 Renew Now</a>"
+        ? "<a href='/tenant_subscription.php' style='display:inline-flex;align-items:center;gap:5px;background:{$btn};color:#fff;text-decoration:none;padding:6px 16px;border-radius:8px;font-size:.78rem;font-weight:700;white-space:nowrap;flex-shrink:0;'>🔄 Renew Now</a>"
         : "<span style='font-size:.76rem;color:rgba(255,255,255,.5);flex-shrink:0;'>Contact your Admin to renew.</span>";
 
     return "

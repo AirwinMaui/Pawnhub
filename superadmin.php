@@ -297,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // ── RUN SUBSCRIPTION CRON MANUALLY ───────────────────────
     if ($_POST['action'] === 'run_sub_cron') {
-        $cron_secret = 'CHANGE_THIS_TO_A_RANDOM_SECRET_STRING';
+        $cron_secret = 'pawnhub_cron_2026_secret';
         header('Location: subscription_cron.php?cron_secret=' . urlencode($cron_secret));
         exit;
     }
