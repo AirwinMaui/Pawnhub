@@ -36,7 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         ->execute([$bname,$oname,$email,$phone,$address,$plan,$branches]);
                     $new_tid    = $pdo->lastInsertId();
 
-                    // ── AUTO-GENERATE SLUG FROM BUSINESS NAME ─
                     $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $bname));
                     $slug = $base_slug;
                     $slug_counter = 1;
@@ -47,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $slug = $base_slug . $slug_counter++;
                     }
                     $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $new_tid]);
-                    // ──────────────────────────────────────────
 
                     $token      = bin2hex(random_bytes(32));
                     $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
@@ -76,7 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $inv    = $pdo->prepare("SELECT i.*,t.business_name,t.slug FROM tenant_invitations i JOIN tenants t ON i.tenant_id=t.id WHERE i.id=?");
         $inv->execute([$inv_id]); $inv = $inv->fetch();
         if ($inv && in_array($inv['status'], ['pending', 'expired'])) {
-            // Generate a fresh token and reset status to 'pending'
             $token      = bin2hex(random_bytes(32));
             $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
             $pdo->prepare("UPDATE tenant_invitations SET token=?, expires_at=?, status='pending', used_at=NULL WHERE id=?")
@@ -124,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $sys_tagline = trim($_POST['system_tagline'] ?? 'Multi-Tenant Pawnshop Management');
         $plan_starter_staff    = max(1, intval($_POST['starter_staff']    ?? 3));
         $plan_starter_branches = max(1, intval($_POST['starter_branches'] ?? 1));
-        $plan_pro_staff        = intval($_POST['pro_staff']        ?? 0); // 0 = unlimited
+        $plan_pro_staff        = intval($_POST['pro_staff']        ?? 0);
         $plan_pro_branches     = max(1, intval($_POST['pro_branches']     ?? 3));
         $plan_ent_staff        = intval($_POST['ent_staff']        ?? 0);
         $plan_ent_branches     = max(1, intval($_POST['ent_branches']     ?? 10));
@@ -133,7 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $plan_ent_price        = trim($_POST['ent_price']     ?? '₱2,499/mo');
 
         try {
-            // Upsert into system_settings table
             $pdo->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES
                 ('system_name',?),('system_tagline',?),
                 ('starter_staff',?),('starter_branches',?),
@@ -158,12 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $tid = intval($_POST['tenant_id']);
         $uid = intval($_POST['user_id']);
 
-        // Fetch tenant info for email + slug generation
         $t_stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
         $t_stmt->execute([$tid]);
         $t_row = $t_stmt->fetch();
 
-        // Auto-generate slug if missing (signup.php tenants have no slug yet)
         $slug = $t_row['slug'] ?? '';
         if (empty($slug) && !empty($t_row['business_name'])) {
             $base_slug    = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $t_row['business_name']));
@@ -178,12 +172,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $tid]);
         }
 
-        // Approve tenant + user
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
 
-        // Send approval email only for self-registered tenants (signup.php flow)
-        // Invited tenants get their URL via sendTenantWelcome() in tenant_login.php after they register
         $inv_chk = $pdo->prepare("SELECT id FROM tenant_invitations WHERE tenant_id = ? LIMIT 1");
         $inv_chk->execute([$tid]);
         if (!$inv_chk->fetch() && $t_row && !empty($t_row['email'])) {
@@ -212,9 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($_POST['action'] === 'deactivate_tenant') {
         $target_tid = intval($_POST['tenant_id']);
-        // Deactivate the tenant
         $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")->execute([$target_tid]);
-        // Suspend all non-admin users of this tenant so they cannot login
         $pdo->prepare("UPDATE users SET is_suspended=1, suspended_at=NOW(), suspension_reason='Tenant deactivated by Super Admin.' WHERE tenant_id=? AND role != 'admin'")->execute([$target_tid]);
         try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'DEACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$target_tid,$u['id'],$u['username'],'super_admin',$target_tid,"Deactivated tenant ID $target_tid — all users suspended.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant deactivated. All branch users have been suspended.';
@@ -223,13 +212,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($_POST['action'] === 'activate_tenant') {
         $target_tid = intval($_POST['tenant_id']);
-        // Activate the tenant
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$target_tid]);
-        // Unsuspend all users that were suspended due to deactivation
         $pdo->prepare("UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL WHERE tenant_id=? AND suspension_reason='Tenant deactivated by Super Admin.'")->execute([$target_tid]);
         try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'ACTIVATE_TENANT','tenant',?,?,?,NOW())")->execute([$target_tid,$u['id'],$u['username'],'super_admin',$target_tid,"Activated tenant ID $target_tid — all users unsuspended.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant activated. All branch users have been unsuspended.';
         $active_page = 'tenants';
+    }
+
+    // ── APPROVE SUBSCRIPTION RENEWAL ─────────────────────────
+    if ($_POST['action'] === 'approve_sub_renewal') {
+        $rid = intval($_POST['renewal_id']);
+        $billing_months = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
+
+        $ren = $pdo->prepare("SELECT sr.*, t.email, t.owner_name, t.business_name, t.slug, t.plan, t.subscription_end FROM subscription_renewals sr JOIN tenants t ON sr.tenant_id = t.id WHERE sr.id = ? LIMIT 1");
+        $ren->execute([$rid]);
+        $ren = $ren->fetch();
+
+        if ($ren && $ren['status'] === 'pending') {
+            $months = $billing_months[$ren['billing_cycle']] ?? 1;
+            $base_date = (!empty($ren['subscription_end']) && strtotime($ren['subscription_end']) > time())
+                ? $ren['subscription_end']
+                : date('Y-m-d');
+            $new_end = date('Y-m-d', strtotime($base_date . " +{$months} months"));
+
+            $pdo->prepare("UPDATE subscription_renewals SET status='approved', reviewed_by=?, reviewed_at=NOW(), new_subscription_end=? WHERE id=?")
+                ->execute([$u['id'], $new_end, $rid]);
+            $pdo->prepare("UPDATE tenants SET subscription_start=CURDATE(), subscription_end=?, subscription_status='active', renewal_reminded_7d=0, renewal_reminded_3d=0, renewal_reminded_1d=0 WHERE id=?")
+                ->execute([$new_end, $ren['tenant_id']]);
+
+            if (function_exists('sendSubscriptionRenewed')) {
+                sendSubscriptionRenewed($ren['email'], $ren['owner_name'], $ren['business_name'], $ren['plan'], $new_end, $ren['slug']);
+            }
+
+            try { $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, 'renewed')")->execute([$ren['tenant_id']]); } catch(PDOException $e){}
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_RENEWAL_APPROVED','subscription',?,?,?,NOW())")->execute([$ren['tenant_id'],$u['id'],$u['username'],'super_admin',$rid,"Approved renewal for {$ren['business_name']}. New expiry: {$new_end}.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+
+            $success_msg = "✅ Renewal approved for <strong>{$ren['business_name']}</strong>! New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+        } else {
+            $error_msg = 'Renewal request not found or already processed.';
+        }
+        $active_page = 'subscriptions';
+    }
+
+    // ── REJECT SUBSCRIPTION RENEWAL ──────────────────────────
+    if ($_POST['action'] === 'reject_sub_renewal') {
+        $rid          = intval($_POST['renewal_id']);
+        $reject_notes = trim($_POST['reject_notes'] ?? '');
+
+        $ren = $pdo->prepare("SELECT sr.*, t.business_name FROM subscription_renewals sr JOIN tenants t ON sr.tenant_id=t.id WHERE sr.id=? LIMIT 1");
+        $ren->execute([$rid]);
+        $ren = $ren->fetch();
+
+        if ($ren && $ren['status'] === 'pending') {
+            $pdo->prepare("UPDATE subscription_renewals SET status='rejected', reviewed_by=?, reviewed_at=NOW(), notes=CONCAT(IFNULL(notes,''), IF(notes IS NOT NULL AND notes != '', '\n', ''), 'Rejected: ', ?) WHERE id=?")
+                ->execute([$u['id'], $reject_notes, $rid]);
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_RENEWAL_REJECTED','subscription',?,?,?,NOW())")->execute([$ren['tenant_id'],$u['id'],$u['username'],'super_admin',$rid,"Rejected renewal for {$ren['business_name']}. Reason: {$reject_notes}",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = "Renewal request for <strong>{$ren['business_name']}</strong> has been rejected.";
+        } else {
+            $error_msg = 'Request not found or already processed.';
+        }
+        $active_page = 'subscriptions';
+    }
+
+    // ── MANUALLY SET SUBSCRIPTION DATES ──────────────────────
+    if ($_POST['action'] === 'set_subscription') {
+        $tid_s     = intval($_POST['tenant_id']);
+        $start     = $_POST['sub_start'] ?? '';
+        $end_date  = $_POST['sub_end']   ?? '';
+        $new_plan  = in_array($_POST['sub_plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['sub_plan'] : null;
+
+        if ($start && $end_date && strtotime($start) && strtotime($end_date)) {
+            $updates = "subscription_start=?, subscription_end=?, subscription_status='active', renewal_reminded_7d=0, renewal_reminded_3d=0, renewal_reminded_1d=0";
+            $params  = [$start, $end_date];
+            if ($new_plan) { $updates .= ", plan=?"; $params[] = $new_plan; }
+            $params[] = $tid_s;
+            $pdo->prepare("UPDATE tenants SET {$updates} WHERE id=?")->execute($params);
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_MANUAL_SET','subscription',?,?,?,NOW())")->execute([$tid_s,$u['id'],$u['username'],'super_admin',$tid_s,"Manually set subscription: {$start} to {$end_date}." . ($new_plan ? " Plan: {$new_plan}." : ''),$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = 'Subscription dates updated successfully.';
+        } else {
+            $error_msg = 'Invalid dates provided.';
+        }
+        $active_page = 'subscriptions';
+    }
+
+    // ── RUN SUBSCRIPTION CRON MANUALLY ───────────────────────
+    if ($_POST['action'] === 'run_sub_cron') {
+        $cron_secret = 'CHANGE_THIS_TO_A_RANDOM_SECRET_STRING';
+        header('Location: subscription_cron.php?cron_secret=' . urlencode($cron_secret));
+        exit;
     }
 }
 
@@ -293,9 +363,8 @@ $sys_settings = [];
 try {
     $rows = $pdo->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll();
     foreach ($rows as $row) { $sys_settings[$row['setting_key']] = $row['setting_value']; }
-} catch (PDOException $e) { /* table may not exist yet */ }
+} catch (PDOException $e) {}
 
-// Defaults if not set
 $ss = array_merge([
     'system_name'       => 'PawnHub',
     'system_tagline'    => 'Multi-Tenant Pawnshop Management',
@@ -309,6 +378,32 @@ $ss = array_merge([
     'pro_price'         => '₱999/mo',
     'ent_price'         => '₱2,499/mo',
 ], $sys_settings);
+
+// ── SUBSCRIPTION DATA ─────────────────────────────────────────
+try {
+    $sub_renewals = $pdo->query("
+        SELECT sr.*, t.business_name, t.email, t.owner_name, t.slug, t.subscription_end, t.subscription_status,
+               u.fullname AS reviewed_by_name
+        FROM subscription_renewals sr
+        JOIN tenants t ON sr.tenant_id = t.id
+        LEFT JOIN users u ON sr.reviewed_by = u.id
+        ORDER BY FIELD(sr.status,'pending','approved','rejected'), sr.requested_at DESC
+        LIMIT 100
+    ")->fetchAll();
+} catch (PDOException $e) { $sub_renewals = []; }
+
+$pending_sub_renewals = array_filter($sub_renewals, fn($r) => $r['status'] === 'pending');
+$pending_sub_count    = count($pending_sub_renewals);
+
+try {
+    $all_tenants_sub = $pdo->query("
+        SELECT id, business_name, email, owner_name, plan, status, slug,
+               subscription_start, subscription_end, subscription_status,
+               DATEDIFF(subscription_end, CURDATE()) AS days_left
+        FROM tenants
+        ORDER BY subscription_end ASC
+    ")->fetchAll();
+} catch (PDOException $e) { $all_tenants_sub = []; }
 
 // ── FILTERS ──────────────────────────────────────────────────
 $report_type      = $_GET['report_type']    ?? 'tenant_activity';
@@ -459,6 +554,7 @@ try { $audit_actions_list = $pdo->query("SELECT DISTINCT action FROM audit_logs 
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>PawnHub — Super Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -533,18 +629,18 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 .summary-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
 .summary-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;}
 .summary-num{font-size:1.3rem;font-weight:800;color:var(--text);} .summary-lbl{font-size:.7rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
-/* Audit action badge colors */
 .act-approve,.act-activate{background:#dcfce7;color:#15803d;} .act-reject,.act-deactivate,.act-delete{background:#fee2e2;color:#dc2626;}
 .act-login{background:#f3e8ff;color:#7c3aed;} .act-logout{background:#f1f5f9;color:#475569;}
 .act-create,.act-add{background:#ccfbf1;color:#0f766e;} .act-update,.act-edit{background:#fef3c7;color:#b45309;} .act-other{background:#f1f5f9;color:#475569;}
-/* Rank badges */
 .rank-1{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e;border:1px solid #fcd34d;}
 .rank-2{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;}
 .rank-3{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;}
-/* Pagination */
 .pagination{display:flex;align-items:center;gap:6px;margin-top:16px;flex-wrap:wrap;}
 .page-btn{padding:5px 11px;border-radius:7px;font-size:.74rem;font-weight:600;border:1.5px solid var(--border);background:#fff;color:var(--text-m);text-decoration:none;transition:all .15s;}
 .page-btn:hover{background:var(--bg);} .page-btn.active{background:var(--blue-acc);color:#fff;border-color:var(--blue-acc);}
+/* Subscription page dark cards */
+.sub-stat-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;}
+.page-section{color:#fff;}
 @media(max-width:1200px){.stats-grid,.summary-grid{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr;}}
 @media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}}
 </style>
@@ -575,6 +671,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email Invitations
       <?php if($pending_inv>0):?><span class="sb-pill"><?=$pending_inv?></span><?php endif;?>
     </a>
+    <a href="?page=subscriptions" class="sb-item <?= $active_page==='subscriptions'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Subscriptions
+      <?php if($pending_sub_count>0):?><span class="sb-pill"><?=$pending_sub_count?></span><?php endif;?>
+    </a>
     <div class="sb-section">Analytics</div>
     <a href="?page=reports" class="sb-item <?= $active_page==='reports'?'active':'' ?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports
@@ -602,7 +702,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <span class="topbar-title">
-        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs','settings'=>'System Settings'];
+        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','subscriptions'=>'Subscription Management','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs','settings'=>'System Settings'];
         echo $titles[$active_page]??'Dashboard'; ?>
       </span>
       <span class="super-chip">SUPER ADMIN</span>
@@ -616,7 +716,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   </header>
 
   <div class="content">
-    <?php if($success_msg):?><div class="alert alert-success">✅ <?=htmlspecialchars($success_msg)?></div><?php endif;?>
+    <?php if($success_msg):?><div class="alert alert-success">✅ <?=$success_msg?></div><?php endif;?>
     <?php if($error_msg):?><div class="alert alert-error">⚠ <?=htmlspecialchars($error_msg)?></div><?php endif;?>
 
     <!-- ══ DASHBOARD ═══════════════════════════════════════════ -->
@@ -748,6 +848,272 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <?php endforeach;?></tbody></table><?php endif;?>
       </div>
 
+    <!-- ══ SUBSCRIPTIONS PAGE ═══════════════════════════════════ -->
+    <?php elseif($active_page==='subscriptions'): ?>
+    <div class="page-section" style="color:inherit;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-size:1.1rem;font-weight:800;color:var(--text);margin:0 0 2px;">Subscription Management</h2>
+          <p style="font-size:.78rem;color:var(--text-dim);margin:0;">Monitor tenant subscriptions, approve renewals, and manage billing.</p>
+        </div>
+        <form method="POST" action="" style="margin:0;">
+          <input type="hidden" name="action" value="run_sub_cron"/>
+          <button type="submit" class="btn-sm" style="display:flex;align-items:center;gap:6px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Run Expiry Check
+          </button>
+        </form>
+      </div>
+
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;">
+        <?php
+        $total_sub     = count($all_tenants_sub);
+        $active_sub    = count(array_filter($all_tenants_sub, fn($t) => $t['subscription_status'] === 'active' && ($t['days_left'] ?? 999) > 7));
+        $expiring_sub  = count(array_filter($all_tenants_sub, fn($t) => in_array($t['subscription_status'],['active','expiring_soon']) && isset($t['days_left']) && $t['days_left'] >= 0 && $t['days_left'] <= 7));
+        $expired_sub   = count(array_filter($all_tenants_sub, fn($t) => $t['subscription_status'] === 'expired' || (isset($t['days_left']) && $t['days_left'] < 0)));
+        $sub_stats = [
+          ['label'=>'Total Tenants',      'value'=>$total_sub,    'icon'=>'#2563eb', 'emoji'=>'🏢'],
+          ['label'=>'Active',             'value'=>$active_sub,   'icon'=>'#16a34a', 'emoji'=>'✅'],
+          ['label'=>'Expiring (≤7 days)', 'value'=>$expiring_sub, 'icon'=>'#d97706', 'emoji'=>'⚠️'],
+          ['label'=>'Expired',            'value'=>$expired_sub,  'icon'=>'#dc2626', 'emoji'=>'❌'],
+          ['label'=>'Pending Renewals',   'value'=>$pending_sub_count,'icon'=>'#7c3aed','emoji'=>'🔔'],
+        ];
+        foreach ($sub_stats as $s): ?>
+        <div class="stat-card">
+          <div>
+            <div class="stat-label"><?= $s['label'] ?></div>
+            <div class="stat-value" style="color:<?= $s['icon'] ?>;"><?= $s['value'] ?></div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <!-- Pending Renewals -->
+      <?php if (!empty($pending_sub_renewals)): ?>
+      <div class="card" style="border-color:#fde68a;margin-bottom:24px;">
+        <div class="card-hdr">
+          <span class="card-title" style="color:#b45309;">🔔 Pending Renewal Requests (<?= count($pending_sub_renewals) ?>)</span>
+        </div>
+        <?php foreach ($pending_sub_renewals as $pr): ?>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+              <p style="font-weight:700;color:var(--text);font-size:.92rem;margin:0 0 4px;"><?= htmlspecialchars($pr['business_name']) ?></p>
+              <p style="color:var(--text-dim);font-size:.78rem;margin:0 0 8px;"><?= htmlspecialchars($pr['email']) ?></p>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <span style="font-size:.78rem;color:var(--text-m);">📋 <strong><?= htmlspecialchars($pr['plan']) ?></strong> · <?= ucfirst($pr['billing_cycle']) ?></span>
+                <span style="font-size:.78rem;color:var(--text-m);">💳 <?= htmlspecialchars($pr['payment_method'] ?: '—') ?></span>
+                <?php if ($pr['payment_reference']): ?>
+                <span style="font-size:.78rem;color:var(--text-m);">🔖 Ref: <?= htmlspecialchars($pr['payment_reference']) ?></span>
+                <?php endif; ?>
+                <span style="font-size:.78rem;color:var(--text-dim);">🕐 <?= date('M d, Y h:i A', strtotime($pr['requested_at'])) ?></span>
+              </div>
+              <?php if ($pr['notes']): ?>
+              <p style="font-size:.78rem;color:var(--text-dim);margin:6px 0 0;font-style:italic;"><?= htmlspecialchars($pr['notes']) ?></p>
+              <?php endif; ?>
+              <p style="font-size:.74rem;color:var(--text-dim);margin:5px 0 0;">
+                Current expiry: <?= $pr['subscription_end'] ? date('M d, Y', strtotime($pr['subscription_end'])) : 'None' ?>
+              </p>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              <form method="POST" action="" style="margin:0;">
+                <input type="hidden" name="action" value="approve_sub_renewal"/>
+                <input type="hidden" name="renewal_id" value="<?= $pr['id'] ?>"/>
+                <button type="submit" class="btn-sm btn-success" onclick="return confirm('Approve this renewal?')">✓ Approve</button>
+              </form>
+              <button type="button" class="btn-sm btn-danger"
+                onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.add('open')">
+                ✗ Reject
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reject Modal per renewal -->
+        <div id="reject-modal-<?= $pr['id'] ?>" class="modal-overlay">
+          <div class="modal" style="width:420px;">
+            <div class="mhdr">
+              <div><div class="mtitle">✗ Reject Renewal Request</div><div class="msub"><?= htmlspecialchars($pr['business_name']) ?></div></div>
+              <button class="mclose" onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="mbody">
+              <form method="POST" action="">
+                <input type="hidden" name="action" value="reject_sub_renewal"/>
+                <input type="hidden" name="renewal_id" value="<?= $pr['id'] ?>"/>
+                <div style="margin-bottom:14px;">
+                  <label class="flabel">Reason for Rejection</label>
+                  <textarea name="reject_notes" class="finput" rows="3" style="resize:vertical;" placeholder="e.g. Payment not verified, invalid reference number..."></textarea>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                  <button type="button" class="btn-sm" onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.remove('open')">Cancel</button>
+                  <button type="submit" class="btn-sm btn-danger">Confirm Reject</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- All Tenant Subscriptions Table -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+          <span class="card-title">All Tenant Subscriptions</span>
+          <input type="text" id="sub-search" placeholder="Search tenant..." oninput="filterSubTable(this.value)"
+            style="border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;padding:7px 12px;outline:none;width:200px;"/>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="sub-table">
+            <thead>
+              <tr>
+                <th>Business</th><th>Plan</th><th>Start</th><th>Expiry</th><th>Days Left</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($all_tenants_sub as $ts):
+                $dl = $ts['days_left'];
+                $ss_status = $ts['subscription_status'];
+                if ($ts['subscription_end'] && strtotime($ts['subscription_end']) < strtotime('today')) {
+                    $ss_status = 'expired';
+                }
+                $sc = match(true) {
+                    $ss_status === 'expired'        => ['Expired',       '#dc2626','#fee2e2','#fecaca'],
+                    $ss_status === 'expiring_soon'  => ['Expiring Soon', '#d97706','#fef3c7','#fde68a'],
+                    $dl !== null && $dl <= 7        => ['Expiring Soon', '#d97706','#fef3c7','#fde68a'],
+                    $ss_status === 'active'         => ['Active',        '#15803d','#f0fdf4','#bbf7d0'],
+                    $ss_status === 'cancelled'      => ['Cancelled',     '#64748b','#f8fafc','#e2e8f0'],
+                    default                         => ['—',             '#64748b','#f8fafc','#e2e8f0'],
+                };
+              ?>
+              <tr class="sub-row" data-name="<?= strtolower(htmlspecialchars($ts['business_name'])) ?>">
+                <td>
+                  <div style="font-weight:600;"><?= htmlspecialchars($ts['business_name']) ?></div>
+                  <div style="font-size:.72rem;color:var(--text-dim);"><?= htmlspecialchars($ts['email']) ?></div>
+                </td>
+                <td><?= htmlspecialchars($ts['plan']) ?></td>
+                <td style="font-size:.78rem;color:var(--text-dim);"><?= $ts['subscription_start'] ? date('M d, Y', strtotime($ts['subscription_start'])) : '—' ?></td>
+                <td style="font-size:.78rem;"><?= $ts['subscription_end'] ? date('M d, Y', strtotime($ts['subscription_end'])) : '—' ?></td>
+                <td>
+                  <?php if ($dl !== null): ?>
+                  <span style="color:<?= $dl <= 0 ? '#dc2626' : ($dl <= 7 ? '#d97706' : ($dl <= 14 ? '#d97706' : 'var(--text-m)')) ?>;font-weight:<?= $dl <= 7 ? '700' : '400' ?>;">
+                    <?= $dl <= 0 ? 'Expired ' . abs($dl) . 'd ago' : $dl . ' days' ?>
+                  </span>
+                  <?php else: ?><span style="color:var(--text-dim);">—</span><?php endif; ?>
+                </td>
+                <td>
+                  <span style="display:inline-block;padding:3px 10px;border-radius:100px;font-size:.72rem;font-weight:700;color:<?= $sc[1] ?>;background:<?= $sc[2] ?>;border:1px solid <?= $sc[3] ?>;"><?= $sc[0] ?></span>
+                </td>
+                <td>
+                  <button type="button" class="btn-sm" style="font-size:.73rem;"
+                    onclick="openSetSubModal(<?= $ts['id'] ?>, '<?= addslashes($ts['business_name']) ?>', '<?= $ts['subscription_start'] ?? '' ?>', '<?= $ts['subscription_end'] ?? '' ?>', '<?= $ts['plan'] ?>')">
+                    ✏️ Set Dates
+                  </button>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Renewal History -->
+      <?php if (!empty($sub_renewals)): ?>
+      <div class="card" style="margin-top:8px;">
+        <div class="card-hdr"><span class="card-title">📋 All Renewal Requests</span></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <?php foreach (['Business','Plan','Billing','Method','Ref #','Amount','Status','Requested','Reviewed'] as $th): ?>
+                <th><?= $th ?></th>
+                <?php endforeach; ?>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($sub_renewals as $r):
+                $rc = match($r['status']) {
+                  'approved' => ['#15803d','#f0fdf4'], 'rejected' => ['#dc2626','#fee2e2'], default => ['#d97706','#fef3c7']
+                };
+              ?>
+              <tr>
+                <td style="font-weight:600;"><?= htmlspecialchars($r['business_name']) ?></td>
+                <td><?= htmlspecialchars($r['plan']) ?></td>
+                <td><?= ucfirst($r['billing_cycle']) ?></td>
+                <td style="color:var(--text-dim);"><?= htmlspecialchars($r['payment_method']?:'—') ?></td>
+                <td style="font-size:.75rem;color:var(--text-dim);"><?= htmlspecialchars($r['payment_reference']?:'—') ?></td>
+                <td style="font-weight:600;">₱<?= number_format($r['amount'],2) ?></td>
+                <td><span style="display:inline-block;padding:2px 9px;border-radius:100px;font-size:.7rem;font-weight:700;color:<?= $rc[0] ?>;background:<?= $rc[1] ?>;"><?= ucfirst($r['status']) ?></span></td>
+                <td style="font-size:.74rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
+                <td style="font-size:.74rem;color:var(--text-dim);"><?= $r['reviewed_at'] ? date('M d, Y', strtotime($r['reviewed_at'])) : '—' ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <?php endif; ?>
+
+    </div><!-- /page-section -->
+
+    <!-- Set Subscription Dates Modal -->
+    <div id="set-sub-modal" class="modal-overlay">
+      <div class="modal" style="width:460px;">
+        <div class="mhdr">
+          <div><div class="mtitle">✏️ Set Subscription Dates</div><div class="msub" id="set-sub-biz"></div></div>
+          <button class="mclose" onclick="document.getElementById('set-sub-modal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="mbody">
+          <form method="POST" action="">
+            <input type="hidden" name="action" value="set_subscription"/>
+            <input type="hidden" name="tenant_id" id="set-sub-tid"/>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+              <div>
+                <label class="flabel">Start Date</label>
+                <input type="date" name="sub_start" id="set-sub-start" class="finput"/>
+              </div>
+              <div>
+                <label class="flabel">End Date</label>
+                <input type="date" name="sub_end" id="set-sub-end" class="finput"/>
+              </div>
+            </div>
+            <div style="margin-bottom:18px;">
+              <label class="flabel">Plan Override (optional)</label>
+              <select name="sub_plan" id="set-sub-plan" class="finput">
+                <option value="">— Keep current plan —</option>
+                <option value="Starter">Starter</option>
+                <option value="Pro">Pro</option>
+                <option value="Enterprise">Enterprise</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button type="button" class="btn-sm" onclick="document.getElementById('set-sub-modal').classList.remove('open')">Cancel</button>
+              <button type="submit" class="btn-sm btn-primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function openSetSubModal(tid, biz, start, end, plan) {
+        document.getElementById('set-sub-tid').value = tid;
+        document.getElementById('set-sub-biz').textContent = biz;
+        document.getElementById('set-sub-start').value = start;
+        document.getElementById('set-sub-end').value = end;
+        document.getElementById('set-sub-plan').value = '';
+        document.getElementById('set-sub-modal').classList.add('open');
+    }
+    function filterSubTable(q) {
+        q = q.toLowerCase();
+        document.querySelectorAll('.sub-row').forEach(r => {
+            r.style.display = r.dataset.name.includes(q) ? '' : 'none';
+        });
+    }
+    </script>
+
     <!-- ══ REPORTS ══════════════════════════════════════════════ -->
     <?php elseif($active_page==='reports'): ?>
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
@@ -819,7 +1185,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         </div>
       </form>
 
-      <!-- Summary Cards -->
       <div class="summary-grid">
         <div class="summary-item"><div class="summary-num" style="color:var(--success);">₱<?=number_format($sales_summary['total_revenue']??0,2)?></div><div class="summary-lbl">Total Revenue</div></div>
         <div class="summary-item"><div class="summary-num" style="color:var(--blue-acc);"><?=number_format($sales_summary['total_transactions']??0)?></div><div class="summary-lbl">Total Transactions</div></div>
@@ -827,7 +1192,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="summary-item"><div class="summary-num" style="color:#7c3aed;">₱<?=number_format($sales_summary['avg_transaction']??0,2)?></div><div class="summary-lbl">Avg. Transaction</div></div>
       </div>
 
-      <!-- Revenue Trend Chart -->
       <div class="card">
         <div class="card-hdr"><span class="card-title">📈 Revenue Trend — <?=ucfirst($sales_period)?></span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
         <?php if(empty($sales_data)):?><div class="empty-state"><p>No transaction data for the selected period.</p></div>
@@ -838,7 +1202,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
 
       <div class="two-col">
-        <!-- Sales Per Tenant Table -->
         <div class="card" style="overflow-x:auto;">
           <div class="card-hdr"><span class="card-title">🏢 Sales Per Tenant</span></div>
           <?php if(empty($sales_per_tenant)):?><div class="empty-state"><p>No data.</p></div>
@@ -849,8 +1212,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <tfoot><tr style="background:#f8fafc;"><td colspan="3" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=number_format(array_sum(array_column($sales_per_tenant,'tx_count')))?></td><td style="font-weight:800;color:var(--success);">₱<?=number_format(array_sum(array_column($sales_per_tenant,'revenue')),2)?></td><td colspan="2"></td></tr></tfoot>
           </table><?php endif;?>
         </div>
-
-        <!-- Top 5 Tenants Bar -->
         <div class="card">
           <div class="card-hdr"><span class="card-title">🏆 Top Performing Tenants</span></div>
           <?php if(empty($top_tenants)):?><div class="empty-state"><p>No data.</p></div>
@@ -868,7 +1229,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         </div>
       </div>
 
-      <!-- Transaction History -->
       <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">📋 Transaction History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
         <?php if(empty($tx_history)):?><div class="empty-state"><p>No transactions found.</p></div>
@@ -884,7 +1244,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <form method="POST">
         <input type="hidden" name="action" value="save_system_settings">
 
-        <!-- System Branding -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr"><span class="card-title">🎨 System Branding</span></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
@@ -901,103 +1260,51 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           </div>
         </div>
 
-        <!-- Subscription Plan Settings -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr">
             <span class="card-title">📦 Subscription Plan Limits</span>
             <span style="font-size:.74rem;color:var(--text-dim);">These limits are enforced per tenant based on their plan.</span>
           </div>
-
-          <!-- Plan Cards -->
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
-
-            <!-- PLAN MODEL NOTE -->
             <div style="grid-column:1/-1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 16px;font-size:.78rem;color:#1d4ed8;margin-bottom:4px;">
               📍 <strong>1 subscription = 1 branch.</strong> Tenants subscribe per branch — plan determines features, not branch count.
             </div>
-
-            <!-- STARTER -->
             <div style="border:2px solid #e2e8f0;border-radius:12px;overflow:hidden;">
               <div style="background:#f1f5f9;padding:14px 16px;border-bottom:1px solid #e2e8f0;">
                 <div style="font-size:.9rem;font-weight:800;color:#475569;">Starter</div>
                 <div style="font-size:.75rem;color:#94a3b8;margin-top:2px;">Basic pawnshop operations</div>
               </div>
               <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-                <div>
-                  <label class="flabel">Price / Label</label>
-                  <input type="text" name="starter_price" class="finput" value="<?=htmlspecialchars($ss['starter_price'])?>" placeholder="Free">
-                </div>
-                <div>
-                  <label class="flabel">Max Staff + Cashiers</label>
-                  <input type="number" name="starter_staff" class="finput" value="<?=(int)$ss['starter_staff']?>" min="1" max="999">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit</div>
-                </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;">
-                  <div>✅ 1 Branch Manager</div>
-                  <div>✅ Pawn tickets &amp; customers</div>
-                  <div>✅ Inventory management</div>
-                  <div>✅ Basic reports</div>
-                  <div>✅ Email support</div>
-                </div>
+                <div><label class="flabel">Price / Label</label><input type="text" name="starter_price" class="finput" value="<?=htmlspecialchars($ss['starter_price'])?>" placeholder="Free"></div>
+                <div><label class="flabel">Max Staff + Cashiers</label><input type="number" name="starter_staff" class="finput" value="<?=(int)$ss['starter_staff']?>" min="1" max="999"><div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">Combined staff + cashier limit</div></div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;"><div>✅ 1 Branch Manager</div><div>✅ Pawn tickets &amp; customers</div><div>✅ Inventory management</div><div>✅ Basic reports</div><div>✅ Email support</div></div>
               </div>
             </div>
-
-            <!-- PRO -->
             <div style="border:2px solid #bfdbfe;border-radius:12px;overflow:hidden;">
               <div style="background:#eff6ff;padding:14px 16px;border-bottom:1px solid #bfdbfe;">
                 <div style="font-size:.9rem;font-weight:800;color:#1d4ed8;">Pro</div>
                 <div style="font-size:.75rem;color:#93c5fd;margin-top:2px;">For growing pawnshops</div>
               </div>
               <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-                <div>
-                  <label class="flabel">Price / Label</label>
-                  <input type="text" name="pro_price" class="finput" value="<?=htmlspecialchars($ss['pro_price'])?>" placeholder="₱999/mo">
-                </div>
-                <div>
-                  <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
-                  <input type="number" name="pro_staff" class="finput" value="<?=(int)$ss['pro_staff']?>" min="0">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 = no limit</div>
-                </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;">
-                  <div>✅ Everything in Starter</div>
-                  <div>✅ Unlimited staff &amp; cashiers</div>
-                  <div>✅ Advanced reports &amp; analytics</div>
-                  <div>✅ Custom branding &amp; theme</div>
-                  <div>✅ Priority support</div>
-                </div>
+                <div><label class="flabel">Price / Label</label><input type="text" name="pro_price" class="finput" value="<?=htmlspecialchars($ss['pro_price'])?>" placeholder="₱999/mo"></div>
+                <div><label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label><input type="number" name="pro_staff" class="finput" value="<?=(int)$ss['pro_staff']?>" min="0"><div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 = no limit</div></div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;"><div>✅ Everything in Starter</div><div>✅ Unlimited staff &amp; cashiers</div><div>✅ Advanced reports &amp; analytics</div><div>✅ Custom branding &amp; theme</div><div>✅ Priority support</div></div>
               </div>
             </div>
-
-            <!-- ENTERPRISE -->
             <div style="border:2px solid #ddd6fe;border-radius:12px;overflow:hidden;">
               <div style="background:#f3e8ff;padding:14px 16px;border-bottom:1px solid #ddd6fe;">
                 <div style="font-size:.9rem;font-weight:800;color:#7c3aed;">Enterprise</div>
                 <div style="font-size:.75rem;color:#c4b5fd;margin-top:2px;">Large pawnshop operations</div>
               </div>
               <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-                <div>
-                  <label class="flabel">Price / Label</label>
-                  <input type="text" name="ent_price" class="finput" value="<?=htmlspecialchars($ss['ent_price'])?>" placeholder="₱2,499/mo">
-                </div>
-                <div>
-                  <label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label>
-                  <input type="number" name="ent_staff" class="finput" value="<?=(int)$ss['ent_staff']?>" min="0">
-                  <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 = no limit</div>
-                </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;">
-                  <div>✅ Everything in Pro</div>
-                  <div>✅ White-label system name</div>
-                  <div>✅ Data export (CSV/PDF)</div>
-                  <div>✅ Dedicated account manager</div>
-                  <div>✅ 24/7 priority support</div>
-                </div>
+                <div><label class="flabel">Price / Label</label><input type="text" name="ent_price" class="finput" value="<?=htmlspecialchars($ss['ent_price'])?>" placeholder="₱2,499/mo"></div>
+                <div><label class="flabel">Max Staff + Cashiers <span style="color:#94a3b8;">(0 = unlimited)</span></label><input type="number" name="ent_staff" class="finput" value="<?=(int)$ss['ent_staff']?>" min="0"><div style="font-size:.7rem;color:var(--text-dim);margin-top:3px;">0 = no limit</div></div>
+                <div style="background:#f8fafc;border-radius:8px;padding:10px;font-size:.75rem;color:var(--text-m);line-height:1.8;"><div>✅ Everything in Pro</div><div>✅ White-label system name</div><div>✅ Data export (CSV/PDF)</div><div>✅ Dedicated account manager</div><div>✅ 24/7 priority support</div></div>
               </div>
             </div>
-
-          </div><!-- /plan grid -->
+          </div>
         </div>
 
-        <!-- User Role Permissions Info -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr"><span class="card-title">👤 User Role Permissions</span></div>
           <div style="overflow-x:auto;">
@@ -1005,51 +1312,30 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
               <thead><tr><th>Permission</th><th style="text-align:center;">Super Admin</th><th style="text-align:center;">Admin (Owner)</th><th style="text-align:center;">Manager</th><th style="text-align:center;">Staff</th><th style="text-align:center;">Cashier</th></tr></thead>
               <tbody>
                 <?php
-                // [label, super_admin, admin/owner, manager, staff, cashier]
                 $perms = [
-                  ['Manage Tenants',          true,  false, false, false, false],
-                  ['Approve/Reject Tenants',  true,  false, false, false, false],
-                  ['View Sales Report',       true,  false, false, false, false],
-                  ['View Audit Logs',         true,  false, false, false, false],
-                  ['System Settings',         true,  false, false, false, false],
-                  ['Invite Managers',         false, true,  false, false, false],
-                  ['Theme & Branding',        false, true,  false, false, false],
-                  ['View Tenant Reports',     false, true,  false, false, false],
-                  ['Manage Staff/Cashiers',   false, false, true,  false, false],
-                  ['Approve Void Requests',   false, false, true,  false, false],
-                  ['Approve Renewals',        false, false, true,  false, false],
-                  ['Create Pawn Tickets',     false, false, false, true,  false],
-                  ['Register Customers',      false, false, false, true,  false],
-                  ['Request Void',            false, false, false, true,  false],
-                  ['Process Payment',         false, false, false, true,  true ],
-                  ['View Ticket Status',      false, true,  true,  true,  true ],
+                  ['Manage Tenants',true,false,false,false,false],['Approve/Reject Tenants',true,false,false,false,false],
+                  ['View Sales Report',true,false,false,false,false],['View Audit Logs',true,false,false,false,false],
+                  ['System Settings',true,false,false,false,false],['Invite Managers',false,true,false,false,false],
+                  ['Theme & Branding',false,true,false,false,false],['View Tenant Reports',false,true,false,false,false],
+                  ['Manage Staff/Cashiers',false,false,true,false,false],['Approve Void Requests',false,false,true,false,false],
+                  ['Approve Renewals',false,false,true,false,false],['Create Pawn Tickets',false,false,false,true,false],
+                  ['Register Customers',false,false,false,true,false],['Request Void',false,false,false,true,false],
+                  ['Process Payment',false,false,false,true,true],['View Ticket Status',false,true,true,true,true],
                 ];
                 foreach($perms as [$label,$sa,$ow,$mg,$st,$ca]):?>
-                <tr>
-                  <td style="font-size:.8rem;font-weight:500;"><?=$label?></td>
-                  <?php foreach([$sa,$ow,$mg,$st,$ca] as $allowed):?>
-                  <td style="text-align:center;">
-                    <?php if($allowed):?>
-                      <span style="color:#16a34a;font-size:1rem;">✓</span>
-                    <?php else:?>
-                      <span style="color:#e2e8f0;font-size:1rem;">—</span>
-                    <?php endif;?>
-                  </td>
-                  <?php endforeach;?>
-                </tr>
+                <tr><td style="font-size:.8rem;font-weight:500;"><?=$label?></td>
+                <?php foreach([$sa,$ow,$mg,$st,$ca] as $allowed):?>
+                <td style="text-align:center;"><?php if($allowed):?><span style="color:#16a34a;font-size:1rem;">✓</span><?php else:?><span style="color:#e2e8f0;font-size:1rem;">—</span><?php endif;?></td>
+                <?php endforeach;?></tr>
                 <?php endforeach;?>
               </tbody>
             </table>
           </div>
-          <div style="margin-top:12px;font-size:.75rem;color:var(--text-dim);background:#f8fafc;border-radius:8px;padding:10px 14px;">
-            ℹ️ Role permissions are fixed by the system. Contact the developer to modify role-level access.
-          </div>
+          <div style="margin-top:12px;font-size:.75rem;color:var(--text-dim);background:#f8fafc;border-radius:8px;padding:10px 14px;">ℹ️ Role permissions are fixed by the system. Contact the developer to modify role-level access.</div>
         </div>
 
         <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
-          <button type="submit" class="btn-sm btn-primary" style="padding:10px 24px;font-size:.88rem;">
-            💾 Save Settings
-          </button>
+          <button type="submit" class="btn-sm btn-primary" style="padding:10px 24px;font-size:.88rem;">💾 Save Settings</button>
         </div>
       </form>
 
@@ -1081,7 +1367,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <div class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             <p>No audit log entries found for the selected filters.</p>
-            <p style="font-size:.75rem;margin-top:4px;color:#b0b8c8;">Logs are recorded automatically as Super Admin actions are performed.</p>
           </div>
         <?php else:?>
           <table>
@@ -1108,7 +1393,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             <?php endforeach;?>
             </tbody>
           </table>
-
           <?php if($audit_total_pages>1):
             $bu="?page=audit_logs&audit_from=".urlencode($audit_date_from)."&audit_to=".urlencode($audit_date_to)."&audit_action=".urlencode($audit_action)."&audit_actor=".urlencode($audit_actor);?>
           <div class="pagination">
@@ -1263,9 +1547,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 </div>
 
 <script>
-['approveModal','rejectModal','addTenantModal','planModal'].forEach(id=>{
-  const el = document.getElementById(id);
-  if(el) el.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+// Close modals when clicking backdrop
+document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('open');
+    });
 });
 function openApproveModal(tid,uid,name){document.getElementById('approve_tid').value=tid;document.getElementById('approve_uid').value=uid;document.getElementById('approve_sub').textContent='Business: '+name;document.getElementById('approveModal').classList.add('open');}
 function openRejectModal(tid,uid,name){document.getElementById('reject_tid').value=tid;document.getElementById('reject_uid').value=uid;document.getElementById('reject_sub').textContent='Business: '+name;document.getElementById('rejectModal').classList.add('open');}
