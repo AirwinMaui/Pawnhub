@@ -4,6 +4,73 @@ pawnhub_session_start('manager');
 require 'db.php';
 require 'theme_helper.php';
 
+require_once __DIR__ . '/vendor/autoload.php';
+
+use MicrosoftAzure\Storage\Blob\BlobRestProxy;
+use MicrosoftAzure\Storage\Blob\Models\CreateBlockBlobOptions;
+
+function validate_shop_image(array $file): array {
+    $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (empty($file['name']) || empty($file['tmp_name'])) {
+        throw new RuntimeException('Item photo is required.');
+    }
+
+    if (!is_uploaded_file($file['tmp_name'])) {
+        throw new RuntimeException('Invalid uploaded file.');
+    }
+
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowed, true)) {
+        throw new RuntimeException('Invalid photo. Use JPG/PNG/WEBP only.');
+    }
+
+    if (($file['size'] ?? 0) > 5 * 1024 * 1024) {
+        throw new RuntimeException('Invalid photo. Max file size is 5MB.');
+    }
+
+    return [$ext, $file['type'] ?? 'application/octet-stream'];
+}
+
+function blob_client(): BlobRestProxy {
+    $connectionString = getenv('AZURE_STORAGE_CONNECTION_STRING');
+    if (!$connectionString) {
+        throw new RuntimeException('Azure storage is not configured.');
+    }
+
+    return BlobRestProxy::createBlobService($connectionString);
+}
+
+function blob_container_name(): string {
+    return getenv('AZURE_BLOB_CONTAINER') ?: 'item-images';
+}
+
+function blob_base_url(): string {
+    return rtrim(getenv('AZURE_BLOB_BASE_URL') ?: 'https://pawnhubstorage.blob.core.windows.net/item-images', '/');
+}
+
+function upload_shop_photo_to_blob(array $file, int $tenantId, int $itemId): string {
+    [$ext, $mime] = validate_shop_image($file);
+
+    $container = blob_container_name();
+    $baseUrl = blob_base_url();
+    $client = blob_client();
+
+    $blobName = "tenants/{$tenantId}/items/{$itemId}/cover.{$ext}";
+
+    $content = fopen($file['tmp_name'], 'r');
+    if ($content === false) {
+        throw new RuntimeException('Unable to read uploaded file.');
+    }
+
+    $options = new CreateBlockBlobOptions();
+    $options->setContentType($mime);
+
+    $client->createBlockBlob($container, $blobName, $content, $options);
+
+    return "{$baseUrl}/{$blobName}";
+}
+
 function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $action, string $entity_type = '', string $entity_id = '', string $message = '', $tenant_id = null): void {
     try {
         $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
@@ -173,125 +240,177 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // ── SHOP: Toggle item visibility / update shop fields ─────
     if ($_POST['action'] === 'update_shop_item') {
-        $item_id        = intval($_POST['item_id'] ?? 0);
-        $is_visible     = intval($_POST['is_shop_visible'] ?? 0);
-        $is_featured    = intval($_POST['is_featured'] ?? 0);
-        $display_price  = floatval($_POST['display_price'] ?? 0);
-        $category_id    = intval($_POST['category_id'] ?? 0) ?: null;
-        $stock_qty      = intval($_POST['stock_qty'] ?? 1);
+    $item_id        = intval($_POST['item_id'] ?? 0);
+    $is_visible     = intval($_POST['is_shop_visible'] ?? 0);
+    $is_featured    = intval($_POST['is_featured'] ?? 0);
+    $display_price  = floatval($_POST['display_price'] ?? 0);
+    $category_id    = intval($_POST['category_id'] ?? 0) ?: null;
+    $stock_qty      = intval($_POST['stock_qty'] ?? 1);
 
-        // Handle photo upload
+    try {
         $photo_path = null;
+
         if (!empty($_FILES['item_photo']['name'])) {
-            $upload_dir = __DIR__ . '/uploads/shop/';
-            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-            $ext = strtolower(pathinfo($_FILES['item_photo']['name'], PATHINFO_EXTENSION));
-            $allowed = ['jpg','jpeg','png','webp'];
-            if (in_array($ext, $allowed)) {
-                $filename = 'shop_' . $item_id . '_' . time() . '.' . $ext;
-                if (move_uploaded_file($_FILES['item_photo']['tmp_name'], $upload_dir . $filename)) {
-                    $photo_path = 'uploads/shop/' . $filename;
-                }
-            }
+            $photo_path = upload_shop_photo_to_blob($_FILES['item_photo'], $tid, $item_id);
         }
 
         if ($photo_path) {
-            $pdo->prepare("UPDATE item_inventory SET is_shop_visible=?,is_featured=?,display_price=?,category_id=?,stock_qty=?,item_photo_path=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
-                ->execute([$is_visible,$is_featured,$display_price,$category_id,$stock_qty,$photo_path,$item_id,$tid]);
+            $pdo->prepare("
+                UPDATE item_inventory
+                SET is_shop_visible=?,
+                    is_featured=?,
+                    display_price=?,
+                    category_id=?,
+                    stock_qty=?,
+                    item_photo_path=?,
+                    updated_at=NOW()
+                WHERE id=? AND tenant_id=?
+            ")->execute([
+                $is_visible, $is_featured, $display_price, $category_id,
+                $stock_qty, $photo_path, $item_id, $tid
+            ]);
         } else {
-            $pdo->prepare("UPDATE item_inventory SET is_shop_visible=?,is_featured=?,display_price=?,category_id=?,stock_qty=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
-                ->execute([$is_visible,$is_featured,$display_price,$category_id,$stock_qty,$item_id,$tid]);
+            $pdo->prepare("
+                UPDATE item_inventory
+                SET is_shop_visible=?,
+                    is_featured=?,
+                    display_price=?,
+                    category_id=?,
+                    stock_qty=?,
+                    updated_at=NOW()
+                WHERE id=? AND tenant_id=?
+            ")->execute([
+                $is_visible, $is_featured, $display_price, $category_id,
+                $stock_qty, $item_id, $tid
+            ]);
         }
-        write_audit($pdo,$u['id'],$u['username'],'manager','SHOP_ITEM_UPDATE','item_inventory',(string)$item_id,"Shop item updated: visibility=$is_visible",$tid);
+
+        write_audit(
+            $pdo,
+            $u['id'],
+            $u['username'],
+            'manager',
+            'SHOP_ITEM_UPDATE',
+            'item_inventory',
+            (string)$item_id,
+            "Shop item updated: visibility=$is_visible",
+            $tid
+        );
+
         $success_msg = 'Shop item updated.';
         $active_page = 'shop_items';
+    } catch (Throwable $e) {
+        $error_msg = $e->getMessage();
+        $active_page = 'shop_items';
     }
+}
 
 
     // ── SHOP: Add New Item directly ───────────────────────────
     if ($_POST['action'] === 'add_shop_item') {
-        $item_name     = trim($_POST['item_name']     ?? '');
-        $item_category = trim($_POST['item_category'] ?? '');
-        $category_id   = intval($_POST['category_id'] ?? 0) ?: null;
-        $display_price = floatval($_POST['display_price'] ?? 0);
-        $condition     = trim($_POST['condition_notes'] ?? '');
-        $description   = trim($_POST['item_description'] ?? '');
-        $stock_qty     = intval($_POST['stock_qty'] ?? 1);
-        $is_featured   = intval($_POST['is_featured'] ?? 0);
+    $item_name     = trim($_POST['item_name'] ?? '');
+    $item_category = trim($_POST['item_category'] ?? '');
+    $category_id   = intval($_POST['category_id'] ?? 0) ?: null;
+    $display_price = floatval($_POST['display_price'] ?? 0);
+    $condition     = trim($_POST['condition_notes'] ?? '');
+    $stock_qty     = intval($_POST['stock_qty'] ?? 1);
+    $is_featured   = intval($_POST['is_featured'] ?? 0);
 
-        if ($item_name === '' || $display_price <= 0) {
-            $error_msg = 'Item name and display price are required.';
-            $active_page = 'add_shop_item';
-        } else {
-            // Handle photo upload
-            $photo_path = null;
-            if (!empty($_FILES['item_photo']['name'])) {
-                $upload_dir = __DIR__ . '/uploads/shop/';
-                if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-                $ext = strtolower(pathinfo($_FILES['item_photo']['name'], PATHINFO_EXTENSION));
-                $allowed = ['jpg','jpeg','png','webp'];
-                if (in_array($ext, $allowed) && $_FILES['item_photo']['size'] <= 5242880) {
-                    $filename = 'shop_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-                    if (move_uploaded_file($_FILES['item_photo']['tmp_name'], $upload_dir . $filename)) {
-                        $photo_path = 'uploads/shop/' . $filename;
-                    }
+    if ($item_name === '' || $display_price <= 0) {
+        $error_msg = 'Item name and display price are required.';
+        $active_page = 'add_shop_item';
+    } else {
+        try {
+            if (empty($_FILES['item_photo']['name'])) {
+                throw new RuntimeException('Item photo is required.');
+            }
+
+            // Validate image first
+            validate_shop_image($_FILES['item_photo']);
+
+            $pdo->beginTransaction();
+
+            // Auto-create / resolve category
+            if ($item_category !== '' && !$category_id) {
+                $chk_cat = $pdo->prepare("SELECT id FROM shop_categories WHERE tenant_id=? AND LOWER(name)=LOWER(?) LIMIT 1");
+                $chk_cat->execute([$tid, $item_category]);
+                $existing_cat = $chk_cat->fetchColumn();
+
+                if ($existing_cat) {
+                    $category_id = (int)$existing_cat;
                 } else {
-                    $error_msg = 'Invalid photo. Use JPG/PNG/WEBP under 5MB.';
-                    $active_page = 'add_shop_item';
+                    $cat_lower = strtolower($item_category);
+                    $auto_icon = match(true) {
+                        str_contains($cat_lower,'phone') || str_contains($cat_lower,'gadget') || str_contains($cat_lower,'mobile') => 'smartphone',
+                        str_contains($cat_lower,'laptop') || str_contains($cat_lower,'computer') => 'laptop',
+                        str_contains($cat_lower,'jewel') || str_contains($cat_lower,'ring') || str_contains($cat_lower,'necklace') => 'diamond',
+                        str_contains($cat_lower,'gold') || str_contains($cat_lower,'silver') => 'diamond',
+                        str_contains($cat_lower,'watch') => 'watch',
+                        str_contains($cat_lower,'camera') => 'photo_camera',
+                        str_contains($cat_lower,'bag') => 'shopping_bag',
+                        str_contains($cat_lower,'appliance') || str_contains($cat_lower,'tv') => 'tv',
+                        default => 'category',
+                    };
+
+                    $pdo->prepare("
+                        INSERT INTO shop_categories (tenant_id,name,icon,is_active,sort_order,created_at)
+                        VALUES (?,?,?,1,0,NOW())
+                    ")->execute([$tid, $item_category, $auto_icon]);
+
+                    $category_id = (int)$pdo->lastInsertId();
                 }
             }
 
-            if (!$error_msg) {
-                // Auto-create category if typed but not yet in shop_categories
-                if ($item_category !== '' && !$category_id) {
-                    // Check if category already exists for this tenant
-                    $chk_cat = $pdo->prepare("SELECT id FROM shop_categories WHERE tenant_id=? AND LOWER(name)=LOWER(?) LIMIT 1");
-                    $chk_cat->execute([$tid, $item_category]);
-                    $existing_cat = $chk_cat->fetchColumn();
-                    if ($existing_cat) {
-                        $category_id = $existing_cat;
-                    } else {
-                        // Auto-detect icon based on category name
-                        $cat_lower = strtolower($item_category);
-                        $auto_icon = match(true) {
-                            str_contains($cat_lower,'phone') || str_contains($cat_lower,'gadget') || str_contains($cat_lower,'mobile') => 'smartphone',
-                            str_contains($cat_lower,'laptop') || str_contains($cat_lower,'computer') => 'laptop',
-                            str_contains($cat_lower,'jewel') || str_contains($cat_lower,'ring') || str_contains($cat_lower,'necklace') => 'diamond',
-                            str_contains($cat_lower,'gold') || str_contains($cat_lower,'silver') => 'diamond',
-                            str_contains($cat_lower,'watch') => 'watch',
-                            str_contains($cat_lower,'camera') => 'photo_camera',
-                            str_contains($cat_lower,'bag') => 'shopping_bag',
-                            str_contains($cat_lower,'appliance') || str_contains($cat_lower,'tv') => 'tv',
-                            default => 'category',
-                        };
-                        $pdo->prepare("INSERT INTO shop_categories (tenant_id,name,icon,is_active,sort_order,created_at) VALUES (?,?,?,1,0,NOW())")
-                            ->execute([$tid, $item_category, $auto_icon]);
-                        $category_id = (int)$pdo->lastInsertId();
-                    }
-                }
+            // Insert item first with null photo
+            $pdo->prepare("
+                INSERT INTO item_inventory
+                    (tenant_id, item_name, item_category, category_id, condition_notes,
+                     display_price, appraisal_value, stock_qty, item_photo_path,
+                     is_shop_visible, is_featured, status, received_at)
+                VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NOW())
+            ")->execute([
+                $tid, $item_name, $item_category, $category_id, $condition,
+                $display_price, $display_price, $stock_qty, null,
+                $is_featured, 'available'
+            ]);
 
-                $pdo->prepare("
-                    INSERT INTO item_inventory
-                        (tenant_id, item_name, item_category, category_id, condition_notes,
-                         display_price, appraisal_value, stock_qty, item_photo_path,
-                         is_shop_visible, is_featured, status, received_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NOW())
-                ")->execute([
-                    $tid, $item_name, $item_category, $category_id, $condition,
-                    $display_price, $display_price, $stock_qty, $photo_path,
-                    $is_featured, 'available'
-                ]);
-                $new_id = (int)$pdo->lastInsertId();
-                write_audit($pdo,$u['id'],$u['username'],'manager','SHOP_ITEM_ADD','item_inventory',(string)$new_id,"Added shop item: $item_name",$tid);
-                $success_msg = "Item $item_name added to shop!";
-                $active_page = 'shop_items';
-                // Refresh shop items
-                $shop_items_stmt = $pdo->prepare("SELECT i.*, c.name AS cat_name FROM item_inventory i LEFT JOIN shop_categories c ON c.id=i.category_id WHERE i.tenant_id=? ORDER BY i.is_shop_visible DESC, i.is_featured DESC, i.id DESC LIMIT 200");
-                $shop_items_stmt->execute([$tid]);
-                $shop_items = $shop_items_stmt->fetchAll();
+            $new_id = (int)$pdo->lastInsertId();
+
+            // Upload to blob using item id
+            $photo_url = upload_shop_photo_to_blob($_FILES['item_photo'], $tid, $new_id);
+
+            // Save final blob URL
+            $pdo->prepare("
+                UPDATE item_inventory
+                SET item_photo_path = ?, updated_at = NOW()
+                WHERE id = ? AND tenant_id = ?
+            ")->execute([$photo_url, $new_id, $tid]);
+
+            $pdo->commit();
+
+            write_audit(
+                $pdo,
+                $u['id'],
+                $u['username'],
+                'manager',
+                'SHOP_ITEM_ADD',
+                'item_inventory',
+                (string)$new_id,
+                "Added shop item: $item_name",
+                $tid
+            );
+
+            $success_msg = "Item $item_name added to shop!";
+            $active_page = 'shop_items';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
             }
+            $error_msg = $e->getMessage();
+            $active_page = 'add_shop_item';
         }
     }
+}
 
     // Quick toggle visibility
     if ($_POST['action'] === 'toggle_shop_visible') {
