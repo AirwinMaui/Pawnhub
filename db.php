@@ -1,12 +1,10 @@
 <?php
-$dotenv = parse_ini_file(__DIR__ . '/.env');
-
 define('DB_HOST', 'pawnhub.mysql.database.azure.com');
 define('DB_USER', 'PawnhubAdmin');
-define('DB_PASS', $dotenv['DB_PASS']);
+define('DB_PASS', getenv('DB_PASS'));
 define('DB_NAME', 'pawnhub');
 define('DB_PORT', '3306');
-define('ANTHROPIC_API_KEY', $dotenv['ANTHROPIC_API_KEY']);
+define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY'));
 
 $ssl_cert = __DIR__ . '/certs/DigiCertGlobalRootG2.crt.pem';
 
