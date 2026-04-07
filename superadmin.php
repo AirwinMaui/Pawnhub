@@ -295,6 +295,149 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'subscriptions';
     }
 
+    // ── CHANGE SUPER ADMIN PASSWORD ───────────────────────────
+    if ($_POST['action'] === 'change_password') {
+        $old_pass  = $_POST['old_password']  ?? '';
+        $new_pass  = trim($_POST['new_password']  ?? '');
+        $conf_pass = trim($_POST['conf_password'] ?? '');
+
+        $me = $pdo->prepare("SELECT password FROM users WHERE id=? LIMIT 1");
+        $me->execute([$u['id']]);
+        $me = $me->fetch();
+
+        if (!$me || !password_verify($old_pass, $me['password'])) {
+            $error_msg = 'Current password is incorrect.';
+        } elseif (strlen($new_pass) < 8) {
+            $error_msg = 'New password must be at least 8 characters.';
+        } elseif ($new_pass !== $conf_pass) {
+            $error_msg = 'New passwords do not match.';
+        } else {
+            $pdo->prepare("UPDATE users SET password=? WHERE id=?")->execute([password_hash($new_pass, PASSWORD_BCRYPT), $u['id']]);
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (NULL,?,?,?,'CHANGE_PASSWORD','user',?,?,?,NOW())")->execute([$u['id'],$u['username'],'super_admin',$u['id'],'Super Admin changed their password.',$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = '✅ Password changed successfully!';
+        }
+        $active_page = 'settings';
+    }
+
+    // ── AI AUTO-REVIEW ALL PENDING PERMITS ────────────────────
+    if ($_POST['action'] === 'ai_review_all') {
+        $pending_permits = $pdo->query("
+            SELECT t.*, u.id AS admin_uid
+            FROM tenants t
+            LEFT JOIN users u ON u.tenant_id=t.id AND u.role='admin'
+            WHERE t.status='pending'
+              AND t.business_permit_url IS NOT NULL
+              AND t.business_permit_url != ''
+              AND t.business_permit_status IN ('pending_review','none')
+            LIMIT 20
+        ")->fetchAll();
+
+        $approved_count = 0;
+        $rejected_count = 0;
+
+        foreach ($pending_permits as $pt) {
+            $permit_path = __DIR__ . '/' . $pt['business_permit_url'];
+            if (!file_exists($permit_path)) continue;
+
+            $ext = strtolower(pathinfo($permit_path, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg','jpeg','png','webp'])) continue;
+
+            $imageData = base64_encode(file_get_contents($permit_path));
+            $mimeType  = mime_content_type($permit_path);
+
+            $payload = json_encode([
+                'model'      => 'claude-sonnet-4-20250514',
+                'max_tokens' => 800,
+                'messages'   => [[
+                    'role'    => 'user',
+                    'content' => [
+                        ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $mimeType, 'data' => $imageData]],
+                        ['type' => 'text',  'text'   => 'You are verifying a Philippine pawnshop business permit. Respond ONLY with JSON:
+{"is_valid_permit": true/false, "confidence": 0-100, "business_name": "", "owner_name": "", "permit_number": "", "rejection_reason": ""}
+is_valid_permit = true only if this is clearly a Philippine Mayor\'s Permit, DTI, SEC, or similar official business registration. Reject if blurry, incomplete, fake-looking, or non-business document.']
+                    ]
+                ]]
+            ]);
+
+            $ch = curl_init('https://api.anthropic.com/v1/messages');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_HTTPHEADER     => [
+                    'Content-Type: application/json',
+                    'x-api-key: ' . (defined('ANTHROPIC_API_KEY') ? ANTHROPIC_API_KEY : getenv('ANTHROPIC_API_KEY')),
+                    'anthropic-version: 2023-06-01'
+                ],
+                CURLOPT_TIMEOUT => 25,
+            ]);
+            $resp = curl_exec($ch);
+            curl_close($ch);
+
+            if (!$resp) continue;
+
+            $aiResp = json_decode($resp, true);
+            $text   = $aiResp['content'][0]['text'] ?? '';
+            preg_match('/\{.*\}/s', $text, $m);
+            $data = json_decode($m[0] ?? '{}', true);
+            if (!$data) continue;
+
+            $confidence = $data['confidence'] ?? 0;
+            $is_valid   = ($data['is_valid_permit'] ?? false) && $confidence >= 75;
+
+            if ($is_valid) {
+                // Auto-approve tenant + user
+                $slug = $pt['slug'] ?? '';
+                if (empty($slug) && !empty($pt['business_name'])) {
+                    $base_slug    = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $pt['business_name']));
+                    $slug         = $base_slug; $sc = 1;
+                    while (true) {
+                        $slug_chk = $pdo->prepare("SELECT id FROM tenants WHERE slug=? AND id!=?");
+                        $slug_chk->execute([$slug, $pt['id']]);
+                        if (!$slug_chk->fetch()) break;
+                        $slug = $base_slug . $sc++;
+                    }
+                    $pdo->prepare("UPDATE tenants SET slug=? WHERE id=?")->execute([$slug, $pt['id']]);
+                }
+
+                $pdo->prepare("UPDATE tenants SET status='active', business_permit_status='ai_approved', business_permit_data=?, ai_confidence=?, ai_reviewed_at=NOW() WHERE id=?")
+                    ->execute([json_encode($data), $confidence, $pt['id']]);
+
+                if ($pt['admin_uid']) {
+                    $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")
+                        ->execute([$u['id'], $pt['admin_uid']]);
+                }
+
+                // Send approval email
+                try {
+                    if (function_exists('sendTenantApproved')) {
+                        sendTenantApproved($pt['email'], $pt['owner_name'], $pt['business_name'], $slug);
+                    }
+                } catch (Throwable $e) {}
+
+                try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'AI_AUTO_APPROVED','tenant',?,?,?,NOW())")->execute([$pt['id'],$u['id'],$u['username'],'super_admin',$pt['id'],"AI auto-approved tenant \"{$pt['business_name']}\" (confidence: {$confidence}%)",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+                $approved_count++;
+
+            } else {
+                // Auto-reject
+                $reason = $data['rejection_reason'] ?? 'Business permit could not be verified by AI system.';
+                $pdo->prepare("UPDATE tenants SET business_permit_status='ai_rejected', business_permit_data=?, ai_confidence=?, ai_reviewed_at=NOW(), permit_rejection_reason=? WHERE id=?")
+                    ->execute([json_encode($data), $confidence, $reason, $pt['id']]);
+
+                try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'AI_AUTO_REJECTED','tenant',?,?,?,NOW())")->execute([$pt['id'],$u['id'],$u['username'],'super_admin',$pt['id'],"AI rejected tenant \"{$pt['business_name']}\" (confidence: {$confidence}%) — {$reason}",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+                $rejected_count++;
+            }
+        }
+
+        $total = $approved_count + $rejected_count;
+        if ($total === 0) {
+            $success_msg = 'No pending applications with uploaded permits found.';
+        } else {
+            $success_msg = "✅ AI Review Complete! Approved: <strong>{$approved_count}</strong> · Rejected: <strong>{$rejected_count}</strong> · Total reviewed: <strong>{$total}</strong>";
+        }
+        $active_page = 'tenants';
+    }
+
     // ── RUN SUBSCRIPTION CRON MANUALLY ───────────────────────
     if ($_POST['action'] === 'run_sub_cron') {
         $cron_secret = 'pawnhub_cron_2026_secret';
@@ -813,11 +956,46 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
       <?php $pts=array_filter($tenants,fn($t)=>$t['status']==='pending');if(!empty($pts)):?>
       <div class="card" style="border-color:#fde68a;">
-        <div class="card-hdr"><span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?=count($pts)?>)</span></div>
-        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
-        <?php foreach($pts as $t):?>
-        <tr><td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td><td><?=htmlspecialchars($t['owner_name'])?></td><td style="font-size:.76rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td><td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
-        <td><button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button><button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button></td></tr>
+        <div class="card-hdr">
+          <span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?=count($pts)?>)</span>
+          <form method="POST" style="margin:0;" onsubmit="return confirm('Run AI review on all pending permits? This may take 1-2 minutes.')">
+            <input type="hidden" name="action" value="ai_review_all">
+            <button type="submit" class="btn-sm btn-primary" style="display:inline-flex;align-items:center;gap:5px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l3 3"/><circle cx="18" cy="6" r="4" fill="#2563eb" stroke="none"/><text x="15" y="9" font-size="5" fill="white" font-weight="bold">AI</text></svg>
+              🤖 AI Auto-Review All Permits
+            </button>
+          </form>
+        </div>
+        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>AI Permit Status</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
+        <?php foreach($pts as $t):
+          $ps = $t['business_permit_status'] ?? 'none';
+          $permit_badge = match($ps) {
+            'ai_approved'       => '<span class="badge b-green">🤖 AI Approved ('.round($t['ai_confidence'] ?? 0).'%)</span>',
+            'ai_rejected'       => '<span class="badge b-red">🤖 AI Rejected</span>',
+            'pending_review'    => '<span class="badge b-yellow">📋 Permit Uploaded</span>',
+            'manually_approved' => '<span class="badge b-teal">✓ Manual OK</span>',
+            default             => '<span class="badge b-gray">No Permit</span>',
+          };
+        ?>
+        <tr>
+          <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
+          <td><?=htmlspecialchars($t['owner_name'])?></td>
+          <td style="font-size:.76rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
+          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td>
+          <td><?= $permit_badge ?>
+            <?php if (!empty($t['business_permit_url'])): ?>
+              <a href="<?=htmlspecialchars($t['business_permit_url'])?>" target="_blank" class="btn-sm" style="font-size:.65rem;padding:2px 7px;margin-left:4px;">View Permit</a>
+            <?php endif; ?>
+            <?php if ($ps === 'ai_rejected' && !empty($t['permit_rejection_reason'])): ?>
+              <div style="font-size:.68rem;color:var(--danger);margin-top:2px;"><?=htmlspecialchars($t['permit_rejection_reason'])?></div>
+            <?php endif; ?>
+          </td>
+          <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
+          <td>
+            <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
+            <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
+          </td>
+        </tr>
         <?php endforeach;?></tbody></table></div>
       </div>
       <?php endif;?>
@@ -1338,6 +1516,103 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <button type="submit" class="btn-sm btn-primary" style="padding:10px 24px;font-size:.88rem;">💾 Save Settings</button>
         </div>
       </form>
+
+      <!-- ── CHANGE SUPER ADMIN PASSWORD ── -->
+      <div class="card" style="margin-bottom:16px;border-color:#fde68a;">
+        <div class="card-hdr">
+          <span class="card-title">🔐 Change Super Admin Password</span>
+          <span style="font-size:.74rem;color:var(--text-dim);">Update your login password</span>
+        </div>
+        <form method="POST" id="changePwForm" style="max-width:520px;">
+          <input type="hidden" name="action" value="change_password">
+          <div style="display:grid;grid-template-columns:1fr;gap:14px;">
+            <div>
+              <label class="flabel">Current Password</label>
+              <div style="position:relative;">
+                <input type="password" name="old_password" id="oldPw" class="finput" placeholder="Enter current password" required>
+                <button type="button" onclick="togglePw('oldPw','eyeOld')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;">
+                  <span class="material-symbols-outlined" id="eyeOld" style="font-size:17px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+                </button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="flabel">New Password</label>
+                <div style="position:relative;">
+                  <input type="password" name="new_password" id="newPw" class="finput" placeholder="Min. 8 characters" required minlength="8">
+                  <button type="button" onclick="togglePw('newPw','eyeNew')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;">
+                    <span class="material-symbols-outlined" id="eyeNew" style="font-size:17px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label class="flabel">Confirm New Password</label>
+                <div style="position:relative;">
+                  <input type="password" name="conf_password" id="confPw" class="finput" placeholder="Repeat new password" required minlength="8">
+                  <button type="button" onclick="togglePw('confPw','eyeConf')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;">
+                    <span class="material-symbols-outlined" id="eyeConf" style="font-size:17px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <!-- Strength bar -->
+            <div id="pwStrengthWrap" style="display:none;">
+              <div style="height:5px;background:#e2e8f0;border-radius:100px;overflow:hidden;margin-bottom:4px;">
+                <div id="pwStrengthBar" style="height:100%;width:0%;border-radius:100px;transition:all 0.3s;"></div>
+              </div>
+              <div id="pwStrengthLabel" style="font-size:.7rem;color:var(--text-dim);"></div>
+            </div>
+            <div>
+              <button type="submit" class="btn-sm btn-warning" style="padding:10px 24px;font-size:.88rem;" onclick="return confirmPwChange()">
+                🔐 Update Password
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <script>
+      function togglePw(fieldId, iconId) {
+        const f = document.getElementById(fieldId);
+        const i = document.getElementById(iconId);
+        f.type = f.type === 'password' ? 'text' : 'password';
+        i.textContent = f.type === 'password' ? 'visibility' : 'visibility_off';
+      }
+      function confirmPwChange() {
+        const np = document.getElementById('newPw').value;
+        const cp = document.getElementById('confPw').value;
+        if (np !== cp) { alert('New passwords do not match!'); return false; }
+        if (np.length < 8) { alert('Password must be at least 8 characters!'); return false; }
+        return confirm('Are you sure you want to change the Super Admin password?');
+      }
+      // Password strength meter
+      document.getElementById('newPw').addEventListener('input', function() {
+        const v = this.value;
+        const wrap = document.getElementById('pwStrengthWrap');
+        const bar  = document.getElementById('pwStrengthBar');
+        const lbl  = document.getElementById('pwStrengthLabel');
+        if (!v) { wrap.style.display='none'; return; }
+        wrap.style.display='block';
+        let score = 0;
+        if (v.length >= 8)  score++;
+        if (v.length >= 12) score++;
+        if (/[A-Z]/.test(v)) score++;
+        if (/[0-9]/.test(v)) score++;
+        if (/[^A-Za-z0-9]/.test(v)) score++;
+        const levels = [
+          {pct:'20%', color:'#dc2626', label:'Very Weak'},
+          {pct:'40%', color:'#ea580c', label:'Weak'},
+          {pct:'60%', color:'#d97706', label:'Fair'},
+          {pct:'80%', color:'#2563eb', label:'Strong'},
+          {pct:'100%',color:'#16a34a', label:'Very Strong'},
+        ];
+        const lvl = levels[Math.min(score-1, 4)] || levels[0];
+        bar.style.width  = lvl.pct;
+        bar.style.background = lvl.color;
+        lbl.textContent  = lvl.label;
+        lbl.style.color  = lvl.color;
+      });
+      </script>
 
     <?php elseif($active_page==='audit_logs'): ?>
 
