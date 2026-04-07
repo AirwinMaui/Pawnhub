@@ -24,7 +24,7 @@ if (!in_array($mime, $allowed)) {
 $imageData = base64_encode(file_get_contents($file['tmp_name']));
 
 $payload = [
-    'model'      => 'claude-opus-4-5',
+    'model'      => 'claude-haiku-4-5-20251001',
     'max_tokens' => 512,
     'messages'   => [[
         'role'    => 'user',
@@ -67,10 +67,16 @@ curl_setopt_array($ch, [
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
 curl_close($ch);
 
 if (!$response || $httpCode !== 200) {
-    echo json_encode(['error' => 'Could not connect to AI']);
+    echo json_encode([
+        'error'      => 'Could not connect to AI',
+        'http_code'  => $httpCode,
+        'curl_error' => $curlError,
+        'response'   => $response,
+    ]);
     exit;
 }
 
