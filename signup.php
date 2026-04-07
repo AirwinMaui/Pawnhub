@@ -3,78 +3,8 @@ session_start();
 require 'db.php';
 $error = $success = '';
 
-// ── Handle AI permit extraction (AJAX) ───────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'extract_permit') {
-    header('Content-Type: application/json');
-    $imageData = $_POST['image_data'] ?? '';
-    if (!$imageData) { echo json_encode(['error' => 'No image data']); exit; }
-
-    // Strip base64 header
-    $base64 = preg_replace('/^data:image\/\w+;base64,/', '', $imageData);
-
-    $payload = json_encode([
-        'model'      => 'claude-sonnet-4-20250514',
-        'max_tokens' => 1000,
-        'messages'   => [[
-            'role'    => 'user',
-            'content' => [
-                [
-                    'type'   => 'image',
-                    'source' => ['type' => 'base64', 'media_type' => 'image/jpeg', 'data' => $base64]
-                ],
-                [
-                    'type' => 'text',
-                    'text' => 'This is a Philippine business permit or DTI/SEC registration document. Extract the following information and respond ONLY with a valid JSON object, no other text:
-{
-  "business_name": "exact business name from permit",
-  "owner_name": "owner or registrant name",
-  "address": "full business address",
-  "phone": "phone number if present, else empty string",
-  "permit_number": "permit or registration number",
-  "validity": "expiry or validity date if present",
-  "is_valid_permit": true or false (true if this looks like a real PH business permit/DTI/SEC/Mayor\'s permit),
-  "confidence": 0-100 (confidence score),
-  "rejection_reason": "reason if is_valid_permit is false, else empty string"
-}'
-                ]
-            ]
-        ]]
-    ]);
-
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'x-api-key: ' . (defined('ANTHROPIC_API_KEY') ? ANTHROPIC_API_KEY : getenv('ANTHROPIC_API_KEY')),
-            'anthropic-version: 2023-06-01'
-        ],
-        CURLOPT_TIMEOUT        => 30,
-    ]);
-    $resp = curl_exec($ch);
-    $err  = curl_error($ch);
-    curl_close($ch);
-
-    if ($err) { echo json_encode(['error' => 'AI service unavailable: ' . $err]); exit; }
-
-    $aiResp = json_decode($resp, true);
-    $text   = $aiResp['content'][0]['text'] ?? '';
-
-    // Extract JSON from response
-    preg_match('/\{.*\}/s', $text, $matches);
-    $extracted = $matches[0] ?? '{}';
-    $data = json_decode($extracted, true);
-
-    if (!$data) { echo json_encode(['error' => 'Could not parse permit data']); exit; }
-
-    echo json_encode(['success' => true, 'data' => $data]);
-    exit;
-}
-
 // ── Handle form submission ────────────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fullname   = trim($_POST['fullname']      ?? '');
     $email      = trim($_POST['email']         ?? '');
     $username   = trim($_POST['username']      ?? '');
@@ -85,7 +15,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $address    = trim($_POST['address']       ?? '');
     $plan       = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
     $branches   = intval($_POST['branches'] ?? 1);
-    $permit_data_raw = $_POST['permit_data'] ?? '';
 
     if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
@@ -100,10 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
             $error = 'Username or email already exists.';
         } else {
             // Handle permit image upload
-            $permit_url = '';
+            $permit_url    = '';
             $permit_status = 'none';
-            $permit_ai_data = null;
-            $permit_confidence = null;
 
             if (!empty($_FILES['business_permit']['name'])) {
                 $allowed = ['image/jpeg','image/png','image/webp','application/pdf'];
@@ -114,29 +41,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
                     $uploaddir = __DIR__ . '/uploads/permits/';
                     if (!is_dir($uploaddir)) mkdir($uploaddir, 0755, true);
                     if (move_uploaded_file($_FILES['business_permit']['tmp_name'], $uploaddir . $filename)) {
-                        $permit_url = 'uploads/permits/' . $filename;
+                        $permit_url    = 'uploads/permits/' . $filename;
                         $permit_status = 'pending_review';
                     }
                 }
             }
 
-            // Parse AI permit data if provided
-            if ($permit_data_raw) {
-                $parsed = json_decode($permit_data_raw, true);
-                if ($parsed) {
-                    $permit_ai_data    = $permit_data_raw;
-                    $permit_confidence = $parsed['confidence'] ?? null;
-                    $permit_status     = ($parsed['is_valid_permit'] ?? false) ? 'ai_approved' : 'ai_rejected';
-                }
-            }
-
             $pdo->beginTransaction();
             $pdo->prepare("INSERT INTO tenants (business_name, owner_name, email, phone, address, plan, branches, status,
-                            business_permit_url, business_permit_status, business_permit_data, ai_confidence, ai_reviewed_at)
-                           VALUES (?,?,?,?,?,?,?,'pending', ?,?,?,?,NOW())")
+                            business_permit_url, business_permit_status)
+                           VALUES (?,?,?,?,?,?,?,'pending', ?,?)")
                 ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches,
-                           $permit_url ?: null, $permit_status,
-                           $permit_ai_data, $permit_confidence]);
+                           $permit_url ?: null, $permit_status]);
             $new_tid = $pdo->lastInsertId();
 
             $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status)
@@ -149,9 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
 }
 
 $plans = [
-    'Starter'    => ['max_staff' => 3,  'branches' => 1, 'price' => 'Free'],
-    'Pro'        => ['max_staff' => 0,  'branches' => 3, 'price' => '₱999/mo'],
-    'Enterprise' => ['max_staff' => 0,  'branches' => 10,'price' => '₱2,499/mo'],
+    'Starter'    => ['max_staff' => 3,  'branches' => 1,  'price' => 'Free'],
+    'Pro'        => ['max_staff' => 0,  'branches' => 3,  'price' => '₱999/mo'],
+    'Enterprise' => ['max_staff' => 0,  'branches' => 10, 'price' => '₱2,499/mo'],
 ];
 $selected_plan = $_POST['plan'] ?? ($_GET['plan'] ?? 'Starter');
 if (!array_key_exists($selected_plan, $plans)) $selected_plan = 'Starter';
@@ -177,7 +93,7 @@ body { font-family: "Inter", sans-serif; }
 .plan-pill.active { background:#3b82f6; border-color:#3b82f6; color:#fff; }
 .hero-bg { background-image:linear-gradient(rgba(0,0,0,0.55),rgba(0,0,0,0.65)), url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVdOMy67RcI3OmEXQ5Ob4N9qbUXkHC8UCa3Ni6E2dPvn8N_9Kg_FuGSOcP4mhYkmmhNphJ8vQukLbFjfnVrv-wy716m8LpTRmRrql1K07LpfXVuqMeCMwQRftqZXZWikKdGhSBaHJEhrAn431mN9EQqELqupcBMhVrkknDFPIyVKW_l8bfki8PfvWSkOTQ129Z5jOMGF5My-stQnfPndc_y1X0jUHBEmlH0AVE04q2vpa87PHKNSxAOHabM4n8c9W6UcgA91Cs-1c'); background-size:cover; background-position:center; background-attachment:fixed; }
 
-/* Permit upload area */
+/* Permit upload */
 .permit-drop { border:2px dashed rgba(255,255,255,0.2); border-radius:14px; padding:28px 20px; text-align:center; cursor:pointer; transition:all 0.25s; background:rgba(255,255,255,0.04); }
 .permit-drop:hover, .permit-drop.drag-over { border-color:#3b82f6; background:rgba(59,130,246,0.08); }
 .permit-preview { position:relative; border-radius:10px; overflow:hidden; }
@@ -219,15 +135,7 @@ body { font-family: "Inter", sans-serif; }
     <h2 class="text-2xl font-extrabold text-white mb-3">Application Submitted! 🎉</h2>
     <p class="text-white/60 text-sm leading-relaxed mb-6">
       Your pawnshop registration has been submitted successfully.<br><br>
-      <?php if (!empty($_POST['permit_data'])): $pd = json_decode($_POST['permit_data'],true); ?>
-        <?php if ($pd['is_valid_permit'] ?? false): ?>
-          ✅ Your business permit was <strong style="color:#86efac;">verified by AI</strong> — your application may be auto-approved faster!
-        <?php else: ?>
-          ⚠️ Your permit needs manual review. Our team will check it soon.
-        <?php endif; ?>
-      <?php else: ?>
-        Our Super Admin will review and approve your account.
-      <?php endif; ?>
+      Our Super Admin will review and approve your account.
     </p>
     <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;font-size:0.8rem;color:#86efac;margin-bottom:24px;">
       📧 Once approved, you will receive an email with your personal login link.
@@ -264,9 +172,8 @@ body { font-family: "Inter", sans-serif; }
     <?php endif; ?>
 
     <form method="POST" id="regForm" enctype="multipart/form-data">
-      <input type="hidden" name="plan"        id="plan_input"     value="<?= htmlspecialchars($selected_plan) ?>">
-      <input type="hidden" name="branches"    id="branches_input" value="1">
-      <input type="hidden" name="permit_data" id="permit_data_hidden" value="">
+      <input type="hidden" name="plan"     id="plan_input"     value="<?= htmlspecialchars($selected_plan) ?>">
+      <input type="hidden" name="branches" id="branches_input" value="1">
 
       <div class="space-y-5">
 
@@ -278,39 +185,38 @@ body { font-family: "Inter", sans-serif; }
           </label>
 
           <!-- Drop Zone -->
-          <div id="permitDrop" class="permit-drop" onclick="document.getElementById('permitFile').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handlePermitDrop(event)">
-            <div id="dropContent">
-              <span class="material-symbols-outlined" style="font-size:36px;color:rgba(255,255,255,0.3);display:block;margin-bottom:8px;">upload_file</span>
-              <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);font-weight:600;">Drop your permit here or click to upload</div>
-              <div style="font-size:0.73rem;color:rgba(255,255,255,0.25);margin-top:4px;">JPG, PNG, PDF · Max 10MB</div>
-            </div>
+          <div id="permitDrop" class="permit-drop"
+               onclick="document.getElementById('permitFile').click()"
+               ondragover="event.preventDefault();this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handlePermitDrop(event)">
+            <span class="material-symbols-outlined" style="font-size:36px;color:rgba(255,255,255,0.3);display:block;margin-bottom:8px;">upload_file</span>
+            <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);font-weight:600;">Drop your permit here or click to upload</div>
+            <div style="font-size:0.73rem;color:rgba(255,255,255,0.25);margin-top:4px;">JPG, PNG, WEBP · Max 10MB</div>
           </div>
-          <input type="file" id="permitFile" name="business_permit" accept="image/*,application/pdf" class="hidden" onchange="handlePermitFile(this)">
+          <input type="file" id="permitFile" name="business_permit" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="handlePermitFile(this)">
 
           <!-- Preview & AI Status -->
           <div id="permitPreviewWrap" class="hidden mt-3">
-            <div class="permit-preview mb-2">
+            <div class="permit-preview mb-2" style="position:relative;">
               <img id="permitPreviewImg" src="" alt="Permit preview">
-              <button type="button" onclick="clearPermit()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;">
+              <button type="button" onclick="clearPermit()"
+                style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;">
                 <span class="material-symbols-outlined" style="font-size:15px;">close</span>
               </button>
             </div>
-            <div id="aiStatusWrap">
-              <div id="aiStatusAnalyzing" class="ai-badge analyzing hidden">
-                <span class="material-symbols-outlined ai-pulse" style="font-size:13px;">psychology</span>
-                AI is reading your permit...
-              </div>
-              <div id="aiStatusApproved" class="ai-badge approved hidden">
-                <span class="material-symbols-outlined" style="font-size:13px;">verified</span>
-                Valid Permit Detected — Form auto-filled!
-              </div>
-              <div id="aiStatusRejected" class="ai-badge rejected hidden">
-                <span class="material-symbols-outlined" style="font-size:13px;">warning</span>
-                <span id="aiRejectMsg">Could not verify permit — please check fields manually</span>
-              </div>
-              <div id="aiConfidenceWrap" class="hidden mt-1" style="font-size:0.7rem;color:rgba(255,255,255,0.4);">
-                AI Confidence: <span id="aiConfidence">—</span>%
-              </div>
+            <!-- AI Status Badges -->
+            <div id="aiStatusAnalyzing" class="ai-badge analyzing hidden">
+              <span class="material-symbols-outlined ai-pulse" style="font-size:13px;">psychology</span>
+              AI is reading your permit...
+            </div>
+            <div id="aiStatusApproved" class="ai-badge approved hidden">
+              <span class="material-symbols-outlined" style="font-size:13px;">verified</span>
+              Form auto-filled! Please review the fields below.
+            </div>
+            <div id="aiStatusRejected" class="ai-badge rejected hidden">
+              <span class="material-symbols-outlined" style="font-size:13px;">warning</span>
+              <span id="aiRejectMsg">Could not read permit — please fill manually.</span>
             </div>
           </div>
         </div>
@@ -335,6 +241,7 @@ body { font-family: "Inter", sans-serif; }
           </div>
         </div>
 
+        <!-- Owner / Account Info -->
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:18px;">
           <p class="text-xs font-bold uppercase tracking-widest text-white/50 mb-4">Owner / Account Information</p>
           <div class="space-y-4">
@@ -377,9 +284,11 @@ body { font-family: "Inter", sans-serif; }
           <div id="summary_desc" style="font-size:0.76rem;color:rgba(147,197,253,0.8);line-height:1.6;"></div>
         </div>
 
-        <button type="submit" id="submitBtn" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;">
+        <button type="submit" id="submitBtn"
+          style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;">
           Submit Application →
         </button>
+
       </div>
     </form>
 
@@ -399,6 +308,7 @@ body { font-family: "Inter", sans-serif; }
 </footer>
 
 <script>
+// ── Plan selector ─────────────────────────────────────────────────────────────
 const planData = {
   Starter:    { price:'Free',      desc:'✅ 1 Manager · Up to 3 Staff/Cashier · Basic Reports · Core pawnshop features', branches:1 },
   Pro:        { price:'₱999/mo',   desc:'✅ 1 Manager · Unlimited Staff · Advanced Reports · Custom Branding · Priority Support', branches:3 },
@@ -418,9 +328,7 @@ function selectPlan(name) {
 }
 selectPlan(document.getElementById('plan_input').value || 'Starter');
 
-// ── Permit upload handling ────────────────────────────────────
-let permitBase64 = '';
-
+// ── Permit upload ─────────────────────────────────────────────────────────────
 function handlePermitDrop(e) {
   e.preventDefault();
   document.getElementById('permitDrop').classList.remove('drag-over');
@@ -434,84 +342,70 @@ function handlePermitFile(input) {
 }
 
 function processPermitFile(file) {
+  // Show preview
   const reader = new FileReader();
   reader.onload = function(e) {
-    permitBase64 = e.target.result;
-    // Show preview
-    document.getElementById('permitDrop').classList.add('hidden');
-    const wrap = document.getElementById('permitPreviewWrap');
-    wrap.classList.remove('hidden');
-    if (file.type.startsWith('image/')) {
-      document.getElementById('permitPreviewImg').src = permitBase64;
-    } else {
-      document.getElementById('permitPreviewImg').src = '';
-      document.getElementById('permitPreviewImg').alt = '📄 PDF Uploaded: ' + file.name;
-    }
-    // Start AI extraction
-    runAIExtraction(permitBase64);
+    document.getElementById('permitPreviewImg').src = e.target.result;
   };
   reader.readAsDataURL(file);
+
+  document.getElementById('permitDrop').classList.add('hidden');
+  document.getElementById('permitPreviewWrap').classList.remove('hidden');
+
+  // Run AI extraction via extract_permit.php
+  runAIExtraction(file);
 }
 
 function clearPermit() {
-  permitBase64 = '';
   document.getElementById('permitFile').value = '';
   document.getElementById('permitDrop').classList.remove('hidden');
   document.getElementById('permitPreviewWrap').classList.add('hidden');
-  document.getElementById('permit_data_hidden').value = '';
-  ['aiStatusAnalyzing','aiStatusApproved','aiStatusRejected','aiConfidenceWrap'].forEach(id => {
+  ['aiStatusAnalyzing','aiStatusApproved','aiStatusRejected'].forEach(id => {
     document.getElementById(id).classList.add('hidden');
   });
-  // Remove autofill highlighting
   ['f_business_name','f_phone','f_address','f_fullname'].forEach(id => {
     document.getElementById(id).classList.remove('field-autofilled');
   });
 }
 
-async function runAIExtraction(imageData) {
-  // Show analyzing
+async function runAIExtraction(file) {
+  // Show analyzing badge
   ['aiStatusApproved','aiStatusRejected'].forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById('aiStatusAnalyzing').classList.remove('hidden');
-  document.getElementById('aiConfidenceWrap').classList.add('hidden');
 
   try {
     const formData = new FormData();
-    formData.append('action', 'extract_permit');
-    formData.append('image_data', imageData);
+    formData.append('permit', file); // 'permit' key — matches $_FILES['permit'] in extract_permit.php
 
-    const resp = await fetch(window.location.href, { method:'POST', body:formData });
+    const resp = await fetch('extract_permit.php', { method: 'POST', body: formData });
     const result = await resp.json();
 
     document.getElementById('aiStatusAnalyzing').classList.add('hidden');
 
     if (result.success && result.data) {
       const d = result.data;
-      document.getElementById('permit_data_hidden').value = JSON.stringify(d);
 
-      // Show confidence
-      if (d.confidence) {
-        document.getElementById('aiConfidence').textContent = d.confidence;
-        document.getElementById('aiConfidenceWrap').classList.remove('hidden');
-      }
+      // Auto-fill fields (overwrite if AI found something)
+      autoFill('f_business_name', d.business_name);
+      autoFill('f_fullname',      d.owner_name);
+      autoFill('f_phone',         d.phone);
+      autoFill('f_address',       d.address);
 
-      if (d.is_valid_permit) {
+      // Check if at least one field was extracted
+      const hasData = d.business_name || d.owner_name || d.phone || d.address;
+      if (hasData) {
         document.getElementById('aiStatusApproved').classList.remove('hidden');
-        // Auto-fill fields
-        autoFill('f_business_name', d.business_name);
-        autoFill('f_fullname',      d.owner_name);
-        autoFill('f_phone',         d.phone);
-        autoFill('f_address',       d.address);
       } else {
-        document.getElementById('aiRejectMsg').textContent = d.rejection_reason || 'Could not verify permit — please check fields manually';
+        document.getElementById('aiRejectMsg').textContent = 'AI could not find any fields — please fill manually.';
         document.getElementById('aiStatusRejected').classList.remove('hidden');
       }
     } else {
-      document.getElementById('aiRejectMsg').textContent = result.error || 'AI extraction failed';
+      document.getElementById('aiRejectMsg').textContent = result.error || 'AI extraction failed — please fill manually.';
       document.getElementById('aiStatusRejected').classList.remove('hidden');
     }
-  } catch(err) {
+  } catch (err) {
     document.getElementById('aiStatusAnalyzing').classList.add('hidden');
-    document.getElementById('aiRejectMsg').textContent = 'Could not connect to AI — fill manually';
+    document.getElementById('aiRejectMsg').textContent = 'Could not connect to AI — please fill manually.';
     document.getElementById('aiStatusRejected').classList.remove('hidden');
   }
 }
@@ -519,11 +413,10 @@ async function runAIExtraction(imageData) {
 function autoFill(fieldId, value) {
   if (!value) return;
   const el = document.getElementById(fieldId);
-  if (el && !el.value) {
-    el.value = value;
-    el.classList.add('field-autofilled');
-    setTimeout(() => el.classList.remove('field-autofilled'), 3000);
-  }
+  if (!el) return;
+  el.value = value; // Always overwrite with AI result
+  el.classList.add('field-autofilled');
+  setTimeout(() => el.classList.remove('field-autofilled'), 3000);
 }
 </script>
 </body>
