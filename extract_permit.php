@@ -1,15 +1,6 @@
 <?php
 header('Content-Type: application/json');
 
-$apiKey = getenv('GEMINI_API_KEY')
-       ?: ($_ENV['GEMINI_API_KEY']    ?? '')
-       ?: ($_SERVER['GEMINI_API_KEY'] ?? '');
-
-if (!$apiKey) {
-    echo json_encode(['error' => 'No API key configured']);
-    exit;
-}
-
 if (empty($_FILES['permit']['tmp_name'])) {
     echo json_encode(['error' => 'No file uploaded']);
     exit;
@@ -24,64 +15,48 @@ if (!in_array($mime, $allowed)) {
     exit;
 }
 
-$imageData = base64_encode(file_get_contents($file['tmp_name']));
+// Save temp file
+$tmpPath = tempnam(sys_get_temp_dir(), 'permit_') . '.png';
+move_uploaded_file($file['tmp_name'], $tmpPath);
 
-$payload = [
-    'contents' => [[
-        'parts' => [
-            [
-                'inline_data' => [
-                    'mime_type' => $mime,
-                    'data'      => $imageData,
-                ]
-            ],
-            [
-                'text' => 'Extract the following from this Philippine business permit or DTI/SEC registration. Reply ONLY with valid JSON, no markdown:
-{
-  "business_name": "",
-  "owner_name": "",
-  "address": "",
-  "phone": ""
+// Run Tesseract OCR
+$outputBase = tempnam(sys_get_temp_dir(), 'ocr_out_');
+exec("tesseract " . escapeshellarg($tmpPath) . " " . escapeshellarg($outputBase) . " -l eng 2>/dev/null", $out, $code);
+
+$textFile = $outputBase . '.txt';
+if (!file_exists($textFile)) {
+    unlink($tmpPath);
+    echo json_encode(['error' => 'OCR failed.']);
+    exit;
 }
-If a field is not found, leave it as empty string.'
-            ]
-        ]
-    ]]
-];
 
-$url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $apiKey;
+$text = file_get_contents($textFile);
+unlink($tmpPath);
+unlink($textFile);
 
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-    CURLOPT_POSTFIELDS     => json_encode($payload),
-    CURLOPT_TIMEOUT        => 30,
+// ── Parse text ────────────────────────────────────────────────────────────────
+$lines = array_filter(array_map('trim', explode("\n", $text)));
+
+$business_name = '';
+$owner_name    = '';
+$address       = '';
+$phone         = '';
+
+foreach ($lines as $line) {
+    if (!$business_name && preg_match('/business name[:\s]+(.+)/i', $line, $m))
+        $business_name = trim($m[1]);
+
+    if (!$owner_name && preg_match('/(?:owner|registrant|proprietor|issued to)[:\s]+(.+)/i', $line, $m))
+        $owner_name = trim($m[1]);
+
+    if (!$address && preg_match('/address[:\s]+(.+)/i', $line, $m))
+        $address = trim($m[1]);
+
+    if (!$phone && preg_match('/(\+?63[\s\-]?|0)(9\d{2})[\s\-]?(\d{3})[\s\-]?(\d{4})/', $line, $m))
+        $phone = preg_replace('/[\s\-]/', '', $m[0]);
+}
+
+echo json_encode([
+    'success' => true,
+    'data'    => compact('business_name', 'owner_name', 'address', 'phone')
 ]);
-
-$response  = curl_exec($ch);
-$httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlError = curl_error($ch);
-curl_close($ch);
-
-if (!$response || $httpCode !== 200) {
-    $errBody = json_decode($response, true);
-    $errMsg  = $errBody['error']['message'] ?? ('HTTP ' . $httpCode);
-    echo json_encode(['error' => 'AI error: ' . $errMsg]);
-    exit;
-}
-
-$data = json_decode($response, true);
-$text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-
-// Strip markdown fences
-$text      = preg_replace('/```json|```/', '', $text);
-$extracted = json_decode(trim($text), true);
-
-if (!$extracted) {
-    echo json_encode(['error' => 'AI could not read the document']);
-    exit;
-}
-
-echo json_encode(['success' => true, 'data' => $extracted]);
