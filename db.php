@@ -4,6 +4,7 @@ define('DB_USER', 'PawnhubAdmin');
 define('DB_PASS', 'Admin123');
 define('DB_NAME', 'pawnhub');
 define('DB_PORT', '3306');
+define('ANTHROPIC_API_KEY', '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'); // ← ilagay dito ang iyong tunay na API key
 
 $ssl_cert = __DIR__ . '/certs/DigiCertGlobalRootG2.crt.pem';
 
