@@ -72,7 +72,7 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 function sendTenantInvitation(string $toEmail, string $toName, string $businessName, string $token, string $slug = ''): bool
 {
     $link = $slug
-        ? APP_URL . '/' . urlencode($slug) . '?register=1&token=' . urlencode($token)
+        ? APP_URL . '/' . urlencode($slug) . '?token=' . urlencode($token) . '&role=admin'
         : APP_URL . '/tenant_register.php?token=' . urlencode($token);
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>

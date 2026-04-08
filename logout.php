@@ -9,7 +9,7 @@ pawnhub_session_start($role_hint);
 if ($role_hint === 'super_admin') {
     $redirect = 'login.php';
 } else {
-    $redirect = 'home.php'; // will be overridden below if slug is found
+    $redirect = 'home.php?login=1'; // will be overridden below if slug is found
 }
 
 if (!empty($_SESSION['user'])) {
@@ -18,14 +18,14 @@ if (!empty($_SESSION['user'])) {
 
     // Determine redirect before destroying session
     if (!empty($u['tenant_slug'])) {
-        $redirect = '/' . rawurlencode($u['tenant_slug']);
+        $redirect = '/' . rawurlencode($u['tenant_slug']) . '?login=1';
     } elseif (!empty($u['tenant_id']) && $u['role'] !== 'super_admin') {
         try {
             $s = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
             $s->execute([$u['tenant_id']]);
             $row = $s->fetch();
             if (!empty($row['slug'])) {
-                $redirect = '/' . rawurlencode($row['slug']);
+                $redirect = '/' . rawurlencode($row['slug']) . '?login=1';
             }
         } catch (Throwable $e) {}
     }
@@ -47,7 +47,7 @@ if (!empty($_SESSION['user'])) {
                 $s->execute([$path]);
                 $row = $s->fetch();
                 if (!empty($row['slug'])) {
-                    $redirect = '/' . rawurlencode($row['slug']);
+                    $redirect = '/' . rawurlencode($row['slug']) . '?login=1';
                 }
             } catch (Throwable $e) {}
         }

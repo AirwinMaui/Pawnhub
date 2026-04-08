@@ -31,6 +31,27 @@ if ($slug && !in_array(strtolower($slug), $reserved)) {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
+
+        // If a token is present, check the role so we route to the correct
+        // registration page instead of always landing on tenant_login.php.
+        if (isset($_GET['token'])) {
+            $role_param = strtolower(trim($_GET['role'] ?? ''));
+
+            if ($role_param === 'manager') {
+                // Manager invitation → manager_register.php
+                require __DIR__ . '/manager_register.php';
+                exit;
+            }
+
+            if (in_array($role_param, ['staff', 'cashier'])) {
+                // Staff / Cashier invitation → staff_register.php
+                require __DIR__ . '/staff_register.php';
+                exit;
+            }
+
+            // role='' or role=admin → tenant owner registration (tenant_login.php handles it)
+        }
+
         require __DIR__ . '/tenant_login.php';
     } else {
         // Default: public tenant shop/home page
