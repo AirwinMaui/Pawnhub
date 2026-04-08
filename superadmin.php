@@ -1637,12 +1637,44 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
 <!-- ══ APPROVE MODAL ══════════════════════════════════════════ -->
 <div class="modal-overlay" id="approveModal">
-  <div class="modal">
-    <div class="mhdr"><div><div class="mtitle">✓ Approve Tenant</div><div class="msub" id="approve_sub"></div></div><button class="mclose" onclick="document.getElementById('approveModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+  <div class="modal" style="width:560px;max-width:97vw;">
+    <div class="mhdr">
+      <div><div class="mtitle">✓ Review & Approve Tenant</div><div class="msub" id="approve_sub"></div></div>
+      <button class="mclose" onclick="document.getElementById('approveModal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
     <div class="mbody">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">✅ Approving this tenant will set their status to <strong>Active</strong> and allow them to login immediately.</div>
-      <form method="POST"><input type="hidden" name="action" value="approve_tenant"><input type="hidden" name="tenant_id" id="approve_tid"><input type="hidden" name="user_id" id="approve_uid">
-        <div style="display:flex;justify-content:flex-end;gap:9px;"><button type="button" class="btn-sm" onclick="document.getElementById('approveModal').classList.remove('open')">Cancel</button><button type="submit" class="btn-sm btn-success">✓ Confirm Approval</button></div>
+
+      <!-- Business Permit Section -->
+      <div style="margin-bottom:16px;">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px;">📄 Business Permit</div>
+        <div id="approve_permit_wrap" style="border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-height:80px;display:flex;align-items:center;justify-content:center;background:#f8fafc;">
+          <div id="approve_permit_loading" style="color:var(--text-dim);font-size:.8rem;">Loading...</div>
+          <!-- Permit content injected by JS -->
+        </div>
+      </div>
+
+      <!-- Payment Details Section -->
+      <div style="margin-bottom:16px;">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px;">💳 Payment Details</div>
+        <div id="approve_payment_wrap" style="background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;font-size:.81rem;">
+          <div id="approve_payment_content" style="color:var(--text-dim);">Loading...</div>
+        </div>
+      </div>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">
+        ✅ Please review the Business Permit and Payment details above before approving. Approving will set the tenant status to <strong>Active</strong>.
+      </div>
+
+      <form method="POST">
+        <input type="hidden" name="action" value="approve_tenant">
+        <input type="hidden" name="tenant_id" id="approve_tid">
+        <input type="hidden" name="user_id" id="approve_uid">
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('approveModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-success">✓ Confirm Approval</button>
+        </div>
       </form>
     </div>
   </div>
@@ -1669,7 +1701,84 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
         if (e.target === this) this.classList.remove('open');
     });
 });
-function openApproveModal(tid,uid,name){document.getElementById('approve_tid').value=tid;document.getElementById('approve_uid').value=uid;document.getElementById('approve_sub').textContent='Business: '+name;document.getElementById('approveModal').classList.add('open');}
+
+// ── Tenant permit & payment data (for approve modal) ─────────
+const tenantsData = <?php
+  $td_map = [];
+  foreach ($tenants as $t) {
+    $payment = null;
+    if (!empty($t['payment_info'])) {
+      $decoded = json_decode($t['payment_info'], true);
+      if ($decoded) $payment = $decoded;
+    }
+    $td_map[(int)$t['id']] = [
+      'permit'  => !empty($t['business_permit_url']) ? htmlspecialchars($t['business_permit_url'], ENT_QUOTES) : null,
+      'payment' => $payment,
+    ];
+  }
+  echo json_encode($td_map);
+?>;
+
+function openApproveModal(tid,uid,name){
+  document.getElementById('approve_tid').value=tid;
+  document.getElementById('approve_uid').value=uid;
+  document.getElementById('approve_sub').textContent='Business: '+name;
+
+  // Reset content
+  const permitWrap   = document.getElementById('approve_permit_wrap');
+  const paymentWrap  = document.getElementById('approve_payment_content');
+  permitWrap.innerHTML  = '<div style="color:#94a3b8;font-size:.8rem;padding:16px;">Loading permit...</div>';
+  paymentWrap.innerHTML = '<div style="color:#94a3b8;font-size:.8rem;">Loading payment info...</div>';
+
+  // Fetch tenant permit & payment info via JS from tenants data
+  const td = tenantsData[tid];
+  if (td) {
+    // ── Business Permit ──────────────────────────────────
+    if (td.permit) {
+      const ext = td.permit.split('.').pop().toLowerCase();
+      if (ext === 'pdf') {
+        permitWrap.innerHTML = `
+          <div style="padding:16px;text-align:center;">
+            <span style="font-size:2rem;">📄</span>
+            <p style="font-size:.8rem;color:#475569;margin:6px 0 10px;">PDF Business Permit</p>
+            <a href="${td.permit}" target="_blank" class="btn-sm btn-primary" style="font-size:.74rem;">View PDF →</a>
+          </div>`;
+      } else {
+        permitWrap.innerHTML = `
+          <div style="text-align:center;">
+            <img src="${td.permit}" alt="Business Permit"
+              style="max-width:100%;max-height:260px;object-fit:contain;border-radius:8px;cursor:pointer;"
+              onclick="window.open('${td.permit}','_blank')">
+            <p style="font-size:.7rem;color:#94a3b8;padding:6px;">Click image to view full size</p>
+          </div>`;
+      }
+    } else {
+      permitWrap.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.8rem;">⚠️ No business permit uploaded.</div>';
+    }
+
+    // ── Payment Info ─────────────────────────────────────
+    if (td.payment) {
+      const p = td.payment;
+      let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem;">`;
+      html += `<div><span style="color:#94a3b8;">Method:</span> <strong>${p.method||'—'}</strong></div>`;
+      html += `<div><span style="color:#94a3b8;">Reference #:</span> <strong>${p.reference||'—'}</strong></div>`;
+      if (p.method === 'Credit Card') {
+        html += `<div><span style="color:#94a3b8;">Card Holder:</span> <strong>${p.cc_name||'—'}</strong></div>`;
+        html += `<div><span style="color:#94a3b8;">Card Number:</span> <strong style="font-family:monospace;">${p.cc_number||'—'}</strong></div>`;
+        html += `<div><span style="color:#94a3b8;">Expiry:</span> <strong>${p.cc_expiry||'—'}</strong></div>`;
+      }
+      html += `</div>`;
+      paymentWrap.innerHTML = html;
+    } else {
+      paymentWrap.innerHTML = '<span style="color:#94a3b8;">⚠️ No payment information submitted.</span>';
+    }
+  } else {
+    permitWrap.innerHTML  = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.8rem;">⚠️ No business permit uploaded.</div>';
+    paymentWrap.innerHTML = '<span style="color:#94a3b8;">⚠️ No payment information submitted.</span>';
+  }
+
+  document.getElementById('approveModal').classList.add('open');
+}
 function openRejectModal(tid,uid,name){document.getElementById('reject_tid').value=tid;document.getElementById('reject_uid').value=uid;document.getElementById('reject_sub').textContent='Business: '+name;document.getElementById('rejectModal').classList.add('open');}
 function openPlanModal(tid,name,currentPlan){
   document.getElementById('plan_tid').value=tid;
