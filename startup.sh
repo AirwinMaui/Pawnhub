@@ -5,6 +5,8 @@ server {
     root /home/site/wwwroot;
     index index.php;
 
+    client_max_body_size 10M;
+
     location / {
         try_files $uri $uri/ @router;
     }
