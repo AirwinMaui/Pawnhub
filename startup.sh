@@ -11,6 +11,11 @@ server {
         try_files $uri $uri/ @router;
     }
 
+    # /{slug}/login → tenant login page
+    location ~ ^/([a-zA-Z0-9_-]+)/login/?$ {
+        rewrite ^/([a-zA-Z0-9_-]+)/login/?$ /router.php?slug=$1&login=1 last;
+    }
+
     location @router {
         rewrite ^/([a-zA-Z0-9_-]+)/?$ /router.php?slug=$1 last;
     }
