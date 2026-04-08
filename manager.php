@@ -80,7 +80,7 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
 
 function redirectToTenantLogin(): void {
     $slug = $_SESSION['user']['tenant_slug'] ?? '';
-    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : '/login.php'));
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) . '?login=1' : '/login.php'));
     exit;
 }
 if (empty($_SESSION['user'])) { redirectToTenantLogin(); }
@@ -678,7 +678,8 @@ tr:hover td{background:rgba(255,255,255,.02);}
   </nav>
 
   <div class="sb-footer">
-    <a href="logout.php?role=manager" class="sb-logout">      <span class="material-symbols-outlined">logout</span>Sign Out
+    <a href="logout.php?role=manager&slug=<?= rawurlencode($u['tenant_slug'] ?? '') ?>" class="sb-logout">
+      <span class="material-symbols-outlined">logout</span>Sign Out
     </a>
   </div>
 </aside>

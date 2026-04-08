@@ -12,12 +12,12 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
 }
 
 if (empty($_SESSION['user'])) {
-    header('Location: home.php'); exit;
+    header('Location: /'); exit;
 }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'staff') {
     $slug = $u['tenant_slug'] ?? '';
-    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : 'home.php')); exit;
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) . '?login=1' : '/login.php')); exit;
 }
 
 $tid         = $u['tenant_id'];

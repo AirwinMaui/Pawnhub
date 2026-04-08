@@ -7,7 +7,7 @@ require 'theme_helper.php';
 // ── Session guard ──────────────────────────────────────────────
 function redirectToTenantLogin(): void {
     $slug = $_SESSION['user']['tenant_slug'] ?? '';
-    header('Location: ' . ($slug ? '/' . rawurlencode($slug) : '/login.php'));
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) . '?login=1' : '/login.php'));
     exit;
 }
 if (empty($_SESSION['user'])) { redirectToTenantLogin(); }

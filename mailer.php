@@ -121,7 +121,7 @@ function sendTenantInvitation(string $toEmail, string $toName, string $businessN
 
 function sendTenantWelcome(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -169,7 +169,7 @@ function sendTenantWelcome(string $toEmail, string $toName, string $businessName
 
 function sendTenantApproved(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -261,7 +261,7 @@ function sendStaffInvitation(string $toEmail, string $toName, string $businessNa
 
 function sendStaffWelcome(string $toEmail, string $toName, string $businessName, string $role, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
     $roleLabel = ucfirst($role);
     $roleColor = $role === 'cashier' ? '#7c3aed' : '#2563eb';
     $roleBg    = $role === 'cashier' ? 'linear-gradient(135deg,#4c1d95,#7c3aed)' : 'linear-gradient(135deg,#1e3a8a,#2563eb)';
@@ -342,7 +342,7 @@ function sendManagerInvitation(string $toEmail, string $toName, string $business
 
 function sendManagerWelcome(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -388,7 +388,7 @@ function sendSubscriptionExpiring(
     int    $daysLeft,
     string $slug
 ): bool {
-    $loginLink     = APP_URL . '/' . urlencode($slug);
+    $loginLink     = APP_URL . '/' . urlencode($slug) . '?login=1';
     $formatted     = date('F d, Y', strtotime($expiryDate));
     $dayWord       = $daysLeft === 1 ? '1 day' : "{$daysLeft} days";
     $urgencyColor  = $daysLeft <= 1 ? '#dc2626' : ($daysLeft <= 3 ? '#ea580c' : '#d97706');
@@ -458,7 +458,7 @@ function sendSubscriptionExpired(
     string $plan,
     string $slug
 ): bool {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -520,7 +520,7 @@ function sendSubscriptionRenewed(
     string $newExpiryDate,
     string $slug
 ): bool {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
     $formatted = date('F d, Y', strtotime($newExpiryDate));
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
@@ -570,7 +570,7 @@ function sendRenewalRequestReceived(
     string $plan,
     string $slug
 ): bool {
-    $loginLink = APP_URL . '/' . urlencode($slug);
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">

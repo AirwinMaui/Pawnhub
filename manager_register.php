@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_helper.php';
+pawnhub_session_start(''); // generic session — role not known yet during registration
 require 'db.php';
 
 $token   = trim($_GET['token'] ?? '');
