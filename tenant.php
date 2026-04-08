@@ -571,7 +571,8 @@ tr:hover td{background:rgba(255,255,255,.03);}
     <a href="tenant_subscription.php" class="sb-item <?=$active_page==='subscription'?'active':''?>" style="margin:0 0 6px 0;">
       <span class="material-symbols-outlined">workspace_premium</span>Subscription
     </a>
-    <a href="logout.php?role=admin" class="sb-logout">      <span class="material-symbols-outlined">logout</span>Sign Out
+    <a href="logout.php?role=admin&slug=<?= rawurlencode($u['tenant_slug'] ?? '') ?>" class="sb-logout">
+      <span class="material-symbols-outlined">logout</span>Sign Out
     </a>
   </div>
 </aside>

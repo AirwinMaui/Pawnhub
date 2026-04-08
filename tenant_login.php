@@ -62,7 +62,7 @@ if ($token) {
         // Valid pending token — allow registration regardless of which slug URL they used
         // If token belongs to a different tenant than the current slug, redirect to correct branch URL
         if ($inv['tenant_id'] !== $tenant['id'] && !empty($inv['tenant_slug'])) {
-            header('Location: /' . urlencode($inv['tenant_slug']) . '?token=' . urlencode($token));
+            header('Location: /' . urlencode($inv['tenant_slug']) . '?login=1&token=' . urlencode($token));
             exit;
         }
         $mode = 'register';
@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             }
 
             // Redirect to tenant login page with success message — do NOT auto-login
-            $login_url = '/' . urlencode($slug) . '?registered=1';
+            $login_url = '/' . urlencode($slug) . '?login=1&registered=1';
             header('Location: ' . $login_url);
             exit;
         }
@@ -210,10 +210,13 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .bg { position: fixed; inset: 0; z-index: 0; }
 .bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.52); }
-.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: 64px; display: flex; align-items: center; padding: 0 36px; background: rgba(255,255,255,0.07); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 36px; background: rgba(255,255,255,0.07); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
 .nav-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .nav-logo-text { font-size: 1.15rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+.nav-back { display: flex; align-items: center; gap: 6px; text-decoration: none; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); padding: 7px 14px; border-radius: 10px; transition: all .18s; }
+.nav-back:hover { color: #fff; background: rgba(255,255,255,0.18); }
+.nav-back .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
 .page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; }
 .panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0 40px; }
 .card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
@@ -271,13 +274,17 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 </div>
 
 <header class="nav">
-  <a href="#" class="nav-logo">
+  <a href="/<?= htmlspecialchars(rawurlencode($slug)) ?>" class="nav-logo">
     <div class="nav-logo-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:14px;height:14px;">
         <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
       </svg>
     </div>
     <span class="nav-logo-text"><?= $bizName ?></span>
+  </a>
+  <a href="/<?= htmlspecialchars(rawurlencode($slug)) ?>" class="nav-back">
+    <span class="material-symbols-outlined">arrow_back</span>
+    Back to Shop
   </a>
 </header>
 
@@ -308,7 +315,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         </div>
         <?php endif; ?>
 
-        <form method="POST" action="/<?= htmlspecialchars($slug) ?>?token=<?= htmlspecialchars($token) ?>" class="form">
+        <form method="POST" action="/<?= htmlspecialchars($slug) ?>?login=1&token=<?= htmlspecialchars($token) ?>" class="form">
           <input type="hidden" name="form_type" value="register">
 
           <div>
@@ -386,7 +393,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         </div>
         <?php endif; ?>
 
-        <form method="POST" action="/<?= htmlspecialchars($slug) ?>" class="form">
+        <form method="POST" action="/<?= htmlspecialchars($slug) ?>?login=1" class="form">
           <input type="hidden" name="form_type" value="login">
 
           <div>

@@ -65,9 +65,8 @@ $bg_url    = $tenant['bg_image_url']   ?? '';
 $biz_name  = htmlspecialchars($tenant['business_name']);
 $biz_addr  = htmlspecialchars($tenant['address'] ?? '');
 $biz_phone = htmlspecialchars($tenant['phone'] ?? '');
-// Sign-in URL — routes through router.php → tenant_login.php
-$login_url    = '/' . rawurlencode($slug) . '?login=1';
-$register_url = '/' . rawurlencode($slug) . '?register=1';
+// Sign-in URL — /{slug}?login=1 routes to tenant_login.php via router.php
+$login_url = '/' . rawurlencode($slug) . '?login=1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -610,85 +609,6 @@ footer {
 /* ── HIDDEN FILTER ── */
 .item-card[data-cat].hidden { display: none; }
 
-/* ── STAFF REGISTRATION SECTION ── */
-.staff-reg-section {
-  padding: 60px clamp(16px,5vw,64px);
-  position: relative; z-index: 10;
-}
-.staff-reg-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-.staff-reg-label {
-  font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 90%, #fff);
-  margin-bottom: 10px;
-}
-.staff-reg-title {
-  font-family: 'DM Serif Display', serif;
-  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
-  color: #fff; line-height: 1.15;
-  margin-bottom: 10px;
-}
-.staff-reg-sub {
-  font-size: .95rem; color: var(--text-m); max-width: 520px; margin: 0 auto; line-height: 1.65;
-}
-.role-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 20px;
-  max-width: 900px;
-  margin: 0 auto;
-}
-.role-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 28px 26px;
-  display: flex; flex-direction: column;
-  gap: 14px;
-  transition: all .25s;
-}
-.role-card:hover {
-  transform: translateY(-4px);
-  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
-  box-shadow: 0 16px 40px rgba(0,0,0,.4);
-}
-.role-card-icon {
-  width: 48px; height: 48px; border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 24px;
-}
-.role-card-icon .material-symbols-outlined {
-  font-size: 24px;
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-.role-card-name {
-  font-family: 'DM Serif Display', serif;
-  font-size: 1.2rem; color: #fff; margin-bottom: 4px;
-}
-.role-card-desc {
-  font-size: .82rem; color: var(--text-m); line-height: 1.6; flex: 1;
-}
-.role-card-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  font-size: .88rem; font-weight: 700;
-  color: #fff; text-decoration: none;
-  padding: 12px 20px; border-radius: 12px;
-  transition: all .2s;
-  font-family: inherit;
-}
-.role-card-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
-.role-card-btn .material-symbols-outlined { font-size: 16px; }
-
-/* divider */
-.section-divider {
-  width: calc(100% - clamp(32px,10vw,128px));
-  margin: 0 auto;
-  height: 1px;
-  background: var(--border);
-}
-
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
   .nav-links { display: none; }
@@ -728,11 +648,10 @@ footer {
     <?php if($biz_addr || $biz_phone): ?>
     <a href="#info" class="nav-link">About</a>
     <?php endif; ?>
-    <a href="#join" class="nav-link">Join Team</a>
   </div>
 
   <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin">
-    <span class="material-symbols-outlined">login</span>Staff Sign In
+    <span class="material-symbols-outlined">login</span>Sign In
   </a>
 </nav>
 
@@ -757,7 +676,7 @@ footer {
       </a>
       <?php endif; ?>
       <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-secondary">
-        <span class="material-symbols-outlined">login</span>Staff Sign In
+        <span class="material-symbols-outlined">login</span>Sign In
       </a>
     </div>
 
@@ -925,77 +844,15 @@ footer {
 </section>
 <?php endif; ?>
 
-<!-- STAFF / MANAGER REGISTRATION -->
-<div class="section-divider"></div>
-<section class="staff-reg-section" id="join">
-  <div class="staff-reg-header">
-    <div class="staff-reg-label">👋 Join the Team</div>
-    <h2 class="staff-reg-title">Already Have an Invitation?</h2>
-    <p class="staff-reg-sub">
-      If you received an invite email from the branch owner, click the matching role below to set up your account.
-    </p>
-  </div>
-
-  <div class="role-cards">
-
-    <!-- Tenant Owner -->
-    <div class="role-card">
-      <div class="role-card-icon" style="background:color-mix(in srgb,#2563eb 18%,transparent);color:#60a5fa;">
-        <span class="material-symbols-outlined">storefront</span>
-      </div>
-      <div>
-        <div class="role-card-name">Branch Owner</div>
-        <div class="role-card-desc">Set up your PawnHub account as the owner of this branch. Use the link from your invitation email.</div>
-      </div>
-      <a href="<?= htmlspecialchars($register_url) ?>" class="role-card-btn" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);box-shadow:0 4px 18px rgba(37,99,235,.3);">
-        <span class="material-symbols-outlined">person_add</span>Set Up Owner Account
-      </a>
-    </div>
-
-    <!-- Manager -->
-    <div class="role-card">
-      <div class="role-card-icon" style="background:color-mix(in srgb,#059669 18%,transparent);color:#34d399;">
-        <span class="material-symbols-outlined">manage_accounts</span>
-      </div>
-      <div>
-        <div class="role-card-name">Branch Manager</div>
-        <div class="role-card-desc">Register as a Branch Manager. You need an invitation token sent to your email by the branch owner.</div>
-      </div>
-      <a href="<?= htmlspecialchars('/' . rawurlencode($slug) . '?register=1&role=manager') ?>" class="role-card-btn" style="background:linear-gradient(135deg,#064e3b,#059669);box-shadow:0 4px 18px rgba(5,150,105,.3);">
-        <span class="material-symbols-outlined">person_add</span>Set Up Manager Account
-      </a>
-    </div>
-
-    <!-- Staff / Cashier -->
-    <div class="role-card">
-      <div class="role-card-icon" style="background:color-mix(in srgb,#7c3aed 18%,transparent);color:#a78bfa;">
-        <span class="material-symbols-outlined">badge</span>
-      </div>
-      <div>
-        <div class="role-card-name">Staff / Cashier</div>
-        <div class="role-card-desc">Register as Staff or Cashier. You need an invitation token sent to your email by the branch admin.</div>
-      </div>
-      <a href="<?= htmlspecialchars('/' . rawurlencode($slug) . '?register=1&role=staff') ?>" class="role-card-btn" style="background:linear-gradient(135deg,#4c1d95,#7c3aed);box-shadow:0 4px 18px rgba(124,58,237,.3);">
-        <span class="material-symbols-outlined">person_add</span>Set Up Staff Account
-      </a>
-    </div>
-
-  </div>
-
-  <div style="text-align:center;margin-top:28px;">
-    <p style="font-size:.8rem;color:var(--text-dim);">Already have an account? <a href="<?= htmlspecialchars($login_url) ?>" style="color:var(--primary);font-weight:700;text-decoration:none;">Sign in here →</a></p>
-  </div>
-</section>
-
 <!-- CTA -->
 <section style="padding-top: 0;">
   <div class="cta-banner">
     <h2 class="cta-banner-title">Ready to Pawn or Redeem?</h2>
     <p class="cta-banner-sub">
-      Sign in to your staff account to process transactions, or visit our branch directly.
+      Visit us in-branch or sign in to manage transactions.
     </p>
     <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-primary" style="display:inline-flex;">
-      <span class="material-symbols-outlined">login</span>Staff Sign In
+      <span class="material-symbols-outlined">login</span>Sign In
     </a>
   </div>
 </section>
@@ -1014,7 +871,7 @@ footer {
   </div>
   <div class="footer-meta">Powered by PawnHub · © <?= date('Y') ?></div>
   <a href="<?= htmlspecialchars($login_url) ?>" class="footer-signin">
-    <span class="material-symbols-outlined" style="font-size:15px;">login</span>Staff Sign In
+    <span class="material-symbols-outlined" style="font-size:15px;">login</span>Sign In
   </a>
 </footer>
 
@@ -1027,7 +884,7 @@ footer {
     <div style="padding:24px;">
       <div id="modalContent"></div>
       <a href="<?= htmlspecialchars($login_url) ?>" class="modal-btn">
-        <span class="material-symbols-outlined">login</span>Sign In to Process
+        <span class="material-symbols-outlined">login</span>Sign In
       </a>
       <button class="modal-btn secondary" onclick="closeItem()">Close</button>
     </div>
