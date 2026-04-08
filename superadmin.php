@@ -301,6 +301,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         header('Location: subscription_cron.php?cron_secret=' . urlencode($cron_secret));
         exit;
     }
+
+    // ── ADD ANOTHER SUPER ADMIN ───────────────────────────────
+    if ($_POST['action'] === 'add_super_admin') {
+        $sa_fullname = trim($_POST['sa_fullname'] ?? '');
+        $sa_username = trim($_POST['sa_username'] ?? '');
+        $sa_email    = trim($_POST['sa_email']    ?? '');
+        $sa_password = trim($_POST['sa_password'] ?? '');
+        $sa_confirm  = trim($_POST['sa_confirm']  ?? '');
+
+        if (!$sa_fullname || !$sa_username || !$sa_email || !$sa_password || !$sa_confirm) {
+            $error_msg   = 'Please fill in all fields for the new Super Admin.';
+        } elseif (strlen($sa_password) < 8) {
+            $error_msg   = 'Password must be at least 8 characters.';
+        } elseif ($sa_password !== $sa_confirm) {
+            $error_msg   = 'Passwords do not match.';
+        } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
+            $error_msg   = 'Invalid email address.';
+        } else {
+            $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
+            $dup->execute([$sa_username, $sa_email]);
+            if ($dup->fetch()) {
+                $error_msg = 'Username or email is already in use.';
+            } else {
+                $hashed_pw = password_hash($sa_password, PASSWORD_DEFAULT);
+                $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
+                    VALUES (?, ?, ?, ?, 'super_admin', 'approved', 0, NULL, NOW())")
+                    ->execute([$sa_fullname, $sa_username, $sa_email, $hashed_pw]);
+                $new_sa_id = $pdo->lastInsertId();
+                try {
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
+                        VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
+                        ->execute([$u['id'], $u['username'], $new_sa_id,
+                            "Super Admin \"{$u['username']}\" added new Super Admin \"{$sa_username}\" ({$sa_email}).",
+                            $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                } catch (PDOException $e) {}
+                $success_msg = "✅ New Super Admin \"<strong>{$sa_fullname}</strong>\" (@{$sa_username}) added successfully!";
+            }
+        }
+        $active_page = 'settings';
+    }
+
+    // ── REMOVE SUPER ADMIN ────────────────────────────────────
+    if ($_POST['action'] === 'remove_super_admin') {
+        $target_id = intval($_POST['target_id'] ?? 0);
+        if ($target_id === (int)$u['id']) {
+            $error_msg = 'You cannot remove your own Super Admin account.';
+        } else {
+            $check = $pdo->prepare("SELECT id, username, fullname FROM users WHERE id = ? AND role = 'super_admin' LIMIT 1");
+            $check->execute([$target_id]);
+            $target = $check->fetch();
+            if ($target) {
+                $pdo->prepare("DELETE FROM users WHERE id = ? AND role = 'super_admin'")->execute([$target_id]);
+                try {
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
+                        VALUES (NULL, ?, ?, 'super_admin', 'REMOVE_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
+                        ->execute([$u['id'], $u['username'], $target_id,
+                            "Super Admin \"{$u['username']}\" removed Super Admin \"{$target['username']}\".",
+                            $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                } catch (PDOException $e) {}
+                $success_msg = "Super Admin \"<strong>{$target['fullname']}</strong>\" has been removed.";
+            } else {
+                $error_msg = 'Super Admin account not found.';
+            }
+        }
+        $active_page = 'settings';
+    }
 }
 
 // ── FETCH CORE DATA ──────────────────────────────────────────
@@ -1306,6 +1372,56 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         </div>
 
         <div class="card" style="margin-bottom:16px;">
+          <div class="card-hdr">
+            <span class="card-title">🛡️ Super Admin Accounts</span>
+            <button type="button" onclick="document.getElementById('addSuperAdminModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.75rem;">
+              ➕ Add Super Admin
+            </button>
+          </div>
+          <?php
+            // Fetch all super admins
+            try {
+                $sa_list = $pdo->query("SELECT id, fullname, username, email, created_at FROM users WHERE role = 'super_admin' AND status = 'approved' ORDER BY created_at ASC")->fetchAll();
+            } catch (PDOException $e) { $sa_list = []; }
+          ?>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Full Name</th><th>Username</th><th>Email</th><th>Date Added</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                <?php foreach ($sa_list as $i => $sa): ?>
+                <tr>
+                  <td style="color:var(--text-dim);font-size:.73rem;"><?= $i + 1 ?></td>
+                  <td style="font-weight:600;"><?= htmlspecialchars($sa['fullname']) ?></td>
+                  <td style="font-family:monospace;font-size:.78rem;color:var(--blue-acc);">@<?= htmlspecialchars($sa['username']) ?></td>
+                  <td style="font-size:.78rem;color:var(--text-dim);"><?= htmlspecialchars($sa['email']) ?></td>
+                  <td style="font-size:.73rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($sa['created_at'])) ?></td>
+                  <td>
+                    <?php if ((int)$sa['id'] === (int)$u['id']): ?>
+                      <span class="badge b-purple">You</span>
+                    <?php else: ?>
+                      <form method="POST" style="display:inline;" onsubmit="return confirm('Remove Super Admin \"<?= htmlspecialchars($sa['username'], ENT_QUOTES) ?>\"? This cannot be undone.')">
+                        <input type="hidden" name="action" value="remove_super_admin">
+                        <input type="hidden" name="target_id" value="<?= $sa['id'] ?>">
+                        <button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Remove</button>
+                      </form>
+                    <?php endif; ?>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php if (empty($sa_list)): ?>
+                <tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px;">No super admins found.</td></tr>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;font-size:.75rem;color:var(--text-dim);background:#f8fafc;border-radius:8px;padding:10px 14px;">
+            ⚠️ Super Admins have full access to the system. Only add trusted users. You cannot remove your own account.
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr"><span class="card-title">👤 User Role Permissions</span></div>
           <div style="overflow-x:auto;">
             <table>
@@ -1573,5 +1689,64 @@ function updatePlanCard(selected){
   });
 }
 </script>
+
+<!-- ══ ADD SUPER ADMIN MODAL ══════════════════════════════════ -->
+<div class="modal-overlay" id="addSuperAdminModal">
+  <div class="modal" style="width:500px;">
+    <div class="mhdr">
+      <div><div class="mtitle">🛡️ Add New Super Admin</div><div class="msub">This account will have full system access.</div></div>
+      <button class="mclose" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="mbody">
+      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#92400e;margin-bottom:16px;line-height:1.7;">
+        ⚠️ <strong>Warning:</strong> Super Admins have unrestricted access to all tenants, data, and system settings. Only add someone you fully trust.
+      </div>
+      <form method="POST" action="?page=settings">
+        <input type="hidden" name="action" value="add_super_admin">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div style="grid-column:1/-1;">
+            <label class="flabel">Full Name *</label>
+            <input type="text" name="sa_fullname" class="finput" placeholder="e.g. Maria Santos" required>
+          </div>
+          <div>
+            <label class="flabel">Username *</label>
+            <input type="text" name="sa_username" class="finput" placeholder="e.g. mariasantos" required autocomplete="off">
+          </div>
+          <div>
+            <label class="flabel">Email *</label>
+            <input type="email" name="sa_email" class="finput" placeholder="e.g. maria@email.com" required>
+          </div>
+          <div>
+            <label class="flabel">Password * <span style="color:#94a3b8;font-size:.65rem;">(min. 8 chars)</span></label>
+            <div style="position:relative;">
+              <input type="password" name="sa_password" id="sa-pw" class="finput" placeholder="••••••••" required autocomplete="new-password" style="padding-right:42px;">
+              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="flabel">Confirm Password *</label>
+            <div style="position:relative;">
+              <input type="password" name="sa_confirm" id="sa-pw2" class="finput" placeholder="••••••••" required style="padding-right:42px;">
+              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw2');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary" style="background:linear-gradient(135deg,#4338ca,#7c3aed);border-color:#7c3aed;">
+            🛡️ Create Super Admin
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
