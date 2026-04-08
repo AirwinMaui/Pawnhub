@@ -97,7 +97,7 @@ if ($success) {
     $slug_row    = $slug_stmt->fetch();
     $tenant_slug = $slug_row['slug'] ?? '';
     $login_url   = !empty($tenant_slug)
-        ? '/' . urlencode($tenant_slug) . '?registered=1'
+        ? '/' . urlencode($tenant_slug) . '?login=1&registered=1'
         : 'login.php';
     // Redirect to tenant login page after 4 seconds
     header('refresh:4;url=' . $login_url);

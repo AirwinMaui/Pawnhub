@@ -72,8 +72,8 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
 function sendTenantInvitation(string $toEmail, string $toName, string $businessName, string $token, string $slug = ''): bool
 {
     $link = $slug
-        ? APP_URL . '/' . urlencode($slug) . '?token=' . urlencode($token)
-        : APP_URL . '/tenant_login.php?token=' . urlencode($token);
+        ? APP_URL . '/' . urlencode($slug) . '?register=1&token=' . urlencode($token)
+        : APP_URL . '/tenant_register.php?token=' . urlencode($token);
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -219,9 +219,11 @@ function sendTenantApproved(string $toEmail, string $toName, string $businessNam
 // STAFF / CASHIER EMAILS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function sendStaffInvitation(string $toEmail, string $toName, string $businessName, string $role, string $token): bool
+function sendStaffInvitation(string $toEmail, string $toName, string $businessName, string $role, string $token, string $slug = ''): bool
 {
-    $registerLink = APP_URL . '/staff_register.php?token=' . urlencode($token);
+    $registerLink = $slug
+        ? APP_URL . '/' . urlencode($slug) . '?token=' . urlencode($token) . '&role=' . urlencode($role)
+        : APP_URL . '/staff_register.php?token=' . urlencode($token);
     $roleLabel    = ucfirst($role);
     $roleColor    = $role === 'cashier' ? '#7c3aed' : '#2563eb';
     $roleBg       = $role === 'cashier' ? 'linear-gradient(135deg,#4c1d95,#7c3aed)' : 'linear-gradient(135deg,#1e3a8a,#2563eb)';
@@ -302,8 +304,9 @@ function sendStaffWelcome(string $toEmail, string $toName, string $businessName,
 
 function sendManagerInvitation(string $toEmail, string $toName, string $businessName, string $token, string $slug = ''): bool
 {
-    $registerLink = APP_URL . '/manager_register.php?token=' . urlencode($token)
-        . ($slug ? '&slug=' . urlencode($slug) : '');
+    $registerLink = $slug
+        ? APP_URL . '/' . urlencode($slug) . '?token=' . urlencode($token) . '&role=manager'
+        : APP_URL . '/manager_register.php?token=' . urlencode($token);
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">

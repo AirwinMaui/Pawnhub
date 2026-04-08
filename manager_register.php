@@ -120,8 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
 
                 $success = true;
                 $slug = $inv['slug'] ?? '';
-                $redirect_url = $slug ? '/' . rawurlencode($slug) : '/login.php';
-                // Redirect to manager dashboard after 2 seconds
+                $redirect_url = $slug ? '/' . rawurlencode($slug) . '?login=1' : '/login.php';
+                // Redirect to manager login page after 2 seconds
                 header('refresh:2;url=' . $redirect_url);
             }
         } catch (Throwable $e) {
@@ -263,7 +263,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;position:
       <p class="state-sub">Welcome to <strong><?= $biz_name ?></strong>!<br>Your Manager account is ready.<br><br>Redirecting you to your branch login page...</p>
       <div class="state-redirect">
         ⏳ Redirecting in 2 seconds...<br>
-        <a href="<?= $inv_slug ? '/' . htmlspecialchars($inv_slug) : '/login.php' ?>">Click here if not redirected</a>
+        <a href="<?= $inv_slug ? '/' . htmlspecialchars($inv_slug) . '?login=1' : '/login.php' ?>">Click here if not redirected</a>
       </div>
     </div>
   </div>

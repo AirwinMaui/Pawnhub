@@ -33,11 +33,9 @@ if (!$token) {
 }
 
 // ── Determine redirect URL based on role ─────────────────────
-// Defined early so it's ALWAYS available — prevents undefined variable fatal errors
+// After registration, always send to the tenant login page
 function getStaffRedirectUrl(string $role, string $slug = ''): string {
-    if ($role === 'staff')   return '/staff.php';
-    if ($role === 'cashier') return '/cashier.php';
-    return !empty($slug) ? '/' . $slug : '/login.php';
+    return !empty($slug) ? '/' . rawurlencode($slug) . '?login=1' : '/login.php';
 }
 $redirect_url = $inv ? getStaffRedirectUrl($inv['role'] ?? '', $inv['slug'] ?? '') : 'login.php';
 
