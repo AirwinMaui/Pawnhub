@@ -18,14 +18,18 @@ if ($slug && !in_array(strtolower($slug), $reserved)) {
     // ?login=1 or ?page=login → go to tenant login
     $want_login = isset($_GET['login']) || (($_GET['page'] ?? '') === 'login');
 
-    // ?register=1 or ?token=xxx → tenant owner registration
-    $want_tenant_register = isset($_GET['register']) || (isset($_GET['token']) && !isset($_GET['role']));
+    $token = $_GET['token'] ?? '';
+    $role  = strtolower($_GET['role'] ?? '');
 
-    // ?token=xxx&role=manager → manager registration
-    $want_manager_register = isset($_GET['token']) && (($_GET['role'] ?? '') === 'manager');
+    // ?token=xxx&role=manager  OR  ?register=1&role=manager → manager registration
+    $want_manager_register = ($role === 'manager') && (isset($_GET['token']) || isset($_GET['register']));
 
-    // ?token=xxx&role=staff or role=cashier → staff registration
-    $want_staff_register = isset($_GET['token']) && in_array($_GET['role'] ?? '', ['staff', 'cashier']);
+    // ?token=xxx&role=staff/cashier  OR  ?register=1&role=staff/cashier → staff registration
+    $want_staff_register = in_array($role, ['staff', 'cashier']) && (isset($_GET['token']) || isset($_GET['register']));
+
+    // ?register=1 (no role) or ?token=xxx (no role) → tenant owner registration
+    $want_tenant_register = !$want_manager_register && !$want_staff_register
+        && (isset($_GET['register']) || ($token && !$role));
 
     if ($want_login) {
         session_start();
