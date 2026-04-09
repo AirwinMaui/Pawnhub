@@ -21,15 +21,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cc_number = trim($_POST['cc_number'] ?? '');
     $cc_expiry = trim($_POST['cc_expiry'] ?? '');
 
+    $needs_payment = in_array($plan, ['Pro', 'Enterprise']);
+
     if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
     } elseif ($pass !== $conf) {
         $error = 'Passwords do not match.';
     } elseif (strlen($pass) < 8) {
         $error = 'Password must be at least 8 characters.';
-    } elseif (!$payment_method) {
+    } elseif ($needs_payment && !$payment_method) {
         $error = 'Please select a payment method.';
-    } elseif ($payment_method === 'Credit Card' && (!$cc_name || !$cc_number || !$cc_expiry)) {
+    } elseif ($needs_payment && $payment_method === 'Credit Card' && (!$cc_name || !$cc_number || !$cc_expiry)) {
         $error = 'Please fill in all credit card details.';
     } elseif (empty($_FILES['business_permit']['name'])) {
         $error = 'Please upload your Business Permit.';
@@ -71,16 +73,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
 
                     $pdo->beginTransaction();
-                    $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,business_permit_url,payment_info) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
-                        ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url, $payment_info]);
-                    $new_tid = $pdo->lastInsertId();
-                    $new_uid = null;
-                    $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
-                        ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
-                    $new_uid = $pdo->lastInsertId();
-                    $pdo->commit();
+                    try {
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,business_permit_url,payment_info) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
+                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url, $payment_info]);
+                        $new_tid = $pdo->lastInsertId();
+                        $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
+                            ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
+                        $new_uid = $pdo->lastInsertId();
+                        $pdo->commit();
+                    } catch (Throwable $dbErr) {
+                        $pdo->rollBack();
+                        @unlink($upload_path); // clean up uploaded file
+                        error_log('[Signup] DB error: ' . $dbErr->getMessage());
+                        $error = 'Registration failed due to a server error. Please try again.';
+                        goto end_processing;
+                    }
 
-                    if (in_array($plan, ['Pro', 'Enterprise'])) {
+                    if ($needs_payment) {
                         $_SESSION['pending_tenant_id'] = $new_tid;
                         $_SESSION['pending_user_id']   = $new_uid;
                         $_SESSION['pending_plan']      = $plan;
@@ -91,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $success = true;
+                    end_processing:
                 }
             }
         }
@@ -414,12 +424,12 @@ select.glass-input option {
         </div>
 
         <!-- ── SECTION 4: Payment ─────────────────────────────── -->
-        <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
+        <div id="payment_section" style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;<?= $selected_plan === 'Starter' ? 'display:none;' : '' ?>">
           <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">💳 Payment Information <span style="color:#f87171;">*</span></p>
           <div style="display:flex;flex-direction:column;gap:12px;">
             <div>
               <label class="field-label">Payment Method *</label>
-              <select name="payment_method" id="payment_method_sel" class="glass-input" required onchange="handlePaymentMethodChange(this.value)">
+              <select name="payment_method" id="payment_method_sel" class="glass-input" onchange="handlePaymentMethodChange(this.value)">
                 <option value="" style="color:rgba(255,255,255,0.4);">— Select Payment Method —</option>
                 <option value="Credit Card"              <?= ($_POST['payment_method']??'')==='Credit Card'             ?'selected':'' ?>>💳 Credit Card</option>
                 <option value="GCash"                    <?= ($_POST['payment_method']??'')==='GCash'                   ?'selected':'' ?>>📱 GCash</option>
@@ -554,6 +564,18 @@ function selectPlan(name) {
   ['Starter','Pro','Enterprise'].forEach(n => {
     document.getElementById('pill-' + n).classList.toggle('active', n === name);
   });
+
+  // Show/hide payment section for paid plans
+  const paySection = document.getElementById('payment_section');
+  const paySelect  = document.getElementById('payment_method_sel');
+  const isPaid     = (name === 'Pro' || name === 'Enterprise');
+  paySection.style.display = isPaid ? 'block' : 'none';
+  paySelect.required       = isPaid;
+  if (!isPaid) {
+    paySelect.value = '';
+    document.getElementById('cc_fields').style.display   = 'none';
+    document.getElementById('reference_field').style.display = 'block';
+  }
 }
 
 // ── Business Permit File Handling ─────────────────────────────
@@ -597,6 +619,14 @@ function handlePaymentMethodChange(method) {
 <?php if (($_POST['payment_method'] ?? '') === 'Credit Card'): ?>
 handlePaymentMethodChange('Credit Card');
 <?php endif; ?>
+// On page load, set required state based on current plan
+(function() {
+  const plan = document.getElementById('plan_input').value;
+  if (plan === 'Pro' || plan === 'Enterprise') {
+    document.getElementById('payment_method_sel').required = true;
+    document.getElementById('payment_section').style.display = 'block';
+  }
+})();
 
 // ── Credit Card Formatting ────────────────────────────────────
 function formatCardNumber(input) {

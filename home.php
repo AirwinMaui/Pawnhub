@@ -13,21 +13,10 @@ if (!empty($_SESSION['user'])) {
 // Live stats mula sa database — hindi mag-blank kahit may DB error
 $total_tenants = $total_users = $total_tickets = 0;
 try {
-    // Manual na connect para hindi mag-die() kung walang SSL cert o DB
-    $ssl_cert = __DIR__ . '/certs/DigiCertGlobalRootG2.crt.pem';
-    $dsn = 'mysql:host=pawnhub.mysql.database.azure.com;port=3306;dbname=pawnhub;charset=utf8mb4';
-    $opts = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ];
-    if (file_exists($ssl_cert)) {
-        $opts[PDO::MYSQL_ATTR_SSL_CA] = $ssl_cert;
-    }
-    $pdo_home = new PDO($dsn, 'PawnhubAdmin', 'Admin123', $opts);
-    $total_tenants = (int)$pdo_home->query("SELECT COUNT(*) FROM tenants WHERE status='active'")->fetchColumn();
-    $total_users   = (int)$pdo_home->query("SELECT COUNT(*) FROM users WHERE status='approved'")->fetchColumn();
-    $total_tickets = (int)$pdo_home->query("SELECT COUNT(*) FROM pawn_transactions")->fetchColumn();
+    require_once 'db.php'; // uses the same secure connection as the rest of the app
+    $total_tenants = (int)$pdo->query("SELECT COUNT(*) FROM tenants WHERE status='active'")->fetchColumn();
+    $total_users   = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status='approved'")->fetchColumn();
+    $total_tickets = (int)$pdo->query("SELECT COUNT(*) FROM pawn_transactions")->fetchColumn();
 } catch (Throwable $e) {
     // Patuloy na mag-render ang page kahit walang DB — zero lang ang stats
 }

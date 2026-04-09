@@ -49,22 +49,33 @@ if ($event_type === 'checkout_session.payment.paid') {
     $plan      = $metadata['plan'] ?? '';
 
     if ($tenant_id && $user_id) {
-        // Determine expiry (1 month from now)
-        $expires_at = date('Y-m-d H:i:s', strtotime('+1 month'));
+        try {
+            // Determine expiry (1 month from now)
+            $expires_at = date('Y-m-d H:i:s', strtotime('+1 month'));
 
-        // Activate tenant and user
-        $pdo->prepare("UPDATE tenants SET status='active', plan=?, subscription_expires_at=?, paymongo_paid_at=NOW() WHERE id=? AND paymongo_session_id=?")
-            ->execute([$plan, $expires_at, $tenant_id, $session_id]);
+            // Resolve amount from plan
+            $plan_amounts = ['Pro' => 99900, 'Enterprise' => 249900];
+            $amount_centavos = $plan_amounts[$plan] ?? 0;
 
-        $pdo->prepare("UPDATE users SET status='active' WHERE id=? AND tenant_id=?")
-            ->execute([$user_id, $tenant_id]);
+            // Activate tenant and user
+            $pdo->prepare("UPDATE tenants SET status='active', plan=?, subscription_expires_at=?, paymongo_paid_at=NOW() WHERE id=? AND paymongo_session_id=?")
+                ->execute([$plan, $expires_at, $tenant_id, $session_id]);
 
-        // Optional: log payment
-        $pdo->prepare("INSERT INTO payment_logs (tenant_id, user_id, session_id, plan, amount, status, created_at)
-                       SELECT ?, ?, ?, ?, line_items, 'paid', NOW() FROM (SELECT 1) x")
-            ->execute([$tenant_id, $user_id, $session_id, $plan]);
+            $pdo->prepare("UPDATE users SET status='active' WHERE id=? AND tenant_id=?")
+                ->execute([$user_id, $tenant_id]);
 
-        error_log("[Webhook] Activated tenant_id={$tenant_id}, plan={$plan}");
+            // Log payment
+            $pdo->prepare("INSERT INTO payment_logs (tenant_id, user_id, session_id, plan, amount, status, created_at) VALUES (?,?,?,?,?,'paid',NOW())")
+                ->execute([$tenant_id, $user_id, $session_id, $plan, $amount_centavos]);
+
+            error_log("[Webhook] Activated tenant_id={$tenant_id}, plan={$plan}");
+        } catch (Throwable $e) {
+            error_log("[Webhook] DB error for tenant_id={$tenant_id}: " . $e->getMessage());
+            // Return 500 so PayMongo retries
+            http_response_code(500);
+            echo json_encode(['error' => 'db_error']);
+            exit;
+        }
     }
 }
 
