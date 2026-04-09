@@ -15,14 +15,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $plan       = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
     $branches   = intval($_POST['branches'] ?? 1);
 
-    // Payment fields
     $payment_method    = trim($_POST['payment_method']    ?? '');
     $payment_reference = trim($_POST['payment_reference'] ?? '');
-    // Credit card fields (stored masked — never store raw CVV)
     $cc_name   = trim($_POST['cc_name']   ?? '');
-    $cc_number = trim($_POST['cc_number'] ?? '');  // will be masked before storing
+    $cc_number = trim($_POST['cc_number'] ?? '');
     $cc_expiry = trim($_POST['cc_expiry'] ?? '');
-    // CVV intentionally NOT stored
 
     if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
@@ -37,16 +34,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (empty($_FILES['business_permit']['name'])) {
         $error = 'Please upload your Business Permit.';
     } else {
-        // ── Handle business permit upload ──────────────────────
-        $allowed_types = ['image/jpeg','image/jpg','image/png','application/pdf'];
-        $file_type     = $_FILES['business_permit']['type'];
-        $file_size     = $_FILES['business_permit']['size'];
-        $file_tmp      = $_FILES['business_permit']['tmp_name'];
-        $file_name     = $_FILES['business_permit']['name'];
+        $file_size = $_FILES['business_permit']['size'];
+        $file_tmp  = $_FILES['business_permit']['tmp_name'];
+        $file_name = $_FILES['business_permit']['name'];
 
-        if (!in_array($file_type, $allowed_types)) {
-            $error = 'Business permit must be JPG, PNG, or PDF only.';
-        } elseif ($file_size > 5 * 1024 * 1024) { // 5MB max
+        if ($file_size > 5 * 1024 * 1024) {
             $error = 'Business permit file must be less than 5MB.';
         } else {
             $chk = $pdo->prepare("SELECT id FROM users WHERE username=? OR email=?");
@@ -54,25 +46,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($chk->fetch()) {
                 $error = 'Username or email already exists.';
             } else {
-                // Save file
                 $upload_dir = __DIR__ . '/uploads/permits/';
                 if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-                $ext          = pathinfo($file_name, PATHINFO_EXTENSION);
-                $safe_name    = 'permit_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-                $upload_path  = $upload_dir . $safe_name;
-                $permit_url   = 'uploads/permits/' . $safe_name;
+                $ext         = pathinfo($file_name, PATHINFO_EXTENSION);
+                $safe_name   = 'permit_' . time() . '_' . bin2hex(random_bytes(6)) . ($ext ? '.' . $ext : '');
+                $upload_path = $upload_dir . $safe_name;
+                $permit_url  = 'uploads/permits/' . $safe_name;
 
                 if (!move_uploaded_file($file_tmp, $upload_path)) {
                     $error = 'Failed to upload file. Please try again.';
                 } else {
-                    // Mask credit card number (keep last 4 digits only)
                     $cc_masked = '';
                     if ($payment_method === 'Credit Card' && $cc_number) {
                         $digits_only = preg_replace('/\D/', '', $cc_number);
                         $cc_masked   = 'XXXX-XXXX-XXXX-' . substr($digits_only, -4);
                     }
 
-                    // Build payment info JSON for storage
                     $payment_info = json_encode([
                         'method'    => $payment_method,
                         'reference' => $payment_reference,
@@ -91,7 +80,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $new_uid = $pdo->lastInsertId();
                     $pdo->commit();
 
-                    // ── Redirect paid plans to PayMongo checkout ──────────
                     if (in_array($plan, ['Pro', 'Enterprise'])) {
                         $_SESSION['pending_tenant_id'] = $new_tid;
                         $_SESSION['pending_user_id']   = $new_uid;
@@ -102,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
 
-                    $success = true;   // Starter plan — no payment needed
+                    $success = true;
                 }
             }
         }
@@ -127,6 +115,7 @@ if (!array_key_exists($selected_plan, $plans)) $selected_plan = 'Starter';
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
+* { box-sizing: border-box; }
 body { font-family: "Inter", sans-serif; }
 .material-symbols-outlined { font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24; }
 .glass-panel {
@@ -137,44 +126,57 @@ body { font-family: "Inter", sans-serif; }
 }
 .glass-input {
     width: 100%;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.08) !important;
+    border: 1.5px solid rgba(255,255,255,0.25) !important;
     border-radius: 12px;
     padding: 12px 16px;
-    color: #fff;
+    color: #fff !important;
     font-family: "Inter", sans-serif;
     font-size: 0.875rem;
     outline: none;
     transition: all 0.2s;
+    -webkit-text-fill-color: #fff !important;
+}
+.glass-input:hover {
+    border-color: rgba(255,255,255,0.4) !important;
 }
 .glass-input:focus {
-    background: rgba(255,255,255,0.13);
-    border-color: rgba(59,130,246,0.6);
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    background: rgba(255,255,255,0.13) !important;
+    border-color: rgba(59,130,246,0.8) !important;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.2) !important;
+    color: #fff !important;
+    -webkit-text-fill-color: #fff !important;
 }
-.glass-input::placeholder { color: rgba(255,255,255,0.35); }
+.glass-input::placeholder {
+    color: rgba(255,255,255,0.35) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.35) !important;
+    opacity: 1;
+}
 .glass-input option { background: #1e293b; color: #fff; }
 
-/* Fix browser autofill white background override */
+/* Fix browser autofill */
 .glass-input:-webkit-autofill,
 .glass-input:-webkit-autofill:hover,
 .glass-input:-webkit-autofill:focus,
 .glass-input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 9999px rgba(255,255,255,0.08) inset !important;
-    box-shadow: 0 0 0 9999px rgba(255,255,255,0.08) inset !important;
+    -webkit-box-shadow: 0 0 0 9999px rgba(30,41,59,0.95) inset !important;
+    box-shadow: 0 0 0 9999px rgba(30,41,59,0.95) inset !important;
     -webkit-text-fill-color: #fff !important;
     caret-color: #fff;
-    border-color: rgba(255,255,255,0.12) !important;
+    border-color: rgba(255,255,255,0.25) !important;
     transition: background-color 99999s ease-in-out 0s;
 }
 .glass-input:-webkit-autofill:focus {
-    -webkit-box-shadow: 0 0 0 9999px rgba(255,255,255,0.13) inset, 0 0 0 3px rgba(59,130,246,0.15) !important;
-    border-color: rgba(59,130,246,0.6) !important;
+    -webkit-box-shadow: 0 0 0 9999px rgba(30,41,59,0.95) inset, 0 0 0 3px rgba(59,130,246,0.2) !important;
+    border-color: rgba(59,130,246,0.8) !important;
 }
-/* Fix for Firefox */
-.glass-input:autofill {
-    background: rgba(255,255,255,0.08) !important;
+select.glass-input {
+    -webkit-text-fill-color: #fff !important;
     color: #fff !important;
+}
+select.glass-input option {
+    background: #1e293b;
+    color: #fff;
 }
 .plan-pill {
     cursor: pointer;
@@ -182,10 +184,14 @@ body { font-family: "Inter", sans-serif; }
     border-radius: 100px;
     font-size: 0.78rem;
     font-weight: 700;
-    border: 1.5px solid rgba(255,255,255,0.15);
-    color: rgba(255,255,255,0.5);
+    border: 1.5px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.55);
     background: rgba(255,255,255,0.06);
     transition: all 0.2s;
+}
+.plan-pill:hover {
+    border-color: rgba(255,255,255,0.4);
+    color: rgba(255,255,255,0.8);
 }
 .plan-pill.active {
     background: #3b82f6;
@@ -199,7 +205,6 @@ body { font-family: "Inter", sans-serif; }
     background-position: center;
     background-attachment: fixed;
 }
-/* Credit Card visual */
 .cc-card-preview {
     background: linear-gradient(135deg, #1e3a8a, #7c3aed);
     border-radius: 14px;
@@ -227,7 +232,7 @@ body { font-family: "Inter", sans-serif; }
     background: rgba(255,255,255,0.05);
 }
 .file-upload-zone {
-    border: 2px dashed rgba(255,255,255,0.2);
+    border: 2px dashed rgba(255,255,255,0.25);
     border-radius: 12px;
     padding: 20px;
     text-align: center;
@@ -236,8 +241,19 @@ body { font-family: "Inter", sans-serif; }
     background: rgba(255,255,255,0.04);
 }
 .file-upload-zone:hover, .file-upload-zone.drag-over {
-    border-color: rgba(59,130,246,0.6);
+    border-color: rgba(59,130,246,0.7);
     background: rgba(59,130,246,0.08);
+}
+
+/* Label style */
+.field-label {
+    display: block;
+    font-size: 0.67rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 6px;
 }
 </style>
 </head>
@@ -323,22 +339,20 @@ body { font-family: "Inter", sans-serif; }
         <!-- ── SECTION 1: Business Info ──────────────────────── -->
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
           <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">📋 Business Information</p>
-
           <div style="display:flex;flex-direction:column;gap:12px;">
             <div>
-              <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Business Name *</label>
+              <label class="field-label">Business Name *</label>
               <input type="text" name="business_name" class="glass-input" placeholder="e.g. GoldKing Pawnshop"
                 autocomplete="off" value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>" required>
             </div>
-
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
-                <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Phone Number</label>
+                <label class="field-label">Phone Number</label>
                 <input type="text" name="phone" class="glass-input" placeholder="09XXXXXXXXX"
                   autocomplete="off" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
               </div>
               <div>
-                <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Address</label>
+                <label class="field-label">Address</label>
                 <input type="text" name="address" class="glass-input" placeholder="City, Province"
                   autocomplete="off" value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
               </div>
@@ -349,13 +363,12 @@ body { font-family: "Inter", sans-serif; }
         <!-- ── SECTION 2: Business Permit Upload ─────────────── -->
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
           <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">📄 Business Permit <span style="color:#f87171;">*</span></p>
-
           <div class="file-upload-zone" id="permitDropZone" onclick="document.getElementById('business_permit').click()">
-            <input type="file" name="business_permit" id="business_permit" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="handlePermitFile(this)">
+            <input type="file" name="business_permit" id="business_permit" accept="*/*" style="display:none;" onchange="handlePermitFile(this)">
             <div id="permitPlaceholder">
               <span class="material-symbols-outlined" style="font-size:32px;color:rgba(255,255,255,0.3);margin-bottom:8px;display:block;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">upload_file</span>
               <p style="font-size:0.82rem;font-weight:600;color:rgba(255,255,255,0.5);margin-bottom:4px;">Click or drag & drop your Business Permit</p>
-              <p style="font-size:0.72rem;color:rgba(255,255,255,0.3);">JPG, PNG, or PDF · Max 5MB</p>
+              <p style="font-size:0.72rem;color:rgba(255,255,255,0.3);">Any file format accepted · Max 5MB</p>
             </div>
             <div id="permitPreview" style="display:none;">
               <span class="material-symbols-outlined" style="font-size:28px;color:#34d399;margin-bottom:6px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
@@ -369,34 +382,31 @@ body { font-family: "Inter", sans-serif; }
         <!-- ── SECTION 3: Owner Info ──────────────────────────── -->
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
           <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">👤 Owner / Account Information</p>
-
           <div style="display:flex;flex-direction:column;gap:12px;">
             <div>
-              <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Full Name *</label>
+              <label class="field-label">Full Name *</label>
               <input type="text" name="fullname" class="glass-input" placeholder="Juan Dela Cruz"
                 autocomplete="off" value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
             </div>
-
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
-                <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Email *</label>
+                <label class="field-label">Email *</label>
                 <input type="email" name="email" class="glass-input" placeholder="owner@example.com"
                   autocomplete="off" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
               </div>
               <div>
-                <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Username *</label>
+                <label class="field-label">Username *</label>
                 <input type="text" name="username" class="glass-input" placeholder="yourUsername"
                   autocomplete="off" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
               </div>
             </div>
-
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
-                <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Password * (min. 8)</label>
+                <label class="field-label">Password * (min. 8)</label>
                 <input type="password" name="password" class="glass-input" placeholder="••••••••" autocomplete="new-password" required>
               </div>
               <div>
-                <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Confirm Password *</label>
+                <label class="field-label">Confirm Password *</label>
                 <input type="password" name="confirm" class="glass-input" placeholder="••••••••" autocomplete="new-password" required>
               </div>
             </div>
@@ -406,27 +416,24 @@ body { font-family: "Inter", sans-serif; }
         <!-- ── SECTION 4: Payment ─────────────────────────────── -->
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
           <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">💳 Payment Information <span style="color:#f87171;">*</span></p>
-
           <div style="display:flex;flex-direction:column;gap:12px;">
-            <!-- Payment Method Select -->
             <div>
-              <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Payment Method *</label>
+              <label class="field-label">Payment Method *</label>
               <select name="payment_method" id="payment_method_sel" class="glass-input" required onchange="handlePaymentMethodChange(this.value)">
-                <option value="">— Select Payment Method —</option>
-                <option value="Credit Card" <?= ($_POST['payment_method']??'')==='Credit Card'?'selected':'' ?>>💳 Credit Card</option>
-                <option value="GCash" <?= ($_POST['payment_method']??'')==='GCash'?'selected':'' ?>>📱 GCash</option>
-                <option value="Maya" <?= ($_POST['payment_method']??'')==='Maya'?'selected':'' ?>>📱 Maya (PayMaya)</option>
-                <option value="Bank Transfer - BDO" <?= ($_POST['payment_method']??'')==='Bank Transfer - BDO'?'selected':'' ?>>🏦 Bank Transfer — BDO</option>
-                <option value="Bank Transfer - BPI" <?= ($_POST['payment_method']??'')==='Bank Transfer - BPI'?'selected':'' ?>>🏦 Bank Transfer — BPI</option>
+                <option value="" style="color:rgba(255,255,255,0.4);">— Select Payment Method —</option>
+                <option value="Credit Card"              <?= ($_POST['payment_method']??'')==='Credit Card'             ?'selected':'' ?>>💳 Credit Card</option>
+                <option value="GCash"                    <?= ($_POST['payment_method']??'')==='GCash'                   ?'selected':'' ?>>📱 GCash</option>
+                <option value="Maya"                     <?= ($_POST['payment_method']??'')==='Maya'                    ?'selected':'' ?>>📱 Maya (PayMaya)</option>
+                <option value="Bank Transfer - BDO"      <?= ($_POST['payment_method']??'')==='Bank Transfer - BDO'     ?'selected':'' ?>>🏦 Bank Transfer — BDO</option>
+                <option value="Bank Transfer - BPI"      <?= ($_POST['payment_method']??'')==='Bank Transfer - BPI'     ?'selected':'' ?>>🏦 Bank Transfer — BPI</option>
                 <option value="Bank Transfer - UnionBank" <?= ($_POST['payment_method']??'')==='Bank Transfer - UnionBank'?'selected':'' ?>>🏦 Bank Transfer — UnionBank</option>
                 <option value="Bank Transfer - Metrobank" <?= ($_POST['payment_method']??'')==='Bank Transfer - Metrobank'?'selected':'' ?>>🏦 Bank Transfer — Metrobank</option>
-                <option value="Cash" <?= ($_POST['payment_method']??'')==='Cash'?'selected':'' ?>>💵 Cash (walk-in)</option>
+                <option value="Cash"                     <?= ($_POST['payment_method']??'')==='Cash'                   ?'selected':'' ?>>💵 Cash (walk-in)</option>
               </select>
             </div>
 
-            <!-- Credit Card Fields (shown only when Credit Card selected) -->
+            <!-- Credit Card Fields -->
             <div id="cc_fields" style="display:none;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-              <!-- Card Preview -->
               <div class="cc-card-preview" id="cc_preview">
                 <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;opacity:0.6;margin-bottom:14px;">Credit / Debit Card</div>
                 <div style="font-family:monospace;font-size:1.1rem;font-weight:700;letter-spacing:0.15em;margin-bottom:14px;" id="cc_preview_num">•••• •••• •••• ••••</div>
@@ -441,16 +448,15 @@ body { font-family: "Inter", sans-serif; }
                   </div>
                 </div>
               </div>
-
               <div style="display:flex;flex-direction:column;gap:10px;">
                 <div>
-                  <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Name on Card *</label>
+                  <label class="field-label">Name on Card *</label>
                   <input type="text" name="cc_name" id="cc_name_inp" class="glass-input" placeholder="Juan Dela Cruz"
                     value="<?= htmlspecialchars($_POST['cc_name'] ?? '') ?>"
                     oninput="document.getElementById('cc_preview_name').textContent=this.value.toUpperCase()||'YOUR NAME'">
                 </div>
                 <div>
-                  <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Card Number *</label>
+                  <label class="field-label">Card Number *</label>
                   <input type="text" name="cc_number" id="cc_num_inp" class="glass-input" placeholder="1234 5678 9012 3456"
                     maxlength="19" autocomplete="cc-number"
                     value="<?= htmlspecialchars($_POST['cc_number'] ?? '') ?>"
@@ -458,14 +464,14 @@ body { font-family: "Inter", sans-serif; }
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                   <div>
-                    <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Expiry Date *</label>
+                    <label class="field-label">Expiry Date *</label>
                     <input type="text" name="cc_expiry" id="cc_exp_inp" class="glass-input" placeholder="MM/YY"
                       maxlength="5" autocomplete="cc-exp"
                       value="<?= htmlspecialchars($_POST['cc_expiry'] ?? '') ?>"
                       oninput="formatExpiry(this)">
                   </div>
                   <div>
-                    <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">CVV *</label>
+                    <label class="field-label">CVV *</label>
                     <input type="password" name="cc_cvv" class="glass-input" placeholder="•••" maxlength="4" autocomplete="cc-csc">
                   </div>
                 </div>
@@ -475,9 +481,9 @@ body { font-family: "Inter", sans-serif; }
               </div>
             </div>
 
-            <!-- Reference Number (for non-CC methods) -->
+            <!-- Reference Number -->
             <div id="reference_field">
-              <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Reference / Transaction Number <span style="color:rgba(255,255,255,0.25);font-weight:400;">(if applicable)</span></label>
+              <label class="field-label">Reference / Transaction Number <span style="color:rgba(255,255,255,0.25);font-weight:400;">(if applicable)</span></label>
               <input type="text" name="payment_reference" class="glass-input" placeholder="e.g. GCash ref #1234567890"
                 autocomplete="off" value="<?= htmlspecialchars($_POST['payment_reference'] ?? '') ?>">
             </div>
@@ -573,9 +579,9 @@ dz.addEventListener('drop', e => {
 
 // ── Payment Method Toggle ─────────────────────────────────────
 function handlePaymentMethodChange(method) {
-  const ccFields  = document.getElementById('cc_fields');
-  const refField  = document.getElementById('reference_field');
-  const ccInputs  = ccFields.querySelectorAll('input');
+  const ccFields = document.getElementById('cc_fields');
+  const refField = document.getElementById('reference_field');
+  const ccInputs = ccFields.querySelectorAll('input');
 
   if (method === 'Credit Card') {
     ccFields.style.display = 'block';
@@ -588,7 +594,6 @@ function handlePaymentMethodChange(method) {
   }
 }
 
-// Initialize on page load if error and CC was selected
 <?php if (($_POST['payment_method'] ?? '') === 'Credit Card'): ?>
 handlePaymentMethodChange('Credit Card');
 <?php endif; ?>
@@ -597,7 +602,6 @@ handlePaymentMethodChange('Credit Card');
 function formatCardNumber(input) {
   let v = input.value.replace(/\D/g, '').substring(0, 16);
   input.value = v.replace(/(.{4})/g, '$1 ').trim();
-  // Update preview
   const masked = v.length > 0
     ? (v.substring(0,4) + (v.length > 4 ? ' ' + v.substring(4,8).replace(/./g,'•') : '') +
        (v.length > 8 ? ' ' + v.substring(8,12).replace(/./g,'•') : '') +
