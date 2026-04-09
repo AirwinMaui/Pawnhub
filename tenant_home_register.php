@@ -26,7 +26,13 @@ $primary   = $theme['primary_color']   ?? '#2563eb';
 $secondary = $theme['secondary_color'] ?? '#1e3a8a';
 $accent    = $theme['accent_color']    ?? '#10b981';
 $logo_url  = $theme['logo_url']        ?? '';
-$bg_url    = $tenant['bg_image_url']   ?? '';
+// Shop background: query shop_bg_url from DB, fallback to bg_image_url
+try {
+    $sbq = $pdo->prepare("SELECT shop_bg_url FROM tenant_settings WHERE tenant_id=? LIMIT 1");
+    $sbq->execute([$tid]);
+    $bg_url = $sbq->fetchColumn() ?: '';
+} catch (Throwable $e) { $bg_url = ''; }
+if (!$bg_url) $bg_url = $tenant['bg_image_url'] ?? '';
 // Normalize local upload paths (fix old records without leading slash)
 if ($bg_url   && strpos($bg_url,  'http') !== 0 && $bg_url[0]   !== '/') $bg_url   = '/' . $bg_url;
 if ($logo_url && strpos($logo_url,'http') !== 0 && $logo_url[0] !== '/') $logo_url = '/' . $logo_url;

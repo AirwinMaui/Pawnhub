@@ -60,7 +60,14 @@ $secondary = $theme['secondary_color'] ?? '#1e3a8a';
 $accent    = $theme['accent_color']    ?? $tenant['accent_color']    ?? '#10b981';
 $logo_url  = $theme['logo_url']        ?? $tenant['logo_url']        ?? '';
 $sys_name  = $theme['system_name']     ?? $tenant['business_name'];
-$bg_url    = $tenant['bg_image_url']   ?? '';
+// Shop background: query shop_bg_url directly from DB, fallback to bg_image_url
+try {
+    $sbq = $pdo->prepare("SELECT shop_bg_url FROM tenant_settings WHERE tenant_id=? LIMIT 1");
+    $sbq->execute([$tid]);
+    $shop_bg_raw = $sbq->fetchColumn() ?: '';
+} catch (Throwable $e) { $shop_bg_raw = ''; }
+if (!$shop_bg_raw) $shop_bg_raw = $tenant['bg_image_url'] ?? '';
+$bg_url = $shop_bg_raw;
 // Normalize local upload paths (fix old records without leading slash)
 if ($bg_url   && strpos($bg_url,  'http') !== 0 && $bg_url[0]   !== '/') $bg_url   = '/' . $bg_url;
 if ($logo_url && strpos($logo_url,'http') !== 0 && $logo_url[0] !== '/') $logo_url = '/' . $logo_url;
@@ -126,12 +133,12 @@ body {
 }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
-  opacity: .12; filter: saturate(0.4) brightness(0.5);
+  opacity: .35; filter: saturate(0.6) brightness(0.55);
 }
 .bg-gradient {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 25%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.3) 0%, rgba(8,9,12,0.92) 40%, #08090c 75%);
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 20%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(8,9,12,0.15) 0%, rgba(8,9,12,0.70) 50%, #08090c 85%);
 }
 
 /* ── NAV ── */

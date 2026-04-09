@@ -281,11 +281,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $bgurl = '';
         }
 
+        // ── Shop/Home page background upload/remove ─────────────
+        $shopbgrow = $pdo->prepare("SELECT shop_bg_url FROM tenant_settings WHERE tenant_id=? LIMIT 1");
+        $shopbgrow->execute([$tid]);
+        $shopbgurl = $shopbgrow->fetchColumn() ?: '';
+
+        if (!empty($_FILES['shop_bg_file']['name'])) {
+            $sbAllowed = ['image/jpeg','image/png','image/webp'];
+            $sbType    = mime_content_type($_FILES['shop_bg_file']['tmp_name']);
+            if (in_array($sbType, $sbAllowed) && $_FILES['shop_bg_file']['size'] <= 5*1024*1024) {
+                $sbExt  = pathinfo($_FILES['shop_bg_file']['name'], PATHINFO_EXTENSION);
+                $sbName = 'shopbg_' . $tid . '_' . time() . '.' . $sbExt;
+                $uploaddir = __DIR__ . '/uploads/';
+                if (!is_dir($uploaddir)) mkdir($uploaddir, 0755, true);
+                if ($shopbgurl && strpos($shopbgurl, '/uploads/') === 0 && file_exists(__DIR__ . $shopbgurl)) {
+                    unlink(__DIR__ . $shopbgurl);
+                }
+                if (move_uploaded_file($_FILES['shop_bg_file']['tmp_name'], $uploaddir . $sbName)) {
+                    $shopbgurl = '/uploads/' . $sbName;
+                } else {
+                    $error_msg = 'Failed to upload shop background. Please try again.';
+                }
+            } else {
+                $error_msg = 'Invalid shop background file. Use JPG, PNG, or WebP under 5MB.';
+            }
+        } elseif (isset($_POST['remove_shop_bg']) && $_POST['remove_shop_bg'] === '1') {
+            if ($shopbgurl && strpos($shopbgurl, '/uploads/') === 0 && file_exists(__DIR__ . $shopbgurl)) {
+                unlink(__DIR__ . $shopbgurl);
+            }
+            $shopbgurl = '';
+        }
+
         if (!$error_msg) {
             // Save bg_image_url to tenants table
             $pdo->prepare("UPDATE tenants SET bg_image_url=? WHERE id=?")->execute([$bgurl ?: null, $tid]);
-            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url)
-                VALUES (?,?,?,?,?,?,?,?)
+            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url,shop_bg_url)
+                VALUES (?,?,?,?,?,?,?,?,?)
                 ON DUPLICATE KEY UPDATE
                 primary_color=VALUES(primary_color),
                 secondary_color=VALUES(secondary_color),
@@ -294,10 +325,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 system_name=VALUES(system_name),
                 logo_text=VALUES(logo_text),
                 logo_url=VALUES(logo_url),
+                shop_bg_url=VALUES(shop_bg_url),
                 updated_at=NOW()")
-                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl]);
+                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl,$shopbgurl ?: null]);
 
-            $success_msg = '✅ Theme saved! Staff and cashier dashboards will now reflect the new design.';
+            $success_msg = '✅ Theme saved! All pages will now reflect the new design.';
             $theme = getTenantTheme($pdo, $tid);
         }
         } // end plan check
@@ -950,9 +982,9 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
           <!-- Background Image Card -->
           <div class="card">
-            <div class="card-hdr"><span class="card-title">🖼️ Dashboard & Login Background</span></div>
+            <div class="card-hdr"><span class="card-title">🖼️ Admin, Staff &amp; Login Background</span></div>
             <div style="font-size:.76rem;color:rgba(255,255,255,.4);margin-bottom:12px;line-height:1.6;">
-              This image appears as the background on the <strong style="color:rgba(255,255,255,.6);">Login Page</strong>, <strong style="color:rgba(255,255,255,.6);">Staff Dashboard</strong>, and <strong style="color:rgba(255,255,255,.6);">Cashier Dashboard</strong>.
+              This image appears on the <strong style="color:rgba(255,255,255,.6);">Tenant Login</strong>, <strong style="color:rgba(255,255,255,.6);">Admin Dashboard</strong>, <strong style="color:rgba(255,255,255,.6);">Staff</strong>, and <strong style="color:rgba(255,255,255,.6);">Cashier</strong> dashboards.
             </div>
 
             <?php
@@ -984,6 +1016,45 @@ tr:hover td{background:rgba(255,255,255,.03);}
               <div style="font-size:.8rem;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:3px;">Click to upload or drag & drop</div>
               <div style="font-size:.71rem;color:rgba(255,255,255,.25);">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
               <input type="file" id="bg_file_input" name="bg_file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="previewBg(this)">
+            </div>
+          </div>
+
+          <!-- Public Shop / Home Page Background -->
+          <div class="card">
+            <div class="card-hdr"><span class="card-title">🏪 Public Shop Page Background</span></div>
+            <div style="font-size:.76rem;color:rgba(255,255,255,.4);margin-bottom:12px;line-height:1.6;">
+              This image appears as the background on your <strong style="color:rgba(255,255,255,.6);">Public Shop Page</strong> — what customers see when they visit your store link. If not set, the Admin &amp; Login background will be used instead.
+            </div>
+
+            <?php
+              $currentShopBg = $theme['shop_bg_url'] ?? '';
+              if ($currentShopBg && strpos($currentShopBg,'http') !== 0 && $currentShopBg[0] !== '/') $currentShopBg = '/' . $currentShopBg;
+            ?>
+            <?php if($currentShopBg): ?>
+            <div style="position:relative;border-radius:10px;overflow:hidden;margin-bottom:10px;height:120px;border:1px solid rgba(255,255,255,.1);">
+              <img src="<?=htmlspecialchars($currentShopBg)?>" style="width:100%;height:100%;object-fit:cover;display:block;">
+              <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;">
+                <span style="color:#fff;font-size:.76rem;font-weight:600;background:rgba(0,0,0,.5);padding:4px 12px;border-radius:100px;">Current Shop Background</span>
+              </div>
+            </div>
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.72rem;color:#fca5a5;font-weight:600;margin-bottom:10px;">
+              <input type="checkbox" name="remove_shop_bg" value="1" style="margin:0;accent-color:#ef4444;">
+              Remove current shop background
+            </label>
+            <?php endif; ?>
+
+            <div style="border:2px dashed rgba(255,255,255,.12);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.03);"
+              onclick="document.getElementById('shop_bg_file_input').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--t-primary,#3b82f6)';"
+              ondragleave="this.style.borderColor='rgba(255,255,255,.12)'"
+              ondrop="handleShopBgDrop(event)">
+              <div id="shop-bg-preview-wrap" style="display:none;margin-bottom:10px;">
+                <img id="shop-bg-preview-img" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.1);">
+              </div>
+              <span class="material-symbols-outlined" style="font-size:28px;color:rgba(255,255,255,.25);display:block;margin-bottom:8px;">storefront</span>
+              <div style="font-size:.8rem;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:3px;">Click to upload or drag & drop</div>
+              <div style="font-size:.71rem;color:rgba(255,255,255,.25);">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
+              <input type="file" id="shop_bg_file_input" name="shop_bg_file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="previewShopBg(this)">
             </div>
           </div>
         </div>
@@ -1377,6 +1448,28 @@ function handleBgDrop(e) {
     dt.items.add(file);
     document.getElementById('bg_file_input').files = dt.files;
     previewBg(document.getElementById('bg_file_input'));
+  }
+}
+
+function previewShopBg(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('shop-bg-preview-img').src = e.target.result;
+      document.getElementById('shop-bg-preview-wrap').style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+function handleShopBgDrop(e) {
+  e.preventDefault();
+  e.currentTarget.style.borderColor = 'rgba(255,255,255,.12)';
+  const file = e.dataTransfer.files[0];
+  if (file && (file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/webp')) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('shop_bg_file_input').files = dt.files;
+    previewShopBg(document.getElementById('shop_bg_file_input'));
   }
 }
 
