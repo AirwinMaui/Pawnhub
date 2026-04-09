@@ -85,10 +85,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,business_permit_url,payment_info) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
                         ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url, $payment_info]);
                     $new_tid = $pdo->lastInsertId();
+                    $new_uid = null;
                     $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                         ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
+                    $new_uid = $pdo->lastInsertId();
                     $pdo->commit();
-                    $success = true;
+
+                    // ── Redirect paid plans to PayMongo checkout ──────────
+                    if (in_array($plan, ['Pro', 'Enterprise'])) {
+                        $_SESSION['pending_tenant_id'] = $new_tid;
+                        $_SESSION['pending_user_id']   = $new_uid;
+                        $_SESSION['pending_plan']      = $plan;
+                        $_SESSION['pending_email']     = $email;
+                        $_SESSION['pending_biz_name']  = $biz_name;
+                        header('Location: paymongo_pay.php');
+                        exit;
+                    }
+
+                    $success = true;   // Starter plan — no payment needed
                 }
             }
         }
@@ -140,6 +154,28 @@ body { font-family: "Inter", sans-serif; }
 }
 .glass-input::placeholder { color: rgba(255,255,255,0.35); }
 .glass-input option { background: #1e293b; color: #fff; }
+
+/* Fix browser autofill white background override */
+.glass-input:-webkit-autofill,
+.glass-input:-webkit-autofill:hover,
+.glass-input:-webkit-autofill:focus,
+.glass-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 9999px rgba(255,255,255,0.08) inset !important;
+    box-shadow: 0 0 0 9999px rgba(255,255,255,0.08) inset !important;
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff;
+    border-color: rgba(255,255,255,0.12) !important;
+    transition: background-color 99999s ease-in-out 0s;
+}
+.glass-input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 9999px rgba(255,255,255,0.13) inset, 0 0 0 3px rgba(59,130,246,0.15) !important;
+    border-color: rgba(59,130,246,0.6) !important;
+}
+/* Fix for Firefox */
+.glass-input:autofill {
+    background: rgba(255,255,255,0.08) !important;
+    color: #fff !important;
+}
 .plan-pill {
     cursor: pointer;
     padding: 6px 16px;
