@@ -850,12 +850,36 @@ tr:hover td{background:rgba(255,255,255,.02);}
     </div>
 
   <?php elseif($active_page==='customers'): ?>
+    <?php
+      // Build tickets-per-customer lookup for the modal
+      $cust_tickets_map = [];
+      foreach($all_tickets as $t) {
+          $key = strtolower(trim($t['customer_name']));
+          $cust_tickets_map[$key][] = $t;
+      }
+    ?>
     <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?>
-      <table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Registered</th></tr></thead><tbody>
-      <?php foreach($customers as $c):?>
+      <table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Registered</th><th>Action</th></tr></thead><tbody>
+      <?php foreach($customers as $c):
+        $ckey = strtolower(trim($c['full_name']));
+        $c_json = htmlspecialchars(json_encode([
+          'id'             => $c['id'],
+          'full_name'      => $c['full_name'],
+          'contact_number' => $c['contact_number'] ?? '',
+          'email'          => $c['email'] ?? '',
+          'gender'         => $c['gender'] ?? '',
+          'address'        => $c['address'] ?? '',
+          'birthdate'      => $c['birthdate'] ?? '',
+          'valid_id_type'  => $c['valid_id_type'] ?? '',
+          'valid_id_number'=> $c['valid_id_number'] ?? '',
+          'registered_at'  => $c['registered_at'] ?? '',
+          'notes'          => $c['notes'] ?? '',
+        ]), ENT_QUOTES);
+        $c_tickets_json = htmlspecialchars(json_encode($cust_tickets_map[$ckey] ?? []), ENT_QUOTES);
+      ?>
       <tr>
         <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
@@ -863,10 +887,95 @@ tr:hover td{background:rgba(255,255,255,.02);}
         <td><?=$c['gender']?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
         <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
+        <td>
+          <button class="btn-sm btn-primary" style="font-size:.7rem;" onclick="openCustomerModal(<?=$c_json?>,<?=$c_tickets_json?>)">
+            <span class="material-symbols-outlined" style="font-size:13px;">person</span>View
+          </button>
+        </td>
       </tr>
       <?php endforeach;?></tbody></table>
       <?php endif;?>
     </div>
+
+    <!-- CUSTOMER INFO MODAL -->
+    <div class="modal-overlay" id="customerModal" style="z-index:9999;">
+      <div class="modal" style="width:700px;max-width:97vw;max-height:88vh;overflow-y:auto;">
+        <div class="mhdr">
+          <div class="mtitle" id="cModal_title">Customer Profile</div>
+          <button class="mclose" onclick="document.getElementById('customerModal').classList.remove('open')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="mbody" id="cModal_body"><!-- filled by JS --></div>
+      </div>
+    </div>
+    <script>
+    function openCustomerModal(c, tickets) {
+      document.getElementById('cModal_title').textContent = c.full_name || 'Customer Profile';
+
+      const statusColor = {'Stored':'#93c5fd','Released':'#6ee7b7','Renewed':'#fcd34d','Voided':'#fca5a5','Auctioned':'#c4b5fd'};
+      const statusBg    = {'Stored':'rgba(59,130,246,.18)','Released':'rgba(16,185,129,.18)','Renewed':'rgba(245,158,11,.18)','Voided':'rgba(239,68,68,.18)','Auctioned':'rgba(139,92,246,.18)'};
+
+      let ticketsHtml = '';
+      if (tickets && tickets.length > 0) {
+        const rows = tickets.map(t => {
+          const sc = statusColor[t.status] || 'rgba(255,255,255,.4)';
+          const sb = statusBg[t.status]   || 'rgba(255,255,255,.08)';
+          const overdue = t.status==='Stored' && new Date(t.maturity_date)<new Date() ? 'color:#fca5a5;' : 'color:rgba(255,255,255,.45);';
+          return `<tr>
+            <td><span class="ticket-tag" style="font-size:.72rem;">${t.ticket_no}</span></td>
+            <td style="font-size:.77rem;">${t.item_category||'—'}</td>
+            <td style="font-size:.77rem;">₱${parseFloat(t.loan_amount||0).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>
+            <td style="font-size:.77rem;font-weight:700;color:#fff;">₱${parseFloat(t.total_redeem||0).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>
+            <td style="font-size:.73rem;${overdue}">${t.maturity_date||'—'}</td>
+            <td><span style="font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:100px;background:${sb};color:${sc};">${t.status}</span></td>
+            <td style="font-size:.72rem;color:rgba(255,255,255,.3);">${t.created_at ? t.created_at.substring(0,10) : '—'}</td>
+          </tr>`;
+        }).join('');
+        ticketsHtml = `
+          <div style="margin-top:22px;">
+            <div style="font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:10px;">Pawn Ticket History (${tickets.length})</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead><tr><th>Ticket</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      } else {
+        ticketsHtml = `<div style="margin-top:22px;text-align:center;padding:18px 0;color:rgba(255,255,255,.25);font-size:.82rem;"><span class="material-symbols-outlined" style="display:block;font-size:32px;margin-bottom:6px;opacity:.3;">receipt_long</span>No pawn tickets on record.</div>`;
+      }
+
+      const row = (label, val) => val ? `<div style="margin-bottom:11px;"><div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);margin-bottom:3px;">${label}</div><div style="font-size:.85rem;color:#fff;font-weight:600;">${val}</div></div>` : '';
+
+      document.getElementById('cModal_body').innerHTML = `
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,.07);">
+          <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--t-primary,#059669),var(--t-secondary,#064e3b));display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:#fff;flex-shrink:0;">${(c.full_name||'?')[0].toUpperCase()}</div>
+          <div>
+            <div style="font-size:1.05rem;font-weight:800;color:#fff;">${c.full_name||'—'}</div>
+            <div style="font-size:.78rem;color:rgba(255,255,255,.4);margin-top:3px;">${c.email||'No email'}</div>
+            <div style="font-size:.75rem;color:rgba(255,255,255,.35);margin-top:2px;font-family:monospace;">${c.contact_number||'No contact'}</div>
+          </div>
+          <div style="margin-left:auto;text-align:right;">
+            <div style="font-size:.68rem;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.06em;">Total Tickets</div>
+            <div style="font-size:1.6rem;font-weight:900;color:var(--t-primary,#6ee7b7);">${tickets ? tickets.length : 0}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 20px;">
+          ${row('Gender', c.gender)}
+          ${row('Birthdate', c.birthdate)}
+          ${row('Registered', c.registered_at ? c.registered_at.substring(0,10) : '')}
+          ${row('Valid ID Type', c.valid_id_type)}
+          ${row('ID Number', c.valid_id_number)}
+          ${row('Address', c.address)}
+        </div>
+        ${c.notes ? `<div style="margin-top:6px;padding:10px 13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;font-size:.8rem;color:rgba(255,255,255,.5);"><strong style="color:rgba(255,255,255,.6);">Notes: </strong>${c.notes}</div>` : ''}
+        ${ticketsHtml}
+      `;
+      document.getElementById('customerModal').classList.add('open');
+    }
+    document.getElementById('customerModal').addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); });
+    </script>
 
   <?php elseif($active_page==='void_requests'): ?>
     <div class="page-hdr"><div><h2>Void Requests</h2><p>Approve or reject staff void requests</p></div></div>
