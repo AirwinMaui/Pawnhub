@@ -37,43 +37,101 @@ if ($tid) {
     $tenant = $stmt->fetch();
 }
 
+// ── Auto-generate OR Number per tenant per day ────────────────
+function generateOrNumber(PDO $pdo, int $tid): string {
+    $date = date('Ymd');
+    // Get count of payments today for this tenant
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM payment_transactions WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
+    $stmt->execute([$tid]);
+    $count = (int)$stmt->fetchColumn();
+    $seq = str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+    return "OR-{$date}-{$seq}";
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($_POST['action'] === 'process_payment') {
         $ticket_no  = trim($_POST['ticket_no']     ?? '');
         $pay_action = trim($_POST['pay_action']    ?? 'release');
-        $amount_due = floatval($_POST['amount_due']    ?? 0);
         $cash_recv  = floatval($_POST['cash_received'] ?? 0);
-        $or_no      = trim($_POST['or_no']         ?? '');
-        $change     = max(0, $cash_recv - $amount_due);
+        $or_no      = generateOrNumber($pdo, $tid);
 
-        if ($ticket_no && $amount_due > 0 && $cash_recv >= $amount_due) {
-            $pdo->prepare("INSERT INTO payment_transactions (tenant_id,ticket_no,action,or_no,amount_due,cash_received,change_amount,staff_user_id,staff_username,staff_role) VALUES (?,?,?,?,?,?,?,?,?,'cashier')")
-                ->execute([$tid,$ticket_no,$pay_action,$or_no,$amount_due,$cash_recv,$change,$u['id'],$u['username']]);
-            $new_status = $pay_action === 'release' ? 'Released' : 'Renewed';
-            $pdo->prepare("UPDATE pawn_transactions SET status=? WHERE ticket_no=? AND tenant_id=?")
-                ->execute([$new_status,$ticket_no,$tid]);
-            $pdo->prepare("UPDATE item_inventory SET status=? WHERE ticket_no=? AND tenant_id=?")
-                ->execute([$pay_action==='release'?'redeemed':'pawned',$ticket_no,$tid]);
-            $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?)")
-                ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
+        // Fetch the ticket to get correct amounts
+        $tkrow = $pdo->prepare("SELECT * FROM pawn_transactions WHERE ticket_no=? AND tenant_id=? LIMIT 1");
+        $tkrow->execute([$ticket_no, $tid]);
+        $tk = $tkrow->fetch();
 
-            // ── Notify mobile app ─────────────────────────────
-            require_once __DIR__ . '/session_helper.php';
-            if ($pay_action === 'release') {
-                write_pawn_update($pdo, $tid, $ticket_no, 'REDEEMED',
-                    "Your item has been released/redeemed. Ticket #$ticket_no is now closed. Thank you!");
-            } else {
-                write_pawn_update($pdo, $tid, $ticket_no, 'RENEWED',
-                    "Your pawn ticket #$ticket_no has been renewed successfully. Please check your updated maturity date.");
-            }
-            $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
-            $active_page = 'tickets';
+        if (!$tk) {
+            $error_msg = 'Ticket not found.';
         } else {
-            if ($cash_recv < $amount_due) {
-                $error_msg = 'Cash received is less than amount due.';
+            $loan_amount    = floatval($tk['loan_amount']);
+            $interest_rate  = floatval($tk['interest_rate']);
+            $interest_amount = floatval($tk['interest_amount']);
+            $total_redeem   = floatval($tk['total_redeem']);
+            $claim_term     = $tk['claim_term'] ?? '1-15';
+
+            // Amount due depends on action:
+            // Release = full total_redeem (loan + interest)
+            // Renew   = interest only
+            $amount_due = ($pay_action === 'release') ? $total_redeem : $interest_amount;
+            $change     = max(0, $cash_recv - $amount_due);
+
+            if ($ticket_no && $amount_due > 0 && $cash_recv >= $amount_due) {
+                $pdo->prepare("INSERT INTO payment_transactions (tenant_id,ticket_no,action,or_no,amount_due,cash_received,change_amount,staff_user_id,staff_username,staff_role) VALUES (?,?,?,?,?,?,?,?,?,'cashier')")
+                    ->execute([$tid,$ticket_no,$pay_action,$or_no,$amount_due,$cash_recv,$change,$u['id'],$u['username']]);
+
+                if ($pay_action === 'release') {
+                    // Full redemption — mark as Released
+                    $pdo->prepare("UPDATE pawn_transactions SET status='Released' WHERE ticket_no=? AND tenant_id=?")
+                        ->execute([$ticket_no,$tid]);
+                    $pdo->prepare("UPDATE item_inventory SET status='redeemed' WHERE ticket_no=? AND tenant_id=?")
+                        ->execute([$ticket_no,$tid]);
+                    $new_status = 'Released';
+                } else {
+                    // Renewal — interest paid, reset maturity date, recalculate total_redeem
+                    // Determine days based on claim_term
+                    $days_map = ['1-15'=>15,'16-30'=>30,'2m'=>60,'3m'=>90,'4m'=>120];
+                    $days = $days_map[$claim_term] ?? 30;
+                    $new_maturity = date('Y-m-d', strtotime("+{$days} days"));
+                    $new_expiry   = date('Y-m-d', strtotime("+".($days*2)." days"));
+                    $new_interest = round($loan_amount * $interest_rate, 2);
+                    $new_total    = round($loan_amount + $new_interest, 2);
+
+                    $pdo->prepare("UPDATE pawn_transactions SET
+                        status='Stored',
+                        maturity_date=?,
+                        expiry_date=?,
+                        interest_amount=?,
+                        total_redeem=?,
+                        renewal_count = COALESCE(renewal_count,0) + 1
+                        WHERE ticket_no=? AND tenant_id=?")
+                        ->execute([$new_maturity,$new_expiry,$new_interest,$new_total,$ticket_no,$tid]);
+                    // Item stays pawned
+                    $pdo->prepare("UPDATE item_inventory SET status='pawned' WHERE ticket_no=? AND tenant_id=?")
+                        ->execute([$ticket_no,$tid]);
+                    $new_status = 'Renewed';
+                }
+
+                $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?,NOW())")
+                    ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
+
+                // ── Notify mobile app ─────────────────────────────
+                require_once __DIR__ . '/session_helper.php';
+                if ($pay_action === 'release') {
+                    write_pawn_update($pdo, $tid, $ticket_no, 'REDEEMED',
+                        "Your item has been released/redeemed. Ticket #$ticket_no is now closed. Thank you!");
+                } else {
+                    write_pawn_update($pdo, $tid, $ticket_no, 'RENEWED',
+                        "Your pawn ticket #$ticket_no has been renewed. New maturity date: $new_maturity.");
+                }
+                $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
+                $active_page = 'tickets';
             } else {
-                $error_msg = 'Please fill all payment fields.';
+                if ($cash_recv < $amount_due) {
+                    $error_msg = 'Cash received is less than amount due.';
+                } else {
+                    $error_msg = 'Please fill all payment fields.';
+                }
             }
         }
     }
@@ -407,20 +465,26 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
                 data-loan="<?=$t['loan_amount']?>"
                 data-interest="<?=$t['interest_amount']?>"
                 data-total="<?=$t['total_redeem']?>"
-                data-maturity="<?=$t['maturity_date']?>">
-                <?=$t['ticket_no']?> — <?=htmlspecialchars($t['customer_name'])?> (₱<?=number_format($t['total_redeem'],2)?>)
+                data-maturity="<?=$t['maturity_date']?>"
+                data-claim-term="<?=htmlspecialchars($t['claim_term']??'1-15')?>">
+                <?=$t['ticket_no']?> — <?=htmlspecialchars($t['customer_name'])?> (Redeem: ₱<?=number_format($t['total_redeem'],2)?> / Renew: ₱<?=number_format($t['interest_amount'],2)?>)
               </option>
               <?php endforeach; ?>
             </select>
           </div>
           <div class="fgroup"><label class="flabel">Action *</label>
-            <select name="pay_action" class="finput" required>
+            <select name="pay_action" id="pay_action" class="finput" required onchange="updateAmountDue()">
               <option value="release">Release (Full Redemption)</option>
-              <option value="renew">Renew / Extension</option>
+              <option value="renew">Renew / Extension (Interest Only)</option>
             </select>
           </div>
-          <div class="fgroup"><label class="flabel">OR Number</label><input type="text" name="or_no" class="finput" placeholder="OR-YYYYMMDD-XXXXX"></div>
-          <div class="fgroup"><label class="flabel">Amount Due (₱)</label><input type="number" name="amount_due" id="p_due" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" required></div>
+          <!-- Info box: shows what they need to pay -->
+          <div id="action_info" style="display:none;border-radius:10px;padding:11px 14px;font-size:.8rem;margin-bottom:4px;"></div>
+          <div class="fgroup">
+            <label class="flabel">OR Number <span style="font-size:.7rem;color:rgba(110,231,183,.7);font-weight:500;">● Auto-generated</span></label>
+            <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:.84rem;color:#6ee7b7;font-weight:700;letter-spacing:.04em;" id="or_preview">OR-<?=date('Ymd')?>-<?=str_pad((int)$pdo->query("SELECT COUNT(*) FROM payment_transactions WHERE tenant_id=$tid AND DATE(created_at)=CURDATE()")->fetchColumn()+1,5,'0',STR_PAD_LEFT)?></div>
+          </div>
+          <div class="fgroup"><label class="flabel">Amount Due (₱) <span style="font-size:.7rem;color:rgba(110,231,183,.7);font-weight:500;">● Auto-computed</span></label><input type="number" name="amount_due" id="p_due" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" readonly style="opacity:.8;cursor:not-allowed;"></div>
           <div class="fgroup"><label class="flabel">Cash Received (₱) *</label><input type="number" name="cash_received" id="p_cash" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" required></div>
           <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;font-size:.8rem;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
             <span style="color:rgba(110,231,183,.7);">Change:</span>
@@ -452,6 +516,8 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
           <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
           <div class="receipt-row"><span>Cash Received</span><span id="r_cash">₱0.00</span></div>
           <div class="receipt-row" style="font-weight:700;"><span style="color:#6ee7b7;">Change</span><span id="r_change2" style="color:#6ee7b7;">₱0.00</span></div>
+          <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
+          <div class="receipt-row"><span style="color:rgba(255,255,255,.4);">OR No.</span><span id="r_or" style="font-family:monospace;font-size:.72rem;color:rgba(255,255,255,.5);">Auto-generated</span></div>
           <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.3);">Cashier: <?=htmlspecialchars($u['name'])?></div>
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.25);margin-top:2px;">Thank you for choosing <?=htmlspecialchars($sys_name)?>!</div>
@@ -530,19 +596,61 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
 </div>
 
 <script>
+// Called when ticket is selected
 function fillPayment(sel) {
   const o = sel.options[sel.selectedIndex];
-  const total = parseFloat(o.dataset.total) || 0;
-  document.getElementById('p_due').value = total.toFixed(2);
-  document.getElementById('r_ticket').textContent   = o.value || '—';
-  document.getElementById('r_customer').textContent = o.dataset.customer || '—';
-  document.getElementById('r_item').textContent     = o.dataset.item || '—';
-  document.getElementById('r_maturity').textContent = o.dataset.maturity || '—';
-  document.getElementById('r_loan').textContent     = '₱' + (parseFloat(o.dataset.loan)||0).toFixed(2);
-  document.getElementById('r_interest').textContent = '₱' + (parseFloat(o.dataset.interest)||0).toFixed(2);
-  document.getElementById('r_total').textContent    = '₱' + total.toFixed(2);
+  if (!o.value) return;
+  // Store data on a global so updateAmountDue can access it
+  window._ticket = {
+    loan:     parseFloat(o.dataset.loan)     || 0,
+    interest: parseFloat(o.dataset.interest) || 0,
+    total:    parseFloat(o.dataset.total)    || 0,
+    customer: o.dataset.customer || '—',
+    item:     o.dataset.item     || '—',
+    maturity: o.dataset.maturity || '—',
+    claimTerm: o.dataset.claimTerm || '1-15',
+    ticketNo: o.value
+  };
+  document.getElementById('r_ticket').textContent   = window._ticket.ticketNo;
+  document.getElementById('r_customer').textContent = window._ticket.customer;
+  document.getElementById('r_item').textContent     = window._ticket.item;
+  document.getElementById('r_maturity').textContent = window._ticket.maturity;
+  document.getElementById('r_loan').textContent     = '₱' + window._ticket.loan.toFixed(2);
+  document.getElementById('r_interest').textContent = '₱' + window._ticket.interest.toFixed(2);
+  const orVal = document.getElementById('or_preview')?.textContent || 'Auto-generated';
+  document.getElementById('r_or').textContent = orVal;
+  updateAmountDue();
+}
+
+// Called when action dropdown changes
+function updateAmountDue() {
+  if (!window._ticket) return;
+  const action = document.getElementById('pay_action')?.value || 'release';
+  const isRenew = action === 'renew';
+  const due = isRenew ? window._ticket.interest : window._ticket.total;
+  document.getElementById('p_due').value = due.toFixed(2);
+
+  // Update receipt total label
+  document.getElementById('r_total').textContent = '₱' + due.toFixed(2);
+
+  // Show info box
+  const info = document.getElementById('action_info');
+  if (isRenew) {
+    info.style.display = 'block';
+    info.style.background = 'rgba(245,158,11,.08)';
+    info.style.border = '1px solid rgba(245,158,11,.2)';
+    info.style.color = '#fcd34d';
+    info.innerHTML = '🔄 <strong>Renew:</strong> Customer pays <strong>₱' + window._ticket.interest.toFixed(2) + ' interest only</strong>. Loan of ₱' + window._ticket.loan.toFixed(2) + ' continues. Maturity date will be extended.';
+  } else {
+    info.style.display = 'block';
+    info.style.background = 'rgba(16,185,129,.08)';
+    info.style.border = '1px solid rgba(16,185,129,.2)';
+    info.style.color = '#6ee7b7';
+    info.innerHTML = '✅ <strong>Full Release:</strong> Customer pays <strong>₱' + window._ticket.total.toFixed(2) + ' total</strong> (₱' + window._ticket.loan.toFixed(2) + ' loan + ₱' + window._ticket.interest.toFixed(2) + ' interest). Item will be returned.';
+  }
   calcChange();
 }
+
 function calcChange() {
   const due  = parseFloat(document.getElementById('p_due')?.value)  || 0;
   const cash = parseFloat(document.getElementById('p_cash')?.value) || 0;
