@@ -314,7 +314,7 @@ body { font-family: "Inter", sans-serif; }
     </div>
     <?php endif; ?>
 
-    <form method="POST" id="regForm" enctype="multipart/form-data">
+    <form method="POST" id="regForm" enctype="multipart/form-data" autocomplete="off">
       <input type="hidden" name="plan"     id="plan_input"     value="<?= htmlspecialchars($selected_plan) ?>">
       <input type="hidden" name="branches" id="branches_input" value="<?= $plans[$selected_plan]['branches'] ?>">
 
@@ -328,19 +328,19 @@ body { font-family: "Inter", sans-serif; }
             <div>
               <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Business Name *</label>
               <input type="text" name="business_name" class="glass-input" placeholder="e.g. GoldKing Pawnshop"
-                value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>" required>
+                autocomplete="off" value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>" required>
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
                 <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Phone Number</label>
                 <input type="text" name="phone" class="glass-input" placeholder="09XXXXXXXXX"
-                  value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
               </div>
               <div>
                 <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Address</label>
                 <input type="text" name="address" class="glass-input" placeholder="City, Province"
-                  value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
               </div>
             </div>
           </div>
@@ -374,30 +374,30 @@ body { font-family: "Inter", sans-serif; }
             <div>
               <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Full Name *</label>
               <input type="text" name="fullname" class="glass-input" placeholder="Juan Dela Cruz"
-                value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
+                autocomplete="off" value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
                 <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Email *</label>
                 <input type="email" name="email" class="glass-input" placeholder="owner@example.com"
-                  value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
               </div>
               <div>
                 <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Username *</label>
                 <input type="text" name="username" class="glass-input" placeholder="yourUsername"
-                  value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
               </div>
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
                 <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Password * (min. 8)</label>
-                <input type="password" name="password" class="glass-input" placeholder="••••••••" required>
+                <input type="password" name="password" class="glass-input" placeholder="••••••••" autocomplete="new-password" required>
               </div>
               <div>
                 <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Confirm Password *</label>
-                <input type="password" name="confirm" class="glass-input" placeholder="••••••••" required>
+                <input type="password" name="confirm" class="glass-input" placeholder="••••••••" autocomplete="new-password" required>
               </div>
             </div>
           </div>
@@ -479,7 +479,7 @@ body { font-family: "Inter", sans-serif; }
             <div id="reference_field">
               <label style="display:block;font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Reference / Transaction Number <span style="color:rgba(255,255,255,0.25);font-weight:400;">(if applicable)</span></label>
               <input type="text" name="payment_reference" class="glass-input" placeholder="e.g. GCash ref #1234567890"
-                value="<?= htmlspecialchars($_POST['payment_reference'] ?? '') ?>">
+                autocomplete="off" value="<?= htmlspecialchars($_POST['payment_reference'] ?? '') ?>">
             </div>
           </div>
         </div>
