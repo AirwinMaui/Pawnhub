@@ -12,7 +12,46 @@ $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = $error_msg = '';
 
 // ── POST ACTIONS ─────────────────────────────────────────────
+// Determine if current user is the original (oldest) Super Admin
+$oldest_sa_row = null;
+try {
+    $oldest_sa_row = $pdo->query("SELECT id FROM users WHERE role='super_admin' ORDER BY created_at ASC, id ASC LIMIT 1")->fetch();
+} catch (PDOException $e) {}
+$is_original_sa = ($oldest_sa_row && (int)$oldest_sa_row['id'] === (int)$u['id']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+
+    // ── CHANGE PASSWORD (from inside dashboard) ───────────────
+    if ($_POST['action'] === 'change_password') {
+        $old_pass     = $_POST['old_password']    ?? '';
+        $new_pass     = $_POST['new_password']    ?? '';
+        $confirm_pass = $_POST['confirm_password'] ?? '';
+
+        if (!$old_pass || !$new_pass || !$confirm_pass) {
+            $error_msg = 'Please fill in all password fields.';
+        } elseif (strlen($new_pass) < 8) {
+            $error_msg = 'New password must be at least 8 characters.';
+        } elseif ($new_pass !== $confirm_pass) {
+            $error_msg = 'New passwords do not match.';
+        } else {
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND role = 'super_admin' LIMIT 1");
+            $stmt->execute([$u['id']]);
+            $cur = $stmt->fetch();
+            if (!$cur || !password_verify($old_pass, $cur['password'])) {
+                $error_msg = 'Current password is incorrect.';
+            } else {
+                $hashed = password_hash($new_pass, PASSWORD_DEFAULT);
+                $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([$hashed, $u['id']]);
+                try {
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
+                        VALUES (NULL, ?, ?, 'super_admin', 'CHANGE_PASSWORD', 'user', ?, 'Super Admin changed their own password.', ?, NOW())")
+                        ->execute([$u['id'], $u['username'], $u['id'], $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                } catch (PDOException $e) {}
+                $success_msg = '✅ Password changed successfully!';
+            }
+        }
+        $active_page = 'settings';
+    }
 
     // ── ADD TENANT + SEND INVITE EMAIL ────────────────────────
     if ($_POST['action'] === 'add_tenant') {
@@ -304,42 +343,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // ── ADD ANOTHER SUPER ADMIN ───────────────────────────────
     if ($_POST['action'] === 'add_super_admin') {
-        $sa_fullname = trim($_POST['sa_fullname'] ?? '');
-        $sa_username = trim($_POST['sa_username'] ?? '');
-        $sa_email    = trim($_POST['sa_email']    ?? '');
-        $sa_password = trim($_POST['sa_password'] ?? '');
-        $sa_confirm  = trim($_POST['sa_confirm']  ?? '');
-
-        if (!$sa_fullname || !$sa_username || !$sa_email || !$sa_password || !$sa_confirm) {
-            $error_msg   = 'Please fill in all fields for the new Super Admin.';
-        } elseif (strlen($sa_password) < 8) {
-            $error_msg   = 'Password must be at least 8 characters.';
-        } elseif ($sa_password !== $sa_confirm) {
-            $error_msg   = 'Passwords do not match.';
-        } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
-            $error_msg   = 'Invalid email address.';
+        // Only the ORIGINAL (oldest) Super Admin may add another Super Admin
+        $oldest_sa = $pdo->query("SELECT id FROM users WHERE role='super_admin' ORDER BY created_at ASC, id ASC LIMIT 1")->fetch();
+        if (!$oldest_sa || (int)$oldest_sa['id'] !== (int)$u['id']) {
+            $error_msg = '⛔ Only the original Super Admin account can add another Super Admin.';
+            $active_page = 'settings';
         } else {
-            $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
-            $dup->execute([$sa_username, $sa_email]);
-            if ($dup->fetch()) {
-                $error_msg = 'Username or email is already in use.';
+            $sa_fullname = trim($_POST['sa_fullname'] ?? '');
+            $sa_username = trim($_POST['sa_username'] ?? '');
+            $sa_email    = trim($_POST['sa_email']    ?? '');
+
+            if (!$sa_fullname || !$sa_username || !$sa_email) {
+                $error_msg = 'Please fill in all required fields.';
+            } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
+                $error_msg = 'Invalid email address.';
             } else {
-                $hashed_pw = password_hash($sa_password, PASSWORD_DEFAULT);
-                $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
-                    VALUES (?, ?, ?, ?, 'super_admin', 'approved', 0, NULL, NOW())")
-                    ->execute([$sa_fullname, $sa_username, $sa_email, $hashed_pw]);
-                $new_sa_id = $pdo->lastInsertId();
-                try {
-                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
-                        VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
-                        ->execute([$u['id'], $u['username'], $new_sa_id,
-                            "Super Admin \"{$u['username']}\" added new Super Admin \"{$sa_username}\" ({$sa_email}).",
-                            $_SERVER['REMOTE_ADDR'] ?? '::1']);
-                } catch (PDOException $e) {}
-                $success_msg = "✅ New Super Admin \"<strong>{$sa_fullname}</strong>\" (@{$sa_username}) added successfully!";
+                $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
+                $dup->execute([$sa_username, $sa_email]);
+                if ($dup->fetch()) {
+                    $error_msg = 'Username or email is already in use.';
+                } else {
+                    // Insert user with status=pending (no password yet)
+                    $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
+                        VALUES (?, ?, ?, '', 'super_admin', 'pending', 0, NULL, NOW())")
+                        ->execute([$sa_fullname, $sa_username, $sa_email]);
+                    $new_sa_id = $pdo->lastInsertId();
+
+                    // Generate setup token
+                    $setup_token  = bin2hex(random_bytes(32));
+                    $expires_at   = date('Y-m-d H:i:s', strtotime('+24 hours'));
+                    try {
+                        $pdo->prepare("INSERT INTO super_admin_invitations (user_id, token, expires_at, used, created_by, created_at)
+                            VALUES (?, ?, ?, 0, ?, NOW())")
+                            ->execute([$new_sa_id, $setup_token, $expires_at, $u['id']]);
+                    } catch (PDOException $e) {
+                        // Fallback: store token in password_resets table if super_admin_invitations doesn't exist yet
+                        $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at, used, created_at)
+                            VALUES (?, ?, ?, 0, NOW())")
+                            ->execute([$new_sa_id, $setup_token, $expires_at]);
+                    }
+
+                    try {
+                        $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
+                            VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
+                            ->execute([$u['id'], $u['username'], $new_sa_id,
+                                "Super Admin \"{$u['username']}\" invited new Super Admin \"{$sa_username}\" ({$sa_email}). Awaiting password setup.",
+                                $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                    } catch (PDOException $e) {}
+
+                    $sent = sendSuperAdminInvitation($sa_email, $sa_fullname, $sa_username, $setup_token);
+                    $success_msg = $sent
+                        ? "✅ Invitation sent to <strong>{$sa_email}</strong>! They must set up their password within 24 hours."
+                        : "⚠️ Account created but email failed. Setup token: <code>{$setup_token}</code> — Check mailer.php.";
+                }
             }
+            $active_page = 'settings';
         }
-        $active_page = 'settings';
     }
 
     // ── REMOVE SUPER ADMIN ────────────────────────────────────
@@ -1374,14 +1433,21 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr">
             <span class="card-title">🛡️ Super Admin Accounts</span>
-            <button type="button" onclick="document.getElementById('addSuperAdminModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.75rem;">
-              ➕ Add Super Admin
-            </button>
+            <div style="display:flex;gap:8px;">
+              <button type="button" onclick="document.getElementById('changePasswordModal').classList.add('open')" class="btn-sm" style="font-size:.75rem;">
+                🔒 Change My Password
+              </button>
+              <?php if ($is_original_sa): ?>
+              <button type="button" onclick="document.getElementById('addSuperAdminModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.75rem;">
+                ➕ Add Super Admin
+              </button>
+              <?php endif; ?>
+            </div>
           </div>
           <?php
-            // Fetch all super admins
+            // Fetch all super admins (approved + pending invite)
             try {
-                $sa_list = $pdo->query("SELECT id, fullname, username, email, created_at FROM users WHERE role = 'super_admin' AND status = 'approved' ORDER BY created_at ASC")->fetchAll();
+                $sa_list = $pdo->query("SELECT id, fullname, username, email, status, created_at FROM users WHERE role = 'super_admin' ORDER BY created_at ASC")->fetchAll();
             } catch (PDOException $e) { $sa_list = []; }
           ?>
           <div style="overflow-x:auto;">
@@ -1803,14 +1869,20 @@ function updatePlanCard(selected){
 <div class="modal-overlay" id="addSuperAdminModal">
   <div class="modal" style="width:500px;">
     <div class="mhdr">
-      <div><div class="mtitle">🛡️ Add New Super Admin</div><div class="msub">This account will have full system access.</div></div>
+      <div><div class="mtitle">🛡️ Add New Super Admin</div><div class="msub">An invitation email will be sent to set up their password.</div></div>
       <button class="mclose" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="mbody">
+      <?php if (!$is_original_sa): ?>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:14px 16px;font-size:.82rem;color:#dc2626;line-height:1.7;">
+        ⛔ <strong>Access Denied:</strong> Only the original Super Admin account can add another Super Admin.
+      </div>
+      <?php else: ?>
       <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#92400e;margin-bottom:16px;line-height:1.7;">
-        ⚠️ <strong>Warning:</strong> Super Admins have unrestricted access to all tenants, data, and system settings. Only add someone you fully trust.
+        ⚠️ <strong>Warning:</strong> Super Admins have unrestricted access to all tenants, data, and system settings. Only invite someone you fully trust.<br>
+        📧 An email will be sent to the new Super Admin to set up their own password. The link expires in <strong>24 hours</strong>.
       </div>
       <form method="POST" action="?page=settings">
         <input type="hidden" name="action" value="add_super_admin">
@@ -1824,38 +1896,69 @@ function updatePlanCard(selected){
             <input type="text" name="sa_username" class="finput" placeholder="e.g. mariasantos" required autocomplete="off">
           </div>
           <div>
-            <label class="flabel">Email *</label>
+            <label class="flabel">Email * <span style="color:#94a3b8;font-size:.65rem;">(invite will be sent here)</span></label>
             <input type="email" name="sa_email" class="finput" placeholder="e.g. maria@email.com" required>
-          </div>
-          <div>
-            <label class="flabel">Password * <span style="color:#94a3b8;font-size:.65rem;">(min. 8 chars)</span></label>
-            <div style="position:relative;">
-              <input type="password" name="sa_password" id="sa-pw" class="finput" placeholder="••••••••" required autocomplete="new-password" style="padding-right:42px;">
-              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-              </button>
-            </div>
-          </div>
-          <div>
-            <label class="flabel">Confirm Password *</label>
-            <div style="position:relative;">
-              <input type="password" name="sa_confirm" id="sa-pw2" class="finput" placeholder="••••••••" required style="padding-right:42px;">
-              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw2');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-              </button>
-            </div>
           </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">Cancel</button>
           <button type="submit" class="btn-sm btn-primary" style="background:linear-gradient(135deg,#4338ca,#7c3aed);border-color:#7c3aed;">
-            🛡️ Create Super Admin
+            📧 Send Invitation
           </button>
+        </div>
+      </form>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CHANGE PASSWORD MODAL ══════════════════════════════════ -->
+<div class="modal-overlay" id="changePasswordModal">
+  <div class="modal" style="width:460px;">
+    <div class="mhdr">
+      <div><div class="mtitle">🔒 Change My Password</div><div class="msub">Update your Super Admin account password.</div></div>
+      <button class="mclose" onclick="document.getElementById('changePasswordModal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="mbody">
+      <form method="POST" action="?page=settings">
+        <input type="hidden" name="action" value="change_password">
+        <div style="margin-bottom:12px;">
+          <label class="flabel">Current Password *</label>
+          <div style="position:relative;">
+            <input type="password" name="old_password" id="cp-old" class="finput" placeholder="Your current password" required style="padding-right:42px;">
+            <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('cp-old');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="flabel">New Password * <span style="color:#94a3b8;font-size:.65rem;">(min. 8 chars)</span></label>
+          <div style="position:relative;">
+            <input type="password" name="new_password" id="cp-new" class="finput" placeholder="New password" required style="padding-right:42px;">
+            <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('cp-new');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label class="flabel">Confirm New Password *</label>
+          <div style="position:relative;">
+            <input type="password" name="confirm_password" id="cp-confirm" class="finput" placeholder="Re-enter new password" required style="padding-right:42px;">
+            <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('cp-confirm');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('changePasswordModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary">🔒 Change Password</button>
         </div>
       </form>
     </div>
   </div>
-</div>
+</div>-e 
 
 </body>
 </html>

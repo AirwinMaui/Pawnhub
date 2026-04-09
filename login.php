@@ -5,52 +5,9 @@ require 'db.php';
 
 $error = '';
 $success = '';
-$mode = $_GET['mode'] ?? 'login'; // 'login' or 'change_password'
-
-// ── CHANGE PASSWORD (Super Admin only) ────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'change_password') {
-    $username    = trim($_POST['username']     ?? '');
-    $old_pass    = trim($_POST['old_password'] ?? '');
-    $new_pass    = trim($_POST['new_password'] ?? '');
-    $confirm_pass = trim($_POST['confirm_password'] ?? '');
-
-    if (!$username || !$old_pass || !$new_pass || !$confirm_pass) {
-        $error = 'Please fill in all fields.';
-        $mode  = 'change_password';
-    } elseif (strlen($new_pass) < 8) {
-        $error = 'New password must be at least 8 characters.';
-        $mode  = 'change_password';
-    } elseif ($new_pass !== $confirm_pass) {
-        $error = 'New passwords do not match.';
-        $mode  = 'change_password';
-    } else {
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? AND role = 'super_admin' AND status = 'approved' LIMIT 1");
-        $stmt->execute([$username]);
-        $user = $stmt->fetch();
-
-        if (!$user) {
-            $error = 'Super Admin username not found.';
-            $mode  = 'change_password';
-        } elseif (!password_verify($old_pass, $user['password'])) {
-            $error = 'Current password is incorrect.';
-            $mode  = 'change_password';
-        } else {
-            $hashed = password_hash($new_pass, PASSWORD_DEFAULT);
-            $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([$hashed, $user['id']]);
-            // Audit log
-            try {
-                $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
-                    VALUES (NULL, ?, ?, 'super_admin', 'CHANGE_PASSWORD', 'user', ?, 'Super Admin changed their own password.', ?, NOW())")
-                    ->execute([$user['id'], $user['username'], $user['id'], $_SERVER['REMOTE_ADDR'] ?? '::1']);
-            } catch (PDOException $e) {}
-            $success = 'Password changed successfully! You can now sign in with your new password.';
-            $mode = 'login';
-        }
-    }
-}
 
 // ── NORMAL LOGIN ───────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -158,8 +115,6 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .btn { width: 100%; height: 46px; background: linear-gradient(135deg,#1e3a8a,#2563eb); color: #fff; border: none; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 0.91rem; font-weight: 700; cursor: pointer; box-shadow: 0 5px 16px rgba(30,58,138,0.28); transition: transform .15s, box-shadow .15s; }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 7px 22px rgba(30,58,138,0.36); }
 .btn:active { transform: translateY(0); }
-.btn-secondary { background: linear-gradient(135deg,#475569,#64748b); box-shadow: 0 5px 16px rgba(71,85,105,0.28); }
-.btn-secondary:hover { box-shadow: 0 7px 22px rgba(71,85,105,0.36); }
 .toggle-link { text-align: center; margin-top: 14px; }
 .toggle-link a { font-size: 0.79rem; color: #2563eb; font-weight: 600; text-decoration: none; cursor: pointer; transition: color .2s; }
 .toggle-link a:hover { color: #1d4ed8; text-decoration: underline; }
@@ -213,9 +168,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
     <div class="card">
 
       <div class="card-icon">
-        <span class="material-symbols-outlined" style="font-size:2rem;color:<?= $mode === 'change_password' ? '#7c3aed' : '#1e3a8a' ?>;">
-          <?= $mode === 'change_password' ? 'lock_reset' : 'shield' ?>
-        </span>
+        <span class="material-symbols-outlined" style="font-size:2rem;color:#1e3a8a;">shield</span>
       </div>
 
       <div class="sa-badge">
@@ -223,115 +176,55 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         Super Admin Portal
       </div>
 
-      <?php if ($mode === 'change_password'): ?>
-        <h1 class="card-title">Change Password</h1>
-        <p class="card-sub">Enter your current password and choose a new one. Only Super Admin accounts can use this form.</p>
+      <h1 class="card-title">Welcome Back</h1>
+      <p class="card-sub">This portal is for Super Admin access only. Tenant staff should use their branch login page.</p>
 
-        <?php if ($error): ?>
-        <div class="err">
-          <span class="material-symbols-outlined">error</span>
-          <?= htmlspecialchars($error) ?>
-        </div>
-        <?php endif; ?>
-
-        <form method="POST" action="?mode=change_password" class="form">
-          <input type="hidden" name="action" value="change_password">
-          <div>
-            <label class="lbl">Super Admin Username</label>
-            <input type="text" name="username" class="inp"
-              placeholder="Enter your username"
-              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
-          </div>
-          <div>
-            <label class="lbl">Current Password</label>
-            <div class="pw-wrap">
-              <input type="password" name="old_password" id="pw-old" class="inp" placeholder="Your current password" required>
-              <button type="button" class="pw-btn" onclick="togglePw('pw-old',this)">
-                <span class="material-symbols-outlined">visibility</span>
-              </button>
-            </div>
-          </div>
-          <div>
-            <label class="lbl">New Password <span style="font-size:.65rem;color:#94a3b8;">(min. 8 characters)</span></label>
-            <div class="pw-wrap">
-              <input type="password" name="new_password" id="pw-new" class="inp" placeholder="New password" required>
-              <button type="button" class="pw-btn" onclick="togglePw('pw-new',this)">
-                <span class="material-symbols-outlined">visibility</span>
-              </button>
-            </div>
-          </div>
-          <div>
-            <label class="lbl">Confirm New Password</label>
-            <div class="pw-wrap">
-              <input type="password" name="confirm_password" id="pw-confirm" class="inp" placeholder="Re-enter new password" required>
-              <button type="button" class="pw-btn" onclick="togglePw('pw-confirm',this)">
-                <span class="material-symbols-outlined">visibility</span>
-              </button>
-            </div>
-          </div>
-          <button type="submit" class="btn btn-secondary">🔒 Change Password</button>
-        </form>
-
-        <div class="toggle-link">
-          <a href="login.php">← Back to Sign In</a>
-        </div>
-
-      <?php else: ?>
-        <h1 class="card-title">Welcome Back</h1>
-        <p class="card-sub">This portal is for Super Admin access only. Tenant staff should use their branch login page.</p>
-
-        <?php if ($success): ?>
-        <div class="succ">
-          <span class="material-symbols-outlined" style="font-size:15px;flex-shrink:0;">check_circle</span>
-          <?= htmlspecialchars($success) ?>
-        </div>
-        <?php endif; ?>
-
-        <?php if ($error): ?>
-        <div class="err">
-          <span class="material-symbols-outlined">error</span>
-          <?= htmlspecialchars($error) ?>
-        </div>
-        <?php endif; ?>
-
-        <form method="POST" action="" class="form">
-          <div>
-            <label class="lbl">Username</label>
-            <input type="text" name="username" class="inp"
-              placeholder="Enter your username"
-              value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
-          </div>
-          <div>
-            <label class="lbl">Password</label>
-            <div class="pw-wrap">
-              <input type="password" name="password" id="pw" class="inp" placeholder="••••••••" required>
-              <button type="button" class="pw-btn" onclick="togglePw('pw',this)">
-                <span class="material-symbols-outlined">visibility</span>
-              </button>
-            </div>
-          </div>
-          <div class="rem">
-            <input type="checkbox" id="rem">
-            <label for="rem">Remember this device</label>
-          </div>
-          <button type="submit" class="btn">Sign In</button>
-        </form>
-
-        <!-- Change Password Link -->
-        <div class="toggle-link">
-          <a href="login.php?mode=change_password">🔒 Change my password</a>
-        </div>
-
-        <div class="card-foot">
-          <div class="card-foot-row">
-            <span class="material-symbols-outlined">info</span>
-            <p>
-              <strong>Not the Super Admin?</strong>
-              <span>Use the login link provided by your branch administrator.</span>
-            </p>
-          </div>
-        </div>
+      <?php if ($success): ?>
+      <div class="succ">
+        <span class="material-symbols-outlined" style="font-size:15px;flex-shrink:0;">check_circle</span>
+        <?= htmlspecialchars($success) ?>
+      </div>
       <?php endif; ?>
+
+      <?php if ($error): ?>
+      <div class="err">
+        <span class="material-symbols-outlined">error</span>
+        <?= htmlspecialchars($error) ?>
+      </div>
+      <?php endif; ?>
+
+      <form method="POST" action="" class="form">
+        <div>
+          <label class="lbl">Username</label>
+          <input type="text" name="username" class="inp"
+            placeholder="Enter your username"
+            value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+        </div>
+        <div>
+          <label class="lbl">Password</label>
+          <div class="pw-wrap">
+            <input type="password" name="password" id="pw" class="inp" placeholder="••••••••" required>
+            <button type="button" class="pw-btn" onclick="togglePw('pw',this)">
+              <span class="material-symbols-outlined">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div class="rem">
+          <input type="checkbox" id="rem">
+          <label for="rem">Remember this device</label>
+        </div>
+        <button type="submit" class="btn">Sign In</button>
+      </form>
+
+      <div class="card-foot">
+        <div class="card-foot-row">
+          <span class="material-symbols-outlined">info</span>
+          <p>
+            <strong>Not the Super Admin?</strong>
+            <span>Use the login link provided by your branch administrator.</span>
+          </p>
+        </div>
+      </div>
 
     </div>
 
