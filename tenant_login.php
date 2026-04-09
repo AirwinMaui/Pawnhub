@@ -190,8 +190,13 @@ $bizName = htmlspecialchars(
         ? $customSysName
         : ($tenant['business_name'] ?? 'PawnHub')
 );
-$bgImg   = !empty($tenant['bg_image_url'])
-    ? htmlspecialchars($tenant['bg_image_url'])
+$rawBg   = $tenant['bg_image_url'] ?? '';
+// Normalize: ensure leading slash for local upload paths
+if ($rawBg && strpos($rawBg, 'http') !== 0 && $rawBg[0] !== '/') {
+    $rawBg = '/' . $rawBg;
+}
+$bgImg   = !empty($rawBg)
+    ? htmlspecialchars($rawBg)
     : 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI';
 ?>
 <!DOCTYPE html>
@@ -274,11 +279,21 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 </div>
 
 <header class="nav">
+  <?php
+    $login_logo_url = $theme['logo_url'] ?? '';
+    if ($login_logo_url && strpos($login_logo_url,'http') !== 0 && $login_logo_url[0] !== '/') {
+        $login_logo_url = '/' . $login_logo_url;
+    }
+  ?>
   <a href="/<?= htmlspecialchars(rawurlencode($slug)) ?>" class="nav-logo">
     <div class="nav-logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:14px;height:14px;">
-        <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
-      </svg>
+      <?php if($login_logo_url): ?>
+        <img src="<?= htmlspecialchars($login_logo_url) ?>" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:9px;">
+      <?php else: ?>
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:14px;height:14px;">
+          <rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/>
+        </svg>
+      <?php endif; ?>
     </div>
     <span class="nav-logo-text"><?= $bizName ?></span>
   </a>

@@ -27,6 +27,9 @@ $secondary = $theme['secondary_color'] ?? '#1e3a8a';
 $accent    = $theme['accent_color']    ?? '#10b981';
 $logo_url  = $theme['logo_url']        ?? '';
 $bg_url    = $tenant['bg_image_url']   ?? '';
+// Normalize local upload paths (fix old records without leading slash)
+if ($bg_url   && strpos($bg_url,  'http') !== 0 && $bg_url[0]   !== '/') $bg_url   = '/' . $bg_url;
+if ($logo_url && strpos($logo_url,'http') !== 0 && $logo_url[0] !== '/') $logo_url = '/' . $logo_url;
 $biz_name  = htmlspecialchars($tenant['business_name']);
 $login_url = '/' . rawurlencode($slug) . '?login=1';
 $home_url  = '/' . rawurlencode($slug);

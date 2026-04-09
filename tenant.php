@@ -237,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if (file_exists($oldfile)) unlink($oldfile);
                 }
                 if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $uploaddir . $filename)) {
-                    $logourl = 'uploads/' . $filename;
+                    $logourl = '/uploads/' . $filename;
                 } else {
                     $error_msg = 'Failed to upload logo. Please try again.';
                 }
@@ -245,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error_msg = 'Invalid file. Please upload JPG, PNG, GIF, or WebP under 2MB.';
             }
         } elseif (isset($_POST['remove_logo']) && $_POST['remove_logo'] === '1') {
-            if ($logourl && file_exists(__DIR__ . '/' . $logourl)) unlink(__DIR__ . '/' . $logourl);
+            if ($logourl && file_exists(__DIR__ . $logourl)) unlink(__DIR__ . $logourl);
             $logourl = '';
         }
 
@@ -263,11 +263,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $uploaddir = __DIR__ . '/uploads/';
                 if (!is_dir($uploaddir)) mkdir($uploaddir, 0755, true);
                 // Delete old bg file if it was locally uploaded
-                if ($bgurl && strpos($bgurl, 'uploads/') === 0 && file_exists(__DIR__ . '/' . $bgurl)) {
-                    unlink(__DIR__ . '/' . $bgurl);
+                if ($bgurl && strpos($bgurl, '/uploads/') === 0 && file_exists(__DIR__ . $bgurl)) {
+                    unlink(__DIR__ . $bgurl);
                 }
                 if (move_uploaded_file($_FILES['bg_file']['tmp_name'], $uploaddir . $bgName)) {
-                    $bgurl = 'uploads/' . $bgName;
+                    $bgurl = '/uploads/' . $bgName;
                 } else {
                     $error_msg = 'Failed to upload background. Please try again.';
                 }
@@ -275,8 +275,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error_msg = 'Invalid background file. Use JPG, PNG, or WebP under 5MB.';
             }
         } elseif (isset($_POST['remove_bg']) && $_POST['remove_bg'] === '1') {
-            if ($bgurl && strpos($bgurl, 'uploads/') === 0 && file_exists(__DIR__ . '/' . $bgurl)) {
-                unlink(__DIR__ . '/' . $bgurl);
+            if ($bgurl && strpos($bgurl, '/uploads/') === 0 && file_exists(__DIR__ . $bgurl)) {
+                unlink(__DIR__ . $bgurl);
             }
             $bgurl = '';
         }
@@ -329,6 +329,8 @@ $pending_applicants = array_filter($applicants, fn($a)=>$a['status']==='pending'
 $sys_name = $theme['system_name'] ?? 'PawnHub';
 $logo_text = $theme['logo_text'] ?: $sys_name;
 $logo_url  = $theme['logo_url']  ?? '';
+// Normalize local upload paths (fix old records without leading slash)
+if ($logo_url && strpos($logo_url,'http') !== 0 && $logo_url[0] !== '/') $logo_url = '/' . $logo_url;
 $business_name = $tenant['business_name'] ?? 'My Branch';
 ?>
 <!DOCTYPE html>
@@ -517,8 +519,12 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <!-- Background Scene -->
 <div class="bg-scene">
   <?php
-    $bgScene = !empty($tenant['bg_image_url'])
-        ? htmlspecialchars($tenant['bg_image_url'])
+    $rawBgScene = $tenant['bg_image_url'] ?? '';
+    if ($rawBgScene && strpos($rawBgScene,'http') !== 0 && $rawBgScene[0] !== '/') {
+        $rawBgScene = '/' . $rawBgScene;
+    }
+    $bgScene = !empty($rawBgScene)
+        ? htmlspecialchars($rawBgScene)
         : 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1600&auto=format&fit=crop&q=60';
   ?>
   <img src="<?= $bgScene ?>" alt="">
@@ -951,6 +957,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
             <?php
               $currentBg = $tenant['bg_image_url'] ?? '';
+            if ($currentBg && strpos($currentBg,'http') !== 0 && $currentBg[0] !== '/') $currentBg = '/' . $currentBg;
             ?>
             <?php if($currentBg): ?>
             <div style="position:relative;border-radius:10px;overflow:hidden;margin-bottom:10px;height:120px;border:1px solid rgba(255,255,255,.1);">
