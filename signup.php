@@ -36,12 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $plan       = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
     $branches   = intval($_POST['branches'] ?? 1);
 
-    $payment_method    = trim($_POST['payment_method']    ?? '');
-    $payment_reference = trim($_POST['payment_reference'] ?? '');
-    $cc_name   = trim($_POST['cc_name']   ?? '');
-    $cc_number = trim($_POST['cc_number'] ?? '');
-    $cc_expiry = trim($_POST['cc_expiry'] ?? '');
-
     $needs_payment = in_array($plan, ['Pro', 'Enterprise']);
 
     if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
@@ -50,10 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Passwords do not match.';
     } elseif (strlen($pass) < 8) {
         $error = 'Password must be at least 8 characters.';
-    } elseif ($needs_payment && !$payment_method) {
-        $error = 'Please select a payment method.';
-    } elseif ($needs_payment && $payment_method === 'Credit Card' && (!$cc_name || !$cc_number || !$cc_expiry)) {
-        $error = 'Please fill in all credit card details.';
     } elseif (empty($_FILES['business_permit']['name']) || ($_FILES['business_permit']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
         $error = 'Please upload your Business Permit.';
     } elseif (($_FILES['business_permit']['error'] ?? 0) !== UPLOAD_ERR_OK) {
@@ -90,24 +80,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!move_uploaded_file($file_tmp, $upload_path)) {
                     $error = 'Failed to upload file. Please try again.';
                 } else {
-                    $cc_masked = '';
-                    if ($payment_method === 'Credit Card' && $cc_number) {
-                        $digits_only = preg_replace('/\D/', '', $cc_number);
-                        $cc_masked   = 'XXXX-XXXX-XXXX-' . substr($digits_only, -4);
-                    }
-
-                    $payment_info = json_encode([
-                        'method'    => $payment_method,
-                        'reference' => $payment_reference,
-                        'cc_name'   => $payment_method === 'Credit Card' ? $cc_name   : '',
-                        'cc_number' => $payment_method === 'Credit Card' ? $cc_masked : '',
-                        'cc_expiry' => $payment_method === 'Credit Card' ? $cc_expiry : '',
-                    ]);
-
                     $pdo->beginTransaction();
                     try {
-                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,business_permit_url,payment_info) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
-                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url, $payment_info]);
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?)")
+                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                             ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
@@ -247,32 +223,6 @@ select.glass-input option {
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
-}
-.cc-card-preview {
-    background: linear-gradient(135deg, #1e3a8a, #7c3aed);
-    border-radius: 14px;
-    padding: 20px 22px;
-    color: #fff;
-    margin-bottom: 16px;
-    position: relative;
-    overflow: hidden;
-    min-height: 120px;
-}
-.cc-card-preview::before {
-    content: '';
-    position: absolute;
-    top: -30px; right: -30px;
-    width: 120px; height: 120px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.07);
-}
-.cc-card-preview::after {
-    content: '';
-    position: absolute;
-    bottom: -40px; left: -20px;
-    width: 150px; height: 150px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.05);
 }
 .file-upload-zone {
     border: 2px dashed rgba(255,255,255,0.25);
@@ -458,77 +408,22 @@ select.glass-input option {
 
         <!-- ── SECTION 4: Payment ─────────────────────────────── -->
         <div id="payment_section" style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;<?= $selected_plan === 'Starter' ? 'display:none;' : '' ?>">
-          <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">💳 Payment Information <span style="color:#f87171;">*</span></p>
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div>
-              <label class="field-label">Payment Method *</label>
-              <select name="payment_method" id="payment_method_sel" class="glass-input" onchange="handlePaymentMethodChange(this.value)">
-                <option value="" style="color:rgba(255,255,255,0.4);">— Select Payment Method —</option>
-                <option value="Credit Card"              <?= ($_POST['payment_method']??'')==='Credit Card'             ?'selected':'' ?>>💳 Credit Card</option>
-                <option value="GCash"                    <?= ($_POST['payment_method']??'')==='GCash'                   ?'selected':'' ?>>📱 GCash</option>
-                <option value="Maya"                     <?= ($_POST['payment_method']??'')==='Maya'                    ?'selected':'' ?>>📱 Maya (PayMaya)</option>
-                <option value="Bank Transfer - BDO"      <?= ($_POST['payment_method']??'')==='Bank Transfer - BDO'     ?'selected':'' ?>>🏦 Bank Transfer — BDO</option>
-                <option value="Bank Transfer - BPI"      <?= ($_POST['payment_method']??'')==='Bank Transfer - BPI'     ?'selected':'' ?>>🏦 Bank Transfer — BPI</option>
-                <option value="Bank Transfer - UnionBank" <?= ($_POST['payment_method']??'')==='Bank Transfer - UnionBank'?'selected':'' ?>>🏦 Bank Transfer — UnionBank</option>
-                <option value="Bank Transfer - Metrobank" <?= ($_POST['payment_method']??'')==='Bank Transfer - Metrobank'?'selected':'' ?>>🏦 Bank Transfer — Metrobank</option>
-                <option value="Cash"                     <?= ($_POST['payment_method']??'')==='Cash'                   ?'selected':'' ?>>💵 Cash (walk-in)</option>
-              </select>
-            </div>
-
-            <!-- Credit Card Fields -->
-            <div id="cc_fields" style="display:none;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-              <div class="cc-card-preview" id="cc_preview">
-                <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;opacity:0.6;margin-bottom:14px;">Credit / Debit Card</div>
-                <div style="font-family:monospace;font-size:1.1rem;font-weight:700;letter-spacing:0.15em;margin-bottom:14px;" id="cc_preview_num">•••• •••• •••• ••••</div>
-                <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-                  <div>
-                    <div style="font-size:0.55rem;opacity:0.5;text-transform:uppercase;letter-spacing:0.1em;">Card Holder</div>
-                    <div style="font-size:0.78rem;font-weight:600;" id="cc_preview_name">YOUR NAME</div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div style="font-size:0.55rem;opacity:0.5;text-transform:uppercase;letter-spacing:0.1em;">Expires</div>
-                    <div style="font-size:0.78rem;font-weight:600;" id="cc_preview_expiry">MM/YY</div>
-                  </div>
+          <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">💳 Payment</p>
+          <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:16px;">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <div style="font-size:1.6rem;line-height:1;margin-top:2px;">🔒</div>
+              <div>
+                <p style="font-size:0.85rem;font-weight:700;color:#93c5fd;margin-bottom:4px;">Secure Payment via PayMongo</p>
+                <p style="font-size:0.78rem;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:10px;">
+                  After submitting this form, you'll be redirected to PayMongo's secure checkout page to complete your payment.
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                  <span style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 10px;font-size:0.72rem;color:rgba(255,255,255,0.6);">💳 Credit / Debit Card</span>
+                  <span style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 10px;font-size:0.72rem;color:rgba(255,255,255,0.6);">📱 GCash</span>
+                  <span style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 10px;font-size:0.72rem;color:rgba(255,255,255,0.6);">🏦 Online Banking</span>
+                  <span style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:4px 10px;font-size:0.72rem;color:rgba(255,255,255,0.6);">💸 BillEase</span>
                 </div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:10px;">
-                <div>
-                  <label class="field-label">Name on Card *</label>
-                  <input type="text" name="cc_name" id="cc_name_inp" class="glass-input" placeholder="Juan Dela Cruz"
-                    value="<?= htmlspecialchars($_POST['cc_name'] ?? '') ?>"
-                    oninput="document.getElementById('cc_preview_name').textContent=this.value.toUpperCase()||'YOUR NAME'">
-                </div>
-                <div>
-                  <label class="field-label">Card Number *</label>
-                  <input type="text" name="cc_number" id="cc_num_inp" class="glass-input" placeholder="1234 5678 9012 3456"
-                    maxlength="19" autocomplete="cc-number"
-                    value="<?= htmlspecialchars($_POST['cc_number'] ?? '') ?>"
-                    oninput="formatCardNumber(this)">
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                  <div>
-                    <label class="field-label">Expiry Date *</label>
-                    <input type="text" name="cc_expiry" id="cc_exp_inp" class="glass-input" placeholder="MM/YY"
-                      maxlength="5" autocomplete="cc-exp"
-                      value="<?= htmlspecialchars($_POST['cc_expiry'] ?? '') ?>"
-                      oninput="formatExpiry(this)">
-                  </div>
-                  <div>
-                    <label class="field-label">CVV *</label>
-                    <input type="password" name="cc_cvv" class="glass-input" placeholder="•••" maxlength="4" autocomplete="cc-csc">
-                  </div>
-                </div>
-                <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:9px 12px;font-size:0.72rem;color:rgba(255,255,255,0.35);">
-                  🔒 Your card details are encrypted. CVV is never stored.
-                </div>
-              </div>
-            </div>
-
-            <!-- Reference Number -->
-            <div id="reference_field">
-              <label class="field-label">Reference / Transaction Number <span style="color:rgba(255,255,255,0.25);font-weight:400;">(if applicable)</span></label>
-              <input type="text" name="payment_reference" class="glass-input" placeholder="e.g. GCash ref #1234567890"
-                autocomplete="off" value="<?= htmlspecialchars($_POST['payment_reference'] ?? '') ?>">
             </div>
           </div>
         </div>
@@ -600,15 +495,8 @@ function selectPlan(name) {
 
   // Show/hide payment section for paid plans
   const paySection = document.getElementById('payment_section');
-  const paySelect  = document.getElementById('payment_method_sel');
   const isPaid     = (name === 'Pro' || name === 'Enterprise');
   paySection.style.display = isPaid ? 'block' : 'none';
-  paySelect.required       = isPaid;
-  if (!isPaid) {
-    paySelect.value = '';
-    document.getElementById('cc_fields').style.display   = 'none';
-    document.getElementById('reference_field').style.display = 'block';
-  }
 }
 
 // ── Business Permit File Handling ─────────────────────────────
@@ -632,53 +520,13 @@ dz.addEventListener('drop', e => {
   handlePermitFile(document.getElementById('business_permit'));
 });
 
-// ── Payment Method Toggle ─────────────────────────────────────
-function handlePaymentMethodChange(method) {
-  const ccFields = document.getElementById('cc_fields');
-  const refField = document.getElementById('reference_field');
-  const ccInputs = ccFields.querySelectorAll('input');
-
-  if (method === 'Credit Card') {
-    ccFields.style.display = 'block';
-    refField.style.display = 'none';
-    ccInputs.forEach(inp => { if (inp.name !== 'cc_cvv') inp.required = true; });
-  } else {
-    ccFields.style.display = 'none';
-    refField.style.display = 'block';
-    ccInputs.forEach(inp => inp.required = false);
-  }
-}
-
-<?php if (($_POST['payment_method'] ?? '') === 'Credit Card'): ?>
-handlePaymentMethodChange('Credit Card');
-<?php endif; ?>
-// On page load, set required state based on current plan
+// On page load, show payment section for paid plans
 (function() {
   const plan = document.getElementById('plan_input').value;
   if (plan === 'Pro' || plan === 'Enterprise') {
-    document.getElementById('payment_method_sel').required = true;
     document.getElementById('payment_section').style.display = 'block';
   }
 })();
-
-// ── Credit Card Formatting ────────────────────────────────────
-function formatCardNumber(input) {
-  let v = input.value.replace(/\D/g, '').substring(0, 16);
-  input.value = v.replace(/(.{4})/g, '$1 ').trim();
-  const masked = v.length > 0
-    ? (v.substring(0,4) + (v.length > 4 ? ' ' + v.substring(4,8).replace(/./g,'•') : '') +
-       (v.length > 8 ? ' ' + v.substring(8,12).replace(/./g,'•') : '') +
-       (v.length > 12 ? ' ' + v.substring(12,16) : ''))
-    : '•••• •••• •••• ••••';
-  document.getElementById('cc_preview_num').textContent = masked || '•••• •••• •••• ••••';
-}
-
-function formatExpiry(input) {
-  let v = input.value.replace(/\D/g, '').substring(0, 4);
-  if (v.length >= 2) v = v.substring(0,2) + '/' + v.substring(2);
-  input.value = v;
-  document.getElementById('cc_preview_expiry').textContent = v || 'MM/YY';
-}
 </script>
 </body>
 </html>

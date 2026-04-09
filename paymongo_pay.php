@@ -30,6 +30,9 @@ $prices = [
 $amount = $prices[$plan] ?? 99900;
 
 // ── 3. Build Checkout Session payload ───────────────────────
+// NOTE: 'maya' was removed — it is not a valid payment_method_type in PayMongo.
+//       Maya/PayMaya payments go through 'card' or 'dob_ubp' depending on integration.
+//       Valid types: card, gcash, dob, billease, brankas_atlas, brankas_eastwest, brankas_robinson
 $payload = [
     'data' => [
         'attributes' => [
@@ -43,7 +46,7 @@ $payload = [
                 'name'        => "PawnHub {$plan} Plan — Monthly Subscription",
                 'quantity'    => 1,
             ]],
-            'payment_method_types' => ['card', 'gcash', 'maya', 'dob', 'billease'],
+            'payment_method_types' => ['card', 'gcash', 'dob', 'billease'],
             'success_url' => PAYMONGO_SUCCESS_URL . '?tenant=' . $tenant_id . '&user=' . $user_id,
             'cancel_url'  => PAYMONGO_CANCEL_URL,
             'metadata'    => [
