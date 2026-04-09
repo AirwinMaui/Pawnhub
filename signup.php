@@ -4,6 +4,27 @@ require 'db.php';
 $error = $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    // ── Detect silent POST truncation (post_max_size exceeded) ──────────────
+    // When total POST body > post_max_size, PHP clears $_POST AND $_FILES
+    // entirely — no error is raised. Catch it here before any validation.
+    $content_length = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    $post_max_str   = ini_get('post_max_size');
+    $post_max_bytes = (function($v) {
+        $v = trim($v);
+        $last = strtolower(substr($v, -1));
+        $n    = (int)$v;
+        if ($last === 'g') $n *= 1024 * 1024 * 1024;
+        elseif ($last === 'm') $n *= 1024 * 1024;
+        elseif ($last === 'k') $n *= 1024;
+        return $n;
+    })($post_max_str);
+    if ($content_length > 0 && empty($_POST) && $post_max_bytes > 0 && $content_length > $post_max_bytes) {
+        $error = 'Your upload is too large for the server. Max total form size: ' . $post_max_str . '. Please compress or resize your file.';
+    }
+
+    if (!$error):
+
     $fullname   = trim($_POST['fullname']      ?? '');
     $email      = trim($_POST['email']         ?? '');
     $username   = trim($_POST['username']      ?? '');
@@ -33,8 +54,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please select a payment method.';
     } elseif ($needs_payment && $payment_method === 'Credit Card' && (!$cc_name || !$cc_number || !$cc_expiry)) {
         $error = 'Please fill in all credit card details.';
-    } elseif (empty($_FILES['business_permit']['name'])) {
+    } elseif (empty($_FILES['business_permit']['name']) || ($_FILES['business_permit']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
         $error = 'Please upload your Business Permit.';
+    } elseif (($_FILES['business_permit']['error'] ?? 0) !== UPLOAD_ERR_OK) {
+        $upload_errors = [
+            UPLOAD_ERR_INI_SIZE   => 'File exceeds server upload limit (' . ini_get('upload_max_filesize') . 'B). Please compress or resize it.',
+            UPLOAD_ERR_FORM_SIZE  => 'File exceeds the form size limit.',
+            UPLOAD_ERR_PARTIAL    => 'File was only partially uploaded. Please try again.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server configuration error (no temp folder). Contact support.',
+            UPLOAD_ERR_CANT_WRITE => 'Server could not save the file. Contact support.',
+            UPLOAD_ERR_EXTENSION  => 'Upload blocked by server extension.',
+        ];
+        $err_code = $_FILES['business_permit']['error'];
+        $error = $upload_errors[$err_code] ?? 'File upload failed (error ' . $err_code . '). Please try again.';
     } else {
         $file_size = $_FILES['business_permit']['size'];
         $file_tmp  = $_FILES['business_permit']['tmp_name'];
@@ -105,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+    endif; // end if (!$error) — post_max_size guard
 }
 
 $plans = [
