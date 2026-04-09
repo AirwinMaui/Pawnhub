@@ -997,7 +997,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
           <div>
             <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.35);margin-bottom:8px;">Valid ID Image</div>
             <img src="${c.valid_id_image}" onclick="openImgLightbox('${c.valid_id_image}')"
-              style="width:100%;max-height:150px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.12);cursor:zoom-in;"
+              style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid rgba(255,255,255,.12);cursor:zoom-in;background:rgba(255,255,255,.04);"
               onerror="this.closest('div').innerHTML='<span style=\'font-size:.75rem;color:rgba(255,255,255,.2);\'>Image unavailable</span>'">
             <div style="font-size:.68rem;color:rgba(255,255,255,.25);margin-top:5px;">Click to enlarge</div>
           </div>` : '';
