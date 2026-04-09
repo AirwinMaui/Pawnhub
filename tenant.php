@@ -147,6 +147,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'users';
     }
 
+    if ($_POST['action'] === 'approve_applicant') {
+        $apid = intval($_POST['applicant_id']);
+        $row  = $pdo->prepare("SELECT * FROM tenant_applicants WHERE id=? AND tenant_id=? AND status='pending' LIMIT 1");
+        $row->execute([$apid,$tid]); $applicant = $row->fetch();
+        if ($applicant) {
+            // Create user account
+            $pdo->prepare("INSERT INTO users (tenant_id,fullname,username,email,password,role,contact_number,status,is_suspended,created_at)
+                VALUES (?,?,?,?,?,'".addslashes($applicant['role'])."',?,?,0,NOW())")
+                ->execute([$tid,$applicant['fullname'],$applicant['username'],$applicant['email'],
+                           $applicant['password_hash'],$applicant['contact_number']??null,'approved']);
+            $pdo->prepare("UPDATE tenant_applicants SET status='approved',decided_at=NOW(),decided_by=? WHERE id=?")
+                ->execute([$u['id'],$apid]);
+            $success_msg = "✅ {$applicant['fullname']} has been approved and their account is now active.";
+        }
+        $active_page = 'applicants';
+    }
+
+    if ($_POST['action'] === 'reject_applicant') {
+        $apid = intval($_POST['applicant_id']);
+        $row  = $pdo->prepare("SELECT fullname FROM tenant_applicants WHERE id=? AND tenant_id=? LIMIT 1");
+        $row->execute([$apid,$tid]); $applicant = $row->fetch();
+        $pdo->prepare("UPDATE tenant_applicants SET status='rejected',decided_at=NOW(),decided_by=? WHERE id=?")
+            ->execute([$u['id'],$apid]);
+        $success_msg = "Application from ".htmlspecialchars($applicant['fullname']??'applicant')." has been rejected.";
+        $active_page = 'applicants';
+    }
+
     if ($_POST['action'] === 'approve_void') {
         $vrid = intval($_POST['void_id']); $ticket_no = trim($_POST['ticket_no']);
         $pdo->prepare("UPDATE pawn_void_requests SET status='approved',decided_by=?,decided_at=NOW() WHERE id=? AND tenant_id=?")->execute([$u['id'],$vrid,$tid]);
@@ -294,6 +321,10 @@ $total_tickets    = count($tickets);
 $active_tickets   = count(array_filter($tickets, fn($t)=>$t['status']==='Stored'));
 $total_customers  = count($customers);
 $total_revenue    = array_sum(array_column(array_filter($tickets, fn($t)=>$t['status']==='Released'), 'total_redeem'));
+
+// Walk-in applicants
+$applicants = $pdo->prepare("SELECT * FROM tenant_applicants WHERE tenant_id=? ORDER BY applied_at DESC"); $applicants->execute([$tid]); $applicants=$applicants->fetchAll();
+$pending_applicants = array_filter($applicants, fn($a)=>$a['status']==='pending');
 
 $sys_name = $theme['system_name'] ?? 'PawnHub';
 $logo_text = $theme['logo_text'] ?: $sys_name;
@@ -539,6 +570,10 @@ tr:hover td{background:rgba(255,255,255,.03);}
       <span class="material-symbols-outlined">badge</span>Managers 
     </a>
     <?php endif;?>
+    <a href="?page=applicants" class="sb-item <?=$active_page==='applicants'?'active':''?>">
+      <span class="material-symbols-outlined">person_search</span>Applicants
+      <?php if(count($pending_applicants)>0):?><span class="sb-pill"><?=count($pending_applicants)?></span><?php endif;?>
+    </a>
     <?php if($features['audit_logs']):?>
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
@@ -581,7 +616,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF','applicants'=>'Walk-in Applicants'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="tenant-chip"><?=htmlspecialchars($business_name)?></span>
     </div>
     <div class="topbar-right">
@@ -1128,6 +1163,97 @@ tr:hover td{background:rgba(255,255,255,.03);}
         <span>© <?=date('Y')?> <?=htmlspecialchars($business_name)?> · Powered by PawnHub</span>
         <span><?=count($exp_rows)?> record<?=count($exp_rows)!==1?'s':''?> · <?=date('F j, Y g:i A')?></span>
       </div>
+    </div>
+
+  <?php elseif($active_page==='applicants'): ?>
+    <?php
+      $applicants_stmt = $pdo->prepare("SELECT * FROM tenant_applicants WHERE tenant_id=? ORDER BY FIELD(status,'pending','approved','rejected'), applied_at DESC");
+      $applicants_stmt->execute([$tid]); $all_applicants = $applicants_stmt->fetchAll();
+      $pend_cnt = count(array_filter($all_applicants, fn($a)=>$a['status']==='pending'));
+    ?>
+    <?php if($pend_cnt > 0): ?>
+    <div style="background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(234,88,12,.07));border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+      <span class="material-symbols-outlined" style="color:#fcd34d;font-size:20px;">pending_actions</span>
+      <span style="font-size:.82rem;font-weight:600;color:#fcd34d;"><?= $pend_cnt ?> pending application<?= $pend_cnt!==1?'s':''?> awaiting your review.</span>
+    </div>
+    <?php endif; ?>
+    <div class="card" style="overflow-x:auto;">
+      <?php if(empty($all_applicants)):?>
+      <div class="empty-state">
+        <span class="material-symbols-outlined">person_search</span>
+        <p>No applicants yet. When someone applies from your public page, they'll appear here.</p>
+      </div>
+      <?php else:?>
+      <table>
+        <thead><tr>
+          <th>Applicant</th><th>Role</th><th>Contact</th><th>Note</th>
+          <th>Resume / Photo</th><th>Status</th><th>Applied</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+        <?php foreach($all_applicants as $ap):
+          $role_badge = match($ap['role']) { 'manager'=>'b-green','cashier'=>'b-purple',default=>'b-blue' };
+          $st_badge   = match($ap['status']) { 'approved'=>'b-green','rejected'=>'b-red',default=>'b-yellow' };
+          $st_icon    = match($ap['status']) { 'approved'=>'check_circle','rejected'=>'cancel',default=>'pending' };
+        ?>
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff;flex-shrink:0;">
+                <?= strtoupper(substr($ap['fullname'],0,1)) ?>
+              </div>
+              <div>
+                <div style="font-weight:700;color:#fff;font-size:.84rem;"><?= htmlspecialchars($ap['fullname']) ?></div>
+                <div style="font-size:.72rem;color:rgba(255,255,255,.4);"><?= htmlspecialchars($ap['email']) ?></div>
+                <div style="font-family:monospace;font-size:.7rem;color:var(--t-primary,#60a5fa);"><?= htmlspecialchars($ap['username']) ?></div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge <?= $role_badge ?>"><?= ucfirst($ap['role']) ?></span></td>
+          <td style="font-family:monospace;font-size:.74rem;"><?= htmlspecialchars($ap['contact_number']??'—') ?></td>
+          <td style="font-size:.77rem;color:rgba(255,255,255,.5);max-width:180px;">
+            <?= $ap['note'] ? htmlspecialchars(mb_strimwidth($ap['note'],0,80,'…')) : '<span style="color:rgba(255,255,255,.2);">—</span>' ?>
+          </td>
+          <td>
+            <?php if($ap['resume_path']): ?>
+              <a href="<?= htmlspecialchars($ap['resume_path']) ?>" target="_blank" class="btn-sm" style="font-size:.7rem;">
+                <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>View
+              </a>
+            <?php else: ?>
+              <span style="font-size:.74rem;color:rgba(255,255,255,.25);">—</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <span class="badge <?= $st_badge ?>">
+              <span class="material-symbols-outlined" style="font-size:12px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $st_icon ?></span>
+              <?= ucfirst($ap['status']) ?>
+            </span>
+          </td>
+          <td style="font-size:.72rem;color:rgba(255,255,255,.35);white-space:nowrap;"><?= date('M d, Y', strtotime($ap['applied_at'])) ?></td>
+          <td>
+            <?php if($ap['status']==='pending'): ?>
+            <form method="POST" style="display:inline;">
+              <input type="hidden" name="action" value="approve_applicant">
+              <input type="hidden" name="applicant_id" value="<?= $ap['id'] ?>">
+              <button type="submit" class="btn-sm btn-success" onclick="return confirm('Approve <?= addslashes(htmlspecialchars($ap['fullname'])) ?> as <?= $ap['role'] ?>? This will create their login account.')" style="font-size:.7rem;">
+                <span class="material-symbols-outlined" style="font-size:13px;">check</span>Approve
+              </button>
+            </form>
+            <form method="POST" style="display:inline;">
+              <input type="hidden" name="action" value="reject_applicant">
+              <input type="hidden" name="applicant_id" value="<?= $ap['id'] ?>">
+              <button type="submit" class="btn-sm btn-danger" onclick="return confirm('Reject this application?')" style="font-size:.7rem;">
+                <span class="material-symbols-outlined" style="font-size:13px;">close</span>Reject
+              </button>
+            </form>
+            <?php else: ?>
+              <span style="font-size:.72rem;color:rgba(255,255,255,.25);">Decided</span>
+            <?php endif; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php endif; ?>
     </div>
 
   <?php endif;?>

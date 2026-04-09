@@ -66,7 +66,16 @@ $biz_name  = htmlspecialchars($tenant['business_name']);
 $biz_addr  = htmlspecialchars($tenant['address'] ?? '');
 $biz_phone = htmlspecialchars($tenant['phone'] ?? '');
 // Sign-in URL — /{slug}?login=1 routes to tenant_login.php via router.php
-$login_url = '/' . rawurlencode($slug) . '?login=1';
+$login_url    = '/' . rawurlencode($slug) . '?login=1';
+$register_url = '/' . rawurlencode($slug) . '?register=1';
+
+// Live counts for hero stats
+try {
+    $cnt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=?");
+    $cnt->execute([$tid]); $total_customers = (int)$cnt->fetchColumn();
+    $cnt2 = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored'");
+    $cnt2->execute([$tid]); $active_pawns = (int)$cnt2->fetchColumn();
+} catch (Throwable $e) { $total_customers = 0; $active_pawns = 0; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -648,11 +657,17 @@ footer {
     <?php if($biz_addr || $biz_phone): ?>
     <a href="#info" class="nav-link">About</a>
     <?php endif; ?>
+    <a href="<?= htmlspecialchars($register_url) ?>" class="nav-link" style="color:color-mix(in srgb,var(--accent) 90%,#fff);">Join Us</a>
   </div>
 
-  <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin">
-    <span class="material-symbols-outlined">login</span>Sign In
-  </a>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <a href="<?= htmlspecialchars($register_url) ?>" class="nav-signin" style="background:color-mix(in srgb,var(--accent) 80%,#000);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 35%,transparent);">
+      <span class="material-symbols-outlined">person_add</span>Apply
+    </a>
+    <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin">
+      <span class="material-symbols-outlined">login</span>Sign In
+    </a>
+  </div>
 </nav>
 
 <!-- HERO -->
@@ -675,35 +690,43 @@ footer {
         <span class="material-symbols-outlined">shopping_bag</span>Browse Items
       </a>
       <?php endif; ?>
+      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-secondary" style="color:color-mix(in srgb,var(--accent) 90%,#fff);border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);">
+        <span class="material-symbols-outlined">person_add</span>Join Our Team
+      </a>
       <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-secondary">
         <span class="material-symbols-outlined">login</span>Sign In
       </a>
     </div>
 
-    <?php if($total_items > 0 || $biz_phone): ?>
     <div class="hero-stats">
       <?php if($total_items > 0): ?>
       <div class="hero-stat">
         <div class="hero-stat-val"><?= $total_items ?>+</div>
         <div class="hero-stat-label">Items Available</div>
       </div>
+      <div class="hero-stat-divider"></div>
+      <?php endif; ?>
+      <?php if($total_customers > 0): ?>
+      <div class="hero-stat">
+        <div class="hero-stat-val"><?= number_format($total_customers) ?></div>
+        <div class="hero-stat-label">Customers Served</div>
+      </div>
+      <div class="hero-stat-divider"></div>
+      <?php endif; ?>
+      <?php if($active_pawns > 0): ?>
+      <div class="hero-stat">
+        <div class="hero-stat-val"><?= number_format($active_pawns) ?></div>
+        <div class="hero-stat-label">Active Pawns</div>
+      </div>
+      <?php if(count($categories) > 0): ?><div class="hero-stat-divider"></div><?php endif; ?>
       <?php endif; ?>
       <?php if(count($categories) > 0): ?>
-      <div class="hero-stat-divider"></div>
       <div class="hero-stat">
         <div class="hero-stat-val"><?= count($categories) ?></div>
         <div class="hero-stat-label">Categories</div>
       </div>
       <?php endif; ?>
-      <?php if($tenant['plan']): ?>
-      <div class="hero-stat-divider"></div>
-      <div class="hero-stat">
-        <div class="hero-stat-val" style="font-size:1rem;color:color-mix(in srgb,var(--accent) 90%,#fff);"><?= htmlspecialchars($tenant['plan']) ?></div>
-        <div class="hero-stat-label">Plan</div>
-      </div>
-      <?php endif; ?>
     </div>
-    <?php endif; ?>
   </div>
 </section>
 
@@ -849,11 +872,16 @@ footer {
   <div class="cta-banner">
     <h2 class="cta-banner-title">Ready to Pawn or Redeem?</h2>
     <p class="cta-banner-sub">
-      Visit us in-branch or sign in to manage transactions.
+      Visit us in-branch or sign in to manage your transactions.
     </p>
-    <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-primary" style="display:inline-flex;">
-      <span class="material-symbols-outlined">login</span>Sign In
-    </a>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;position:relative;z-index:1;">
+      <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-primary" style="display:inline-flex;">
+        <span class="material-symbols-outlined">login</span>Sign In
+      </a>
+      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-secondary" style="display:inline-flex;color:rgba(255,255,255,.8);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);">
+        <span class="material-symbols-outlined">person_add</span>Join Our Team
+      </a>
+    </div>
   </div>
 </section>
 

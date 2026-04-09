@@ -27,6 +27,14 @@ if ($slug && !in_array(strtolower($slug), $reserved)) {
                || (($_GET['page'] ?? '') === 'login')
                || isset($_GET['token']);
 
+    // Route to walk-in applicant registration
+    $want_register = isset($_GET['register']);
+
+    if ($want_register) {
+        require __DIR__ . '/tenant_home_register.php';
+        exit;
+    }
+
     if ($want_login) {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
