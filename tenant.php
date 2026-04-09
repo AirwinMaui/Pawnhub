@@ -152,6 +152,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $row  = $pdo->prepare("SELECT * FROM tenant_applicants WHERE id=? AND tenant_id=? AND status='pending' LIMIT 1");
         $row->execute([$apid,$tid]); $applicant = $row->fetch();
         if ($applicant) {
+            // Get tenant slug and business name for email
+            $trow = $pdo->prepare("SELECT slug, business_name FROM tenants WHERE id=? LIMIT 1");
+            $trow->execute([$tid]); $trow = $trow->fetch();
+            $tenant_slug     = $trow['slug'] ?? '';
+            $tenant_biz_name = $trow['business_name'] ?? 'PawnHub';
+
             // Check if username or email already exists in users table
             $dup = $pdo->prepare("SELECT id FROM users WHERE (username=? OR email=?) AND tenant_id=? LIMIT 1");
             $dup->execute([$applicant['username'], $applicant['email'], $tid]);
@@ -169,6 +175,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $pdo->prepare("UPDATE tenant_applicants SET status='approved',decided_at=NOW(),decided_by=? WHERE id=?")
                     ->execute([$u['id'],$apid]);
                 $success_msg = "✅ {$applicant['fullname']} has been approved and their account is now active.";
+            }
+
+            // Send approval email to applicant
+            try {
+                require_once __DIR__ . '/mailer.php';
+                sendApplicantApproved(
+                    $applicant['email'],
+                    $applicant['fullname'],
+                    $tenant_biz_name,
+                    $applicant['role'],
+                    $tenant_slug
+                );
+            } catch (Throwable $e) {
+                error_log('Applicant approval email failed: ' . $e->getMessage());
             }
         }
         $active_page = 'applicants';
