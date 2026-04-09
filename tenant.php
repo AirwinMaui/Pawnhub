@@ -388,7 +388,7 @@ $active_tickets   = count(array_filter($tickets, fn($t)=>$t['status']==='Stored'
 $total_customers  = count($customers);
 $total_revenue    = array_sum(array_column(array_filter($tickets, fn($t)=>$t['status']==='Released'), 'total_redeem'));
 
-// Walk-in applicants
+// Online applicants
 $applicants = $pdo->prepare("SELECT * FROM tenant_applicants WHERE tenant_id=? ORDER BY applied_at DESC"); $applicants->execute([$tid]); $applicants=$applicants->fetchAll();
 $pending_applicants = array_filter($applicants, fn($a)=>$a['status']==='pending');
 
@@ -688,7 +688,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF','applicants'=>'Walk-in Applicants'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF','applicants'=>'Online Applications'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="tenant-chip"><?=htmlspecialchars($business_name)?></span>
     </div>
     <div class="topbar-right">

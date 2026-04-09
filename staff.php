@@ -554,10 +554,10 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
             <div class="card-title">Item Information</div>
             <div class="form-grid2">
               <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Item Description *</label><input type="text" name="item_description" class="finput" placeholder="e.g. Gold Ring 18k 5g" required></div>
-              <div class="fgroup"><label class="flabel">Category *</label><select name="item_category" class="finput" required><option>Jewelry</option><option>Gold</option><option>Silver</option><option>Gadget</option><option>Appliance</option><option>Others</option></select></div>
+              <div class="fgroup"><label class="flabel">Category *</label><select name="item_category" id="item_category" class="finput" required onchange="toggleGoldFields()"><option value="">— Select Category —</option><option>Gadget</option><option>Jewelry</option><option>Gold</option><option>Silver</option><option>Watch</option><option>Laptop</option><option>Appliance</option><option>Others</option></select></div>
               <div class="fgroup"><label class="flabel">Condition</label><select name="item_condition" class="finput"><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option></select></div>
-              <div class="fgroup"><label class="flabel">Weight (g)</label><input type="number" name="item_weight" class="finput" placeholder="0.00" step="0.01"></div>
-              <div class="fgroup"><label class="flabel">Karat</label><input type="text" name="item_karat" class="finput" placeholder="18k / 24k"></div>
+              <div class="fgroup gold-only" id="gold_weight_wrap" style="display:none;"><label class="flabel">Weight (g)</label><input type="number" name="item_weight" id="item_weight" class="finput" placeholder="0.00" step="0.01"></div>
+              <div class="fgroup gold-only" id="gold_karat_wrap" style="display:none;"><label class="flabel">Karat</label><input type="text" name="item_karat" id="item_karat" class="finput" placeholder="18k / 24k"></div>
               <div class="fgroup" style="grid-column:1/-1;"><label class="flabel">Serial No.</label><input type="text" name="serial_number" class="finput" placeholder="Serial / Reference No."></div>
               <div class="fgroup" style="grid-column:1/-1;">
                 <label class="flabel">Item Photo</label>
@@ -799,6 +799,16 @@ function openVoid(tn){document.getElementById('void_ticket_no').value=tn;documen
 document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
 function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
+function toggleGoldFields() {
+  const cat = document.getElementById('item_category')?.value || '';
+  const isGold = (cat === 'Gold');
+  document.getElementById('gold_weight_wrap').style.display = isGold ? '' : 'none';
+  document.getElementById('gold_karat_wrap').style.display  = isGold ? '' : 'none';
+  if (!isGold) {
+    document.getElementById('item_weight').value = '';
+    document.getElementById('item_karat').value  = '';
+  }
+}
 </script>
 </body>
 </html>
