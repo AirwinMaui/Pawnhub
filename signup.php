@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $pdo->beginTransaction();
                     try {
-                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?)")
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',NULL,?)")
                             ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
@@ -449,10 +449,10 @@ select.glass-input option {
           ℹ️ The Super Admin will review your Business Permit and Payment details. Once verified and approved, you'll receive your login link.
         </p>
 
-        <button type="submit" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;"
+        <button type="submit" id="submit_btn" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;"
           onmouseover="this.style.background='#2563eb';this.style.transform='translateY(-1px)'"
           onmouseout="this.style.background='#3b82f6';this.style.transform='translateY(0)'">
-          Submit Application →
+          <?= $selected_plan === 'Starter' ? 'Submit Application →' : 'Continue to Payment →' ?>
         </button>
 
       </div>
@@ -497,6 +497,10 @@ function selectPlan(name) {
   const paySection = document.getElementById('payment_section');
   const isPaid     = (name === 'Pro' || name === 'Enterprise');
   paySection.style.display = isPaid ? 'block' : 'none';
+
+  // Update submit button label
+  const btn = document.getElementById('submit_btn');
+  if (btn) btn.textContent = isPaid ? 'Continue to Payment →' : 'Submit Application →';
 }
 
 // ── Business Permit File Handling ─────────────────────────────

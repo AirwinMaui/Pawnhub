@@ -12,46 +12,7 @@ $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = $error_msg = '';
 
 // ── POST ACTIONS ─────────────────────────────────────────────
-// Determine if current user is the original (oldest) Super Admin
-$oldest_sa_row = null;
-try {
-    $oldest_sa_row = $pdo->query("SELECT id FROM users WHERE role='super_admin' ORDER BY created_at ASC, id ASC LIMIT 1")->fetch();
-} catch (PDOException $e) {}
-$is_original_sa = ($oldest_sa_row && (int)$oldest_sa_row['id'] === (int)$u['id']);
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-
-    // ── CHANGE PASSWORD (from inside dashboard) ───────────────
-    if ($_POST['action'] === 'change_password') {
-        $old_pass     = $_POST['old_password']    ?? '';
-        $new_pass     = $_POST['new_password']    ?? '';
-        $confirm_pass = $_POST['confirm_password'] ?? '';
-
-        if (!$old_pass || !$new_pass || !$confirm_pass) {
-            $error_msg = 'Please fill in all password fields.';
-        } elseif (strlen($new_pass) < 8) {
-            $error_msg = 'New password must be at least 8 characters.';
-        } elseif ($new_pass !== $confirm_pass) {
-            $error_msg = 'New passwords do not match.';
-        } else {
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND role = 'super_admin' LIMIT 1");
-            $stmt->execute([$u['id']]);
-            $cur = $stmt->fetch();
-            if (!$cur || !password_verify($old_pass, $cur['password'])) {
-                $error_msg = 'Current password is incorrect.';
-            } else {
-                $hashed = password_hash($new_pass, PASSWORD_DEFAULT);
-                $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([$hashed, $u['id']]);
-                try {
-                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
-                        VALUES (NULL, ?, ?, 'super_admin', 'CHANGE_PASSWORD', 'user', ?, 'Super Admin changed their own password.', ?, NOW())")
-                        ->execute([$u['id'], $u['username'], $u['id'], $_SERVER['REMOTE_ADDR'] ?? '::1']);
-                } catch (PDOException $e) {}
-                $success_msg = '✅ Password changed successfully!';
-            }
-        }
-        $active_page = 'settings';
-    }
 
     // ── ADD TENANT + SEND INVITE EMAIL ────────────────────────
     if ($_POST['action'] === 'add_tenant') {
@@ -197,6 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $t_stmt->execute([$tid]);
         $t_row = $t_stmt->fetch();
 
+        if (!$t_row) {
+            $error_msg = 'Tenant not found.';
+            $active_page = 'tenants';
+            goto end_approve;
+        }
+
+        // ── Generate / ensure slug ─────────────────────────────
         $slug = $t_row['slug'] ?? '';
         if (empty($slug) && !empty($t_row['business_name'])) {
             $base_slug    = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $t_row['business_name']));
@@ -209,24 +177,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $slug = $base_slug . $slug_counter++;
             }
             $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $tid]);
+            $t_row['slug'] = $slug;
         }
 
+        // ── Activate tenant & user ─────────────────────────────
         $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
 
-        $inv_chk = $pdo->prepare("SELECT id FROM tenant_invitations WHERE tenant_id = ? LIMIT 1");
-        $inv_chk->execute([$tid]);
-        if (!$inv_chk->fetch() && $t_row && !empty($t_row['email'])) {
+        // ── Send approval/login email ──────────────────────────
+        // For self-signup tenants (no invitation), always send sendTenantApproved.
+        // For SA-invited tenants (tenant_invitations exists), their invite email
+        // already contained the setup link, but we still send a confirmation.
+        $email_sent = false;
+        if (!empty($t_row['email']) && !empty($slug)) {
             try {
-                sendTenantApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $slug);
+                // sendTenantApproved sends the login link with the slug
+                $email_sent = sendTenantApproved(
+                    $t_row['email'],
+                    $t_row['owner_name'],
+                    $t_row['business_name'],
+                    $slug
+                );
+                if (!$email_sent) {
+                    error_log("[Approve] sendTenantApproved returned false for tenant_id={$tid} email={$t_row['email']}");
+                }
             } catch (Throwable $mail_err) {
-                error_log('Approval email failed: ' . $mail_err->getMessage());
+                error_log('[Approve] Approval email exception: ' . $mail_err->getMessage());
             }
         }
 
-        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-        $success_msg = 'Tenant approved! They will receive an email with their login link.';
+        try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid ({$t_row['business_name']}). Email sent: " . ($email_sent ? 'yes' : 'no'),$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+
+        $success_msg = $email_sent
+            ? "✅ Tenant approved! Login link sent to <strong>{$t_row['email']}</strong>."
+            : "✅ Tenant approved! ⚠️ Email could not be sent — check mailer.php settings.";
         $active_page = 'tenants';
+        end_approve:;
     }
 
     if ($_POST['action'] === 'reject_tenant') {
@@ -343,62 +329,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // ── ADD ANOTHER SUPER ADMIN ───────────────────────────────
     if ($_POST['action'] === 'add_super_admin') {
-        // Only the ORIGINAL (oldest) Super Admin may add another Super Admin
-        $oldest_sa = $pdo->query("SELECT id FROM users WHERE role='super_admin' ORDER BY created_at ASC, id ASC LIMIT 1")->fetch();
-        if (!$oldest_sa || (int)$oldest_sa['id'] !== (int)$u['id']) {
-            $error_msg = '⛔ Only the original Super Admin account can add another Super Admin.';
-            $active_page = 'settings';
+        $sa_fullname = trim($_POST['sa_fullname'] ?? '');
+        $sa_username = trim($_POST['sa_username'] ?? '');
+        $sa_email    = trim($_POST['sa_email']    ?? '');
+        $sa_password = trim($_POST['sa_password'] ?? '');
+        $sa_confirm  = trim($_POST['sa_confirm']  ?? '');
+
+        if (!$sa_fullname || !$sa_username || !$sa_email || !$sa_password || !$sa_confirm) {
+            $error_msg   = 'Please fill in all fields for the new Super Admin.';
+        } elseif (strlen($sa_password) < 8) {
+            $error_msg   = 'Password must be at least 8 characters.';
+        } elseif ($sa_password !== $sa_confirm) {
+            $error_msg   = 'Passwords do not match.';
+        } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
+            $error_msg   = 'Invalid email address.';
         } else {
-            $sa_fullname = trim($_POST['sa_fullname'] ?? '');
-            $sa_username = trim($_POST['sa_username'] ?? '');
-            $sa_email    = trim($_POST['sa_email']    ?? '');
-
-            if (!$sa_fullname || !$sa_username || !$sa_email) {
-                $error_msg = 'Please fill in all required fields.';
-            } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
-                $error_msg = 'Invalid email address.';
+            $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
+            $dup->execute([$sa_username, $sa_email]);
+            if ($dup->fetch()) {
+                $error_msg = 'Username or email is already in use.';
             } else {
-                $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
-                $dup->execute([$sa_username, $sa_email]);
-                if ($dup->fetch()) {
-                    $error_msg = 'Username or email is already in use.';
-                } else {
-                    // Insert user with status=pending (no password yet)
-                    $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
-                        VALUES (?, ?, ?, '', 'super_admin', 'pending', 0, NULL, NOW())")
-                        ->execute([$sa_fullname, $sa_username, $sa_email]);
-                    $new_sa_id = $pdo->lastInsertId();
-
-                    // Generate setup token
-                    $setup_token  = bin2hex(random_bytes(32));
-                    $expires_at   = date('Y-m-d H:i:s', strtotime('+24 hours'));
-                    try {
-                        $pdo->prepare("INSERT INTO super_admin_invitations (user_id, token, expires_at, used, created_by, created_at)
-                            VALUES (?, ?, ?, 0, ?, NOW())")
-                            ->execute([$new_sa_id, $setup_token, $expires_at, $u['id']]);
-                    } catch (PDOException $e) {
-                        // Fallback: store token in password_resets table if super_admin_invitations doesn't exist yet
-                        $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at, used, created_at)
-                            VALUES (?, ?, ?, 0, NOW())")
-                            ->execute([$new_sa_id, $setup_token, $expires_at]);
-                    }
-
-                    try {
-                        $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
-                            VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
-                            ->execute([$u['id'], $u['username'], $new_sa_id,
-                                "Super Admin \"{$u['username']}\" invited new Super Admin \"{$sa_username}\" ({$sa_email}). Awaiting password setup.",
-                                $_SERVER['REMOTE_ADDR'] ?? '::1']);
-                    } catch (PDOException $e) {}
-
-                    $sent = sendSuperAdminInvitation($sa_email, $sa_fullname, $sa_username, $setup_token);
-                    $success_msg = $sent
-                        ? "✅ Invitation sent to <strong>{$sa_email}</strong>! They must set up their password within 24 hours."
-                        : "⚠️ Account created but email failed. Setup token: <code>{$setup_token}</code> — Check mailer.php.";
-                }
+                $hashed_pw = password_hash($sa_password, PASSWORD_DEFAULT);
+                $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
+                    VALUES (?, ?, ?, ?, 'super_admin', 'approved', 0, NULL, NOW())")
+                    ->execute([$sa_fullname, $sa_username, $sa_email, $hashed_pw]);
+                $new_sa_id = $pdo->lastInsertId();
+                try {
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
+                        VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
+                        ->execute([$u['id'], $u['username'], $new_sa_id,
+                            "Super Admin \"{$u['username']}\" added new Super Admin \"{$sa_username}\" ({$sa_email}).",
+                            $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                } catch (PDOException $e) {}
+                $success_msg = "✅ New Super Admin \"<strong>{$sa_fullname}</strong>\" (@{$sa_username}) added successfully!";
             }
-            $active_page = 'settings';
         }
+        $active_page = 'settings';
     }
 
     // ── REMOVE SUPER ADMIN ────────────────────────────────────
@@ -939,10 +905,30 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <?php $pts=array_filter($tenants,fn($t)=>$t['status']==='pending');if(!empty($pts)):?>
       <div class="card" style="border-color:#fde68a;">
         <div class="card-hdr"><span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?=count($pts)?>)</span></div>
-        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
-        <?php foreach($pts as $t):?>
-        <tr><td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td><td><?=htmlspecialchars($t['owner_name'])?></td><td style="font-size:.76rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td><td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
-        <td><button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button><button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button></td></tr>
+        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Payment</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
+        <?php foreach($pts as $t):
+          $pmt_status = $t['payment_status'] ?? null;
+          $is_free    = ($t['plan'] === 'Starter');
+          if ($is_free) {
+            $pmt_badge = '<span class="badge b-gray" style="font-size:.68rem;">Free</span>';
+          } elseif ($pmt_status === 'paid') {
+            $pmt_badge = '<span class="badge b-green" style="font-size:.68rem;">💳 Paid</span>';
+          } else {
+            $pmt_badge = '<span class="badge b-yellow" style="font-size:.68rem;">⏳ Unpaid</span>';
+          }
+        ?>
+        <tr>
+          <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
+          <td><?=htmlspecialchars($t['owner_name'])?></td>
+          <td style="font-size:.76rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
+          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td>
+          <td><?= $pmt_badge ?></td>
+          <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
+          <td>
+            <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
+            <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
+          </td>
+        </tr>
         <?php endforeach;?></tbody></table></div>
       </div>
       <?php endif;?>
@@ -1433,21 +1419,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr">
             <span class="card-title">🛡️ Super Admin Accounts</span>
-            <div style="display:flex;gap:8px;">
-              <button type="button" onclick="document.getElementById('changePasswordModal').classList.add('open')" class="btn-sm" style="font-size:.75rem;">
-                🔒 Change My Password
-              </button>
-              <?php if ($is_original_sa): ?>
-              <button type="button" onclick="document.getElementById('addSuperAdminModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.75rem;">
-                ➕ Add Super Admin
-              </button>
-              <?php endif; ?>
-            </div>
+            <button type="button" onclick="document.getElementById('addSuperAdminModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.75rem;">
+              ➕ Add Super Admin
+            </button>
           </div>
           <?php
-            // Fetch all super admins (approved + pending invite)
+            // Fetch all super admins
             try {
-                $sa_list = $pdo->query("SELECT id, fullname, username, email, status, created_at FROM users WHERE role = 'super_admin' ORDER BY created_at ASC")->fetchAll();
+                $sa_list = $pdo->query("SELECT id, fullname, username, email, created_at FROM users WHERE role = 'super_admin' AND status = 'approved' ORDER BY created_at ASC")->fetchAll();
             } catch (PDOException $e) { $sa_list = []; }
           ?>
           <div style="overflow-x:auto;">
@@ -1778,8 +1757,11 @@ const tenantsData = <?php
       if ($decoded) $payment = $decoded;
     }
     $td_map[(int)$t['id']] = [
-      'permit'  => !empty($t['business_permit_url']) ? htmlspecialchars($t['business_permit_url'], ENT_QUOTES) : null,
-      'payment' => $payment,
+      'permit'          => !empty($t['business_permit_url']) ? htmlspecialchars($t['business_permit_url'], ENT_QUOTES) : null,
+      'payment'         => $payment,
+      'payment_status'  => $t['payment_status'] ?? null,
+      'paymongo_paid_at'=> !empty($t['paymongo_paid_at']) ? date('M d, Y g:i A', strtotime($t['paymongo_paid_at'])) : null,
+      'plan'            => $t['plan'] ?? '',
     ];
   }
   echo json_encode($td_map);
@@ -1823,24 +1805,60 @@ function openApproveModal(tid,uid,name){
     }
 
     // ── Payment Info ─────────────────────────────────────
-    if (td.payment) {
-      const p = td.payment;
-      let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem;">`;
-      html += `<div><span style="color:#94a3b8;">Method:</span> <strong>${p.method||'—'}</strong></div>`;
-      html += `<div><span style="color:#94a3b8;">Reference #:</span> <strong>${p.reference||'—'}</strong></div>`;
-      if (p.method === 'Credit Card') {
-        html += `<div><span style="color:#94a3b8;">Card Holder:</span> <strong>${p.cc_name||'—'}</strong></div>`;
-        html += `<div><span style="color:#94a3b8;">Card Number:</span> <strong style="font-family:monospace;">${p.cc_number||'—'}</strong></div>`;
-        html += `<div><span style="color:#94a3b8;">Expiry:</span> <strong>${p.cc_expiry||'—'}</strong></div>`;
+    const isPaid   = td.payment_status === 'paid';
+    const isStarter = (td.plan || '').toLowerCase() === 'starter';
+
+    if (isStarter) {
+      // Starter plan is free — no payment needed
+      paymentWrap.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;">
+          <span style="font-size:1.1rem;">✅</span>
+          <div>
+            <strong style="color:#15803d;">Free Plan — No Payment Required</strong>
+            <p style="font-size:.76rem;color:#6b7280;margin:2px 0 0;">Starter plan is free of charge.</p>
+          </div>
+        </div>`;
+    } else if (isPaid) {
+      // PayMongo payment confirmed by webhook
+      let html = `
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.2rem;">💳</span>
+          <div>
+            <strong style="color:#15803d;font-size:.88rem;">Payment Confirmed via PayMongo</strong>
+            ${td.paymongo_paid_at ? `<p style="font-size:.74rem;color:#6b7280;margin:2px 0 0;">Paid on: ${td.paymongo_paid_at}</p>` : ''}
+          </div>
+        </div>`;
+      if (td.payment) {
+        const p = td.payment;
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem;">`;
+        html += `<div><span style="color:#94a3b8;">Method:</span> <strong>${p.method||'—'}</strong></div>`;
+        html += `<div><span style="color:#94a3b8;">Reference #:</span> <strong>${p.reference||'—'}</strong></div>`;
+        if (p.method === 'Credit Card') {
+          html += `<div><span style="color:#94a3b8;">Card Holder:</span> <strong>${p.cc_name||'—'}</strong></div>`;
+          html += `<div><span style="color:#94a3b8;">Card Number:</span> <strong style="font-family:monospace;">${p.cc_number||'—'}</strong></div>`;
+          html += `<div><span style="color:#94a3b8;">Expiry:</span> <strong>${p.cc_expiry||'—'}</strong></div>`;
+        }
+        html += `</div>`;
       }
-      html += `</div>`;
       paymentWrap.innerHTML = html;
     } else {
-      paymentWrap.innerHTML = '<span style="color:#94a3b8;">⚠️ No payment information submitted.</span>';
+      // Paid plan but payment NOT yet received
+      paymentWrap.innerHTML = `
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1.2rem;">⏳</span>
+          <div>
+            <strong style="color:#b45309;font-size:.88rem;">Payment Not Yet Received</strong>
+            <p style="font-size:.74rem;color:#92400e;margin:2px 0 0;">
+              PayMongo has not confirmed payment for this ${td.plan} plan tenant.<br>
+              Do not approve until payment is confirmed.
+            </p>
+          </div>
+        </div>`;
     }
+
   } else {
     permitWrap.innerHTML  = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.8rem;">⚠️ No business permit uploaded.</div>';
-    paymentWrap.innerHTML = '<span style="color:#94a3b8;">⚠️ No payment information submitted.</span>';
+    paymentWrap.innerHTML = '<span style="color:#94a3b8;font-size:.8rem;">⚠️ No payment information found.</span>';
   }
 
   document.getElementById('approveModal').classList.add('open');
@@ -1869,20 +1887,14 @@ function updatePlanCard(selected){
 <div class="modal-overlay" id="addSuperAdminModal">
   <div class="modal" style="width:500px;">
     <div class="mhdr">
-      <div><div class="mtitle">🛡️ Add New Super Admin</div><div class="msub">An invitation email will be sent to set up their password.</div></div>
+      <div><div class="mtitle">🛡️ Add New Super Admin</div><div class="msub">This account will have full system access.</div></div>
       <button class="mclose" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="mbody">
-      <?php if (!$is_original_sa): ?>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:14px 16px;font-size:.82rem;color:#dc2626;line-height:1.7;">
-        ⛔ <strong>Access Denied:</strong> Only the original Super Admin account can add another Super Admin.
-      </div>
-      <?php else: ?>
       <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#92400e;margin-bottom:16px;line-height:1.7;">
-        ⚠️ <strong>Warning:</strong> Super Admins have unrestricted access to all tenants, data, and system settings. Only invite someone you fully trust.<br>
-        📧 An email will be sent to the new Super Admin to set up their own password. The link expires in <strong>24 hours</strong>.
+        ⚠️ <strong>Warning:</strong> Super Admins have unrestricted access to all tenants, data, and system settings. Only add someone you fully trust.
       </div>
       <form method="POST" action="?page=settings">
         <input type="hidden" name="action" value="add_super_admin">
@@ -1896,69 +1908,38 @@ function updatePlanCard(selected){
             <input type="text" name="sa_username" class="finput" placeholder="e.g. mariasantos" required autocomplete="off">
           </div>
           <div>
-            <label class="flabel">Email * <span style="color:#94a3b8;font-size:.65rem;">(invite will be sent here)</span></label>
+            <label class="flabel">Email *</label>
             <input type="email" name="sa_email" class="finput" placeholder="e.g. maria@email.com" required>
+          </div>
+          <div>
+            <label class="flabel">Password * <span style="color:#94a3b8;font-size:.65rem;">(min. 8 chars)</span></label>
+            <div style="position:relative;">
+              <input type="password" name="sa_password" id="sa-pw" class="finput" placeholder="••••••••" required autocomplete="new-password" style="padding-right:42px;">
+              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="flabel">Confirm Password *</label>
+            <div style="position:relative;">
+              <input type="password" name="sa_confirm" id="sa-pw2" class="finput" placeholder="••••••••" required style="padding-right:42px;">
+              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw2');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+              </button>
+            </div>
           </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">Cancel</button>
           <button type="submit" class="btn-sm btn-primary" style="background:linear-gradient(135deg,#4338ca,#7c3aed);border-color:#7c3aed;">
-            📧 Send Invitation
+            🛡️ Create Super Admin
           </button>
         </div>
       </form>
-      <?php endif; ?>
     </div>
   </div>
 </div>
-
-<!-- ══ CHANGE PASSWORD MODAL ══════════════════════════════════ -->
-<div class="modal-overlay" id="changePasswordModal">
-  <div class="modal" style="width:460px;">
-    <div class="mhdr">
-      <div><div class="mtitle">🔒 Change My Password</div><div class="msub">Update your Super Admin account password.</div></div>
-      <button class="mclose" onclick="document.getElementById('changePasswordModal').classList.remove('open')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-    <div class="mbody">
-      <form method="POST" action="?page=settings">
-        <input type="hidden" name="action" value="change_password">
-        <div style="margin-bottom:12px;">
-          <label class="flabel">Current Password *</label>
-          <div style="position:relative;">
-            <input type="password" name="old_password" id="cp-old" class="finput" placeholder="Your current password" required style="padding-right:42px;">
-            <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('cp-old');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-            </button>
-          </div>
-        </div>
-        <div style="margin-bottom:12px;">
-          <label class="flabel">New Password * <span style="color:#94a3b8;font-size:.65rem;">(min. 8 chars)</span></label>
-          <div style="position:relative;">
-            <input type="password" name="new_password" id="cp-new" class="finput" placeholder="New password" required style="padding-right:42px;">
-            <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('cp-new');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-            </button>
-          </div>
-        </div>
-        <div style="margin-bottom:16px;">
-          <label class="flabel">Confirm New Password *</label>
-          <div style="position:relative;">
-            <input type="password" name="confirm_password" id="cp-confirm" class="finput" placeholder="Re-enter new password" required style="padding-right:42px;">
-            <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('cp-confirm');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-              <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-            </button>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:9px;">
-          <button type="button" class="btn-sm" onclick="document.getElementById('changePasswordModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-sm btn-primary">🔒 Change Password</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>-e 
 
 </body>
 </html>

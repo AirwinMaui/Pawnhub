@@ -3,8 +3,16 @@
  * paymongo_webhook.php
  * ─────────────────────────────────────────────────────────────
  * PayMongo calls this URL automatically after payment is
- * confirmed on their end. This is where you ACTUALLY update
- * your DB and activate the tenant.
+ * confirmed on their end.
+ *
+ * ⚠️  IMPORTANT FLOW CHANGE:
+ *     This webhook NO LONGER auto-activates the tenant.
+ *     It only records that payment was received
+ *     (payment_status = 'paid' on the tenants row).
+ *
+ *     The Super Admin still must review the Business Permit
+ *     + payment proof and click "Approve" in superadmin.php.
+ *     THAT is what sets status = 'active' and sends the email.
  *
  * Register this URL in PayMongo Dashboard → Developers → Webhooks
  * URL: https://yourdomain.com/paymongo_webhook.php
@@ -35,7 +43,7 @@ if (!verifyPayMongoSignature($raw_body, $sig_header, PAYMONGO_WEBHOOK_SECRET)) {
 }
 
 // ── 4. Parse event ───────────────────────────────────────────
-$event = json_decode($raw_body, true);
+$event      = json_decode($raw_body, true);
 $event_type = $event['data']['attributes']['type'] ?? '';
 
 // ── 5. Handle checkout_session.payment.paid ──────────────────
@@ -43,32 +51,49 @@ if ($event_type === 'checkout_session.payment.paid') {
     $cs_data    = $event['data']['attributes']['data'] ?? [];
     $session_id = $cs_data['id'] ?? '';
     $metadata   = $cs_data['attributes']['metadata'] ?? [];
+    $attr       = $cs_data['attributes'] ?? [];
 
     $tenant_id = intval($metadata['tenant_id'] ?? 0);
     $user_id   = intval($metadata['user_id']   ?? 0);
     $plan      = $metadata['plan'] ?? '';
 
+    // Gather payment details for SA review
+    $payment_method = '';
+    $payments = $attr['payments'] ?? [];
+    if (!empty($payments[0])) {
+        $pm = $payments[0]['attributes']['payment_method_used'] ?? '';
+        $payment_method = strtoupper($pm);
+    }
+
+    $plan_amounts   = ['Pro' => 99900, 'Enterprise' => 249900];
+    $amount_paid    = $plan_amounts[$plan] ?? 0;
+
     if ($tenant_id && $user_id) {
         try {
-            // Determine expiry (1 month from now)
-            $expires_at = date('Y-m-d H:i:s', strtotime('+1 month'));
+            // ── Mark payment received ONLY — do NOT activate tenant ──
+            // Tenant status stays 'pending' until Super Admin approves.
+            $pdo->prepare("
+                UPDATE tenants
+                SET payment_status      = 'paid',
+                    paymongo_paid_at    = NOW(),
+                    paymongo_session_id = ?
+                WHERE id = ?
+            ")->execute([$session_id, $tenant_id]);
 
-            // Resolve amount from plan
-            $plan_amounts = ['Pro' => 99900, 'Enterprise' => 249900];
-            $amount_centavos = $plan_amounts[$plan] ?? 0;
+            // Log to payment_logs if the table exists
+            try {
+                $pdo->prepare("
+                    INSERT INTO payment_logs
+                        (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
+                ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, $payment_method]);
+            } catch (PDOException $e) {
+                // payment_logs table may not exist — non-fatal
+                error_log('[Webhook] payment_logs insert skipped: ' . $e->getMessage());
+            }
 
-            // Activate tenant and user
-            $pdo->prepare("UPDATE tenants SET status='active', plan=?, subscription_expires_at=?, paymongo_paid_at=NOW() WHERE id=? AND paymongo_session_id=?")
-                ->execute([$plan, $expires_at, $tenant_id, $session_id]);
+            error_log("[Webhook] Payment recorded for tenant_id={$tenant_id}, plan={$plan}, method={$payment_method}. Awaiting SA approval.");
 
-            $pdo->prepare("UPDATE users SET status='active' WHERE id=? AND tenant_id=?")
-                ->execute([$user_id, $tenant_id]);
-
-            // Log payment
-            $pdo->prepare("INSERT INTO payment_logs (tenant_id, user_id, session_id, plan, amount, status, created_at) VALUES (?,?,?,?,?,'paid',NOW())")
-                ->execute([$tenant_id, $user_id, $session_id, $plan, $amount_centavos]);
-
-            error_log("[Webhook] Activated tenant_id={$tenant_id}, plan={$plan}");
         } catch (Throwable $e) {
             error_log("[Webhook] DB error for tenant_id={$tenant_id}: " . $e->getMessage());
             // Return 500 so PayMongo retries
@@ -76,6 +101,8 @@ if ($event_type === 'checkout_session.payment.paid') {
             echo json_encode(['error' => 'db_error']);
             exit;
         }
+    } else {
+        error_log("[Webhook] Missing tenant_id or user_id in metadata. session_id={$session_id}");
     }
 }
 
@@ -99,7 +126,7 @@ function verifyPayMongoSignature(string $body, string $sigHeader, string $secret
         if ($k && $v) $parts[$k] = $v;
     }
 
-    $timestamp = $parts['t'] ?? '';
+    $timestamp = $parts['t']  ?? '';
     $te_hash   = $parts['te'] ?? '';   // test mode hash
     $li_hash   = $parts['li'] ?? '';   // live mode hash
 
