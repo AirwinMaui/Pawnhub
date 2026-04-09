@@ -40,7 +40,6 @@ if (!$token) {
               AND sai.used = 0
               AND sai.expires_at > NOW()
               AND u.role = 'super_admin'
-              AND u.status = 'pending'
             LIMIT 1
         ");
         $stmt->execute([$token]);
@@ -64,7 +63,6 @@ if (!$token) {
                   AND pr.used = 0
                   AND pr.expires_at > NOW()
                   AND u.role = 'super_admin'
-                  AND u.status = 'pending'
                 LIMIT 1
             ");
             $stmt->execute([$token]);
@@ -99,7 +97,7 @@ if ($step === 'setup' && $setup_user && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
 
             // Set password and activate account
-            $pdo->prepare("UPDATE users SET password = ?, status = 'approved' WHERE id = ? AND role = 'super_admin' AND status = 'pending'")
+            $pdo->prepare("UPDATE users SET password = ?, status = 'approved' WHERE id = ? AND role = 'super_admin'")
                 ->execute([$hashed, $setup_user['user_id']]);
 
             // Mark token as used
@@ -425,8 +423,8 @@ h1 {
     Super Admin Setup
   </div>
 
-  <h1>Set Your Password</h1>
-  <p class="sub">Welcome! Create a strong password to activate your Super Admin account.</p>
+  <h1><?= isset($setup_user['_source']) && $setup_user['_source'] === 'password_resets' && ($setup_user['status'] ?? '') === 'approved' ? 'Reset Your Password' : 'Set Your Password' ?></h1>
+  <p class="sub"><?= isset($setup_user['_source']) && $setup_user['_source'] === 'password_resets' && ($setup_user['status'] ?? '') === 'approved' ? 'Enter a new password for your Super Admin account.' : 'Welcome! Create a strong password to activate your Super Admin account.' ?></p>
 
   <!-- User identity box -->
   <div class="user-box">
@@ -477,7 +475,7 @@ h1 {
       </div>
     </div>
 
-    <button type="submit" class="btn">🛡️ Activate My Account</button>
+    <button type="submit" class="btn"><?= isset($setup_user['_source']) && $setup_user['_source'] === 'password_resets' && ($setup_user['status'] ?? '') === 'approved' ? '🔑 Reset My Password' : '🛡️ Activate My Account' ?></button>
   </form>
   <?php endif; ?>
 

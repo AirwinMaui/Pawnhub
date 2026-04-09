@@ -209,9 +209,12 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
             </button>
           </div>
         </div>
-        <div class="rem">
-          <input type="checkbox" id="rem">
-          <label for="rem">Remember this device</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div class="rem">
+            <input type="checkbox" id="rem">
+            <label for="rem">Remember this device</label>
+          </div>
+          <a href="sa_forgot_password.php" style="font-size:0.79rem;color:#2563eb;font-weight:600;text-decoration:none;">Forgot password?</a>
         </div>
         <button type="submit" class="btn">Sign In</button>
       </form>
