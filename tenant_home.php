@@ -73,6 +73,13 @@ if ($bg_url   && strpos($bg_url,  'http') !== 0 && $bg_url[0]   !== '/') $bg_url
 if ($logo_url && strpos($logo_url,'http') !== 0 && $logo_url[0] !== '/') $logo_url = '/' . $logo_url;
 
 $biz_name  = htmlspecialchars($tenant['business_name']);
+
+// Hero text — customizable by tenant in Theme & Branding settings
+$hero_title    = $theme['hero_title']    ?? '';
+$hero_subtitle = $theme['hero_subtitle'] ?? '';
+// Defaults if not set
+if (!$hero_title)    $hero_title    = 'Your Trusted';
+if (!$hero_subtitle) $hero_subtitle = 'Pawnshop';
 $biz_addr  = htmlspecialchars($tenant['address'] ?? '');
 $biz_phone = htmlspecialchars($tenant['phone'] ?? '');
 // Sign-in URL — /{slug}?login=1 routes to tenant_login.php via router.php
@@ -133,12 +140,12 @@ body {
 }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
-  opacity: .35; filter: saturate(0.6) brightness(0.55);
+  opacity: .55; filter: saturate(0.75) brightness(0.65);
 }
 .bg-gradient {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 20%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.15) 0%, rgba(8,9,12,0.70) 50%, #08090c 85%);
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 15%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(8,9,12,0.05) 0%, rgba(8,9,12,0.55) 45%, #08090c 82%);
 }
 
 /* ── NAV ── */
@@ -688,7 +695,7 @@ footer {
       <?= $biz_name ?>
     </div>
     <h1 class="hero-title">
-      Your Trusted<br><span class="accent">Pawnshop</span>
+      <?= htmlspecialchars($hero_title) ?><br><span class="accent"><?= htmlspecialchars($hero_subtitle) ?></span>
     </h1>
     <p class="hero-sub">
       Browse our available items — jewelry, gadgets, watches, and more.

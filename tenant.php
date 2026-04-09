@@ -220,8 +220,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $secondary = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['secondary_color']??'') ? $_POST['secondary_color'] : '#1e3a8a';
         $accent    = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['accent_color']??'')    ? $_POST['accent_color']    : '#10b981';
         $sidebar   = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['sidebar_color']??'')   ? $_POST['sidebar_color']   : '#0f172a';
-        $sysname   = trim($_POST['system_name'] ?? 'PawnHub') ?: 'PawnHub';
-        $logotext  = trim($_POST['logo_text']   ?? '');
+        $sysname    = trim($_POST['system_name']    ?? 'PawnHub') ?: 'PawnHub';
+        $logotext   = trim($_POST['logo_text']      ?? '');
+        $herotitle  = trim($_POST['hero_title']     ?? '') ?: 'Your Trusted';
+        $herosubtitle = trim($_POST['hero_subtitle'] ?? '') ?: 'Pawnshop';
 
         $logourl = $theme['logo_url'] ?? '';
         if (!empty($_FILES['logo_file']['name'])) {
@@ -315,8 +317,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if (!$error_msg) {
             // Save bg_image_url to tenants table
             $pdo->prepare("UPDATE tenants SET bg_image_url=? WHERE id=?")->execute([$bgurl ?: null, $tid]);
-            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url,shop_bg_url)
-                VALUES (?,?,?,?,?,?,?,?,?)
+            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url,shop_bg_url,hero_title,hero_subtitle)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 ON DUPLICATE KEY UPDATE
                 primary_color=VALUES(primary_color),
                 secondary_color=VALUES(secondary_color),
@@ -326,8 +328,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 logo_text=VALUES(logo_text),
                 logo_url=VALUES(logo_url),
                 shop_bg_url=VALUES(shop_bg_url),
+                hero_title=VALUES(hero_title),
+                hero_subtitle=VALUES(hero_subtitle),
                 updated_at=NOW()")
-                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl,$shopbgurl ?: null]);
+                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl,$shopbgurl ?: null,$herotitle,$herosubtitle]);
 
             $success_msg = '✅ Theme saved! All pages will now reflect the new design.';
             $theme = getTenantTheme($pdo, $tid);
@@ -961,6 +965,19 @@ tr:hover td{background:rgba(255,255,255,.03);}
             <div class="card-hdr"><span class="card-title">🏷️ Branding</span></div>
             <div style="margin-bottom:12px;"><label class="flabel">System Name (title & browser tab)</label><input type="text" name="system_name" class="finput" placeholder="PawnHub" value="<?=htmlspecialchars($theme['system_name']??'PawnHub')?>"></div>
             <div style="margin-bottom:12px;"><label class="flabel">Logo Text (shown in sidebar)</label><input type="text" name="logo_text" class="finput" placeholder="e.g. GoldKing" value="<?=htmlspecialchars($theme['logo_text']??'')?>"></div>
+
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+              <div style="font-size:.72rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
+              <div style="font-size:.72rem;color:rgba(255,255,255,.35);margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
+              <div style="margin-bottom:10px;">
+                <label class="flabel">Main Heading (line 1)</label>
+                <input type="text" name="hero_title" class="finput" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
+              </div>
+              <div>
+                <label class="flabel">Accent Word (line 2 — shown in color)</label>
+                <input type="text" name="hero_subtitle" class="finput" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
+              </div>
+            </div>
             <div>
               <label class="flabel">Logo Image</label>
               <?php if($logo_url): ?>
