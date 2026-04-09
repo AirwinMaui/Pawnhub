@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $pdo->beginTransaction();
                     try {
-                        $payment_status_val = $needs_payment ? 'pending' : 'free';
+                        $payment_status_val = $needs_payment ? 'pending' : 'paid';
                         $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
                             ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $payment_status_val, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
