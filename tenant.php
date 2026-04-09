@@ -153,10 +153,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $row->execute([$apid,$tid]); $applicant = $row->fetch();
         if ($applicant) {
             // Create user account
-            $pdo->prepare("INSERT INTO users (tenant_id,fullname,username,email,password,role,contact_number,status,is_suspended,created_at)
-                VALUES (?,?,?,?,?,'".addslashes($applicant['role'])."',?,?,0,NOW())")
+            $pdo->prepare("INSERT INTO users (tenant_id,fullname,username,email,password,role,status,is_suspended,created_at)
+                VALUES (?,?,?,?,?,'".addslashes($applicant['role'])."',?,0,NOW())")
                 ->execute([$tid,$applicant['fullname'],$applicant['username'],$applicant['email'],
-                           $applicant['password_hash'],$applicant['contact_number']??null,'approved']);
+                           $applicant['password_hash'],'approved']);
             $pdo->prepare("UPDATE tenant_applicants SET status='approved',decided_at=NOW(),decided_by=? WHERE id=?")
                 ->execute([$u['id'],$apid]);
             $success_msg = "✅ {$applicant['fullname']} has been approved and their account is now active.";
