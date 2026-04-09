@@ -82,8 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $pdo->beginTransaction();
                     try {
-                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',NULL,?)")
-                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url]);
+                        $payment_status_val = $needs_payment ? 'pending' : 'free';
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
+                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $payment_status_val, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                             ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
