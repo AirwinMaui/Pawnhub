@@ -82,9 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $pdo->beginTransaction();
                     try {
-                        $payment_status_val = $needs_payment ? 'pending' : 'paid';
-                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
-                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $payment_status_val, $permit_url]);
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',NULL,?)")
+                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                             ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
@@ -397,11 +396,25 @@ select.glass-input option {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
                 <label class="field-label">Password * (min. 8)</label>
-                <input type="password" name="password" class="glass-input" placeholder="••••••••" autocomplete="new-password" required>
+                <div style="position:relative;">
+                  <input type="password" name="password" id="signup_pw" class="glass-input" placeholder="••••••••" autocomplete="new-password" required oninput="checkSignupStrength(this.value)" style="padding-right:42px;">
+                  <button type="button" onclick="toggleSignupPw('signup_pw',this)" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.4);display:flex;align-items:center;padding:0;transition:color .2s;" onmouseover="this.style.color='rgba(255,255,255,0.8)'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+                    <span class="material-symbols-outlined" id="signup_pw_icon" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+                  </button>
+                </div>
+                <div style="height:4px;border-radius:100px;background:rgba(255,255,255,0.1);margin-top:6px;overflow:hidden;">
+                  <div id="signup_str_bar" style="height:100%;border-radius:100px;width:0;transition:width .3s,background .3s;"></div>
+                </div>
+                <div id="signup_str_lbl" style="font-size:0.67rem;margin-top:3px;color:rgba(255,255,255,0.35);min-height:14px;"></div>
               </div>
               <div>
                 <label class="field-label">Confirm Password *</label>
-                <input type="password" name="confirm" class="glass-input" placeholder="••••••••" autocomplete="new-password" required>
+                <div style="position:relative;">
+                  <input type="password" name="confirm" id="signup_conf" class="glass-input" placeholder="••••••••" autocomplete="new-password" required style="padding-right:42px;">
+                  <button type="button" onclick="toggleSignupPw('signup_conf',this)" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.4);display:flex;align-items:center;padding:0;transition:color .2s;" onmouseover="this.style.color='rgba(255,255,255,0.8)'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+                    <span class="material-symbols-outlined" id="signup_conf_icon" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -532,6 +545,38 @@ dz.addEventListener('drop', e => {
     document.getElementById('payment_section').style.display = 'block';
   }
 })();
+
+function toggleSignupPw(id, btn) {
+  const f = document.getElementById(id);
+  const icon = btn.querySelector('span');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  icon.textContent = f.type === 'password' ? 'visibility' : 'visibility_off';
+}
+
+function checkSignupStrength(pw) {
+  const bar = document.getElementById('signup_str_bar');
+  const lbl = document.getElementById('signup_str_lbl');
+  if (!bar) return;
+  let score = 0;
+  if (pw.length >= 8)          score++;
+  if (pw.length >= 12)         score++;
+  if (/[A-Z]/.test(pw))        score++;
+  if (/[0-9]/.test(pw))        score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const cfg = [
+    ['0%',   'rgba(255,255,255,0.1)', ''],
+    ['25%',  '#ef4444', 'Weak'],
+    ['50%',  '#f97316', 'Fair'],
+    ['75%',  '#eab308', 'Good'],
+    ['100%', '#22c55e', 'Strong'],
+    ['100%', '#16a34a', 'Very Strong'],
+  ];
+  const c = cfg[score] ?? cfg[0];
+  bar.style.width      = c[0];
+  bar.style.background = c[1];
+  lbl.textContent      = c[2];
+  lbl.style.color      = c[1];
+}
 </script>
 </body>
 </html>
