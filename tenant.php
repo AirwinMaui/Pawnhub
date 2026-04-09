@@ -152,14 +152,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $row  = $pdo->prepare("SELECT * FROM tenant_applicants WHERE id=? AND tenant_id=? AND status='pending' LIMIT 1");
         $row->execute([$apid,$tid]); $applicant = $row->fetch();
         if ($applicant) {
-            // Create user account
-            $pdo->prepare("INSERT INTO users (tenant_id,fullname,username,email,password,role,status,is_suspended,created_at)
-                VALUES (?,?,?,?,?,'".addslashes($applicant['role'])."',?,0,NOW())")
-                ->execute([$tid,$applicant['fullname'],$applicant['username'],$applicant['email'],
-                           $applicant['password_hash'],'approved']);
-            $pdo->prepare("UPDATE tenant_applicants SET status='approved',decided_at=NOW(),decided_by=? WHERE id=?")
-                ->execute([$u['id'],$apid]);
-            $success_msg = "✅ {$applicant['fullname']} has been approved and their account is now active.";
+            // Check if username or email already exists in users table
+            $dup = $pdo->prepare("SELECT id FROM users WHERE (username=? OR email=?) AND tenant_id=? LIMIT 1");
+            $dup->execute([$applicant['username'], $applicant['email'], $tid]);
+            if ($dup->fetch()) {
+                // Already has an account — just mark applicant as approved
+                $pdo->prepare("UPDATE tenant_applicants SET status='approved',decided_at=NOW(),decided_by=? WHERE id=?")
+                    ->execute([$u['id'],$apid]);
+                $success_msg = "✅ {$applicant['fullname']} already has an account. Application marked as approved.";
+            } else {
+                // Create user account
+                $pdo->prepare("INSERT INTO users (tenant_id,fullname,username,email,password,role,status,is_suspended,created_at)
+                    VALUES (?,?,?,?,?,'".addslashes($applicant['role'])."',?,0,NOW())")
+                    ->execute([$tid,$applicant['fullname'],$applicant['username'],$applicant['email'],
+                               $applicant['password_hash'],'approved']);
+                $pdo->prepare("UPDATE tenant_applicants SET status='approved',decided_at=NOW(),decided_by=? WHERE id=?")
+                    ->execute([$u['id'],$apid]);
+                $success_msg = "✅ {$applicant['fullname']} has been approved and their account is now active.";
+            }
         }
         $active_page = 'applicants';
     }
