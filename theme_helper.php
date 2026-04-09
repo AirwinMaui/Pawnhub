@@ -19,6 +19,7 @@ function getTenantTheme(PDO $pdo, int $tenant_id): array {
         'logo_text'       => null,
         'logo_url'        => null,
         'bg_image_url'    => null,
+        'shop_bg_url'     => null,
         'system_name'     => 'PawnHub',
         'font_style'      => 'Plus Jakarta Sans',
     ];
