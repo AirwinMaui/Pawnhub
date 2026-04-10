@@ -500,6 +500,24 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .qr-label {
   font-size: .75rem; color: var(--text-dim); font-weight: 500;
 }
+.qr-drive-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .8rem; font-weight: 600;
+  color: #fff; text-decoration: none;
+  padding: 8px 16px; border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  transition: all .2s;
+  margin-top: 2px;
+}
+.qr-drive-link:hover {
+  background: color-mix(in srgb, var(--primary) 35%, transparent);
+  transform: translateY(-1px);
+}
+.qr-drive-link .material-symbols-outlined {
+  font-size: 15px;
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
 
 /* ── CTA BANNER ── */
 .cta-banner {
@@ -903,6 +921,9 @@ footer {
       <div class="qr-wrap">
         <img src="YOUR_QR_CODE_HERE" alt="QR Code" class="qr-img">
         <div class="qr-label">Scan to open our shop</div>
+        <a href="https://drive.google.com/drive/folders/1dXLJ7C7JWOP1BsUY-C3PQvKPhhR7Pant" target="_blank" rel="noopener noreferrer" class="qr-drive-link">
+          <span class="material-symbols-outlined">folder</span>View Files
+        </a>
       </div>
     </div>
   </div>
