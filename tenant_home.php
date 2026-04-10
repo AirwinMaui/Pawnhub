@@ -462,7 +462,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 
 /* ── INFO SECTION ── */
 .info-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 18px;
 }
 @media (max-width: 640px) { .info-grid { grid-template-columns: 1fr; } }
 .info-card {
@@ -483,6 +483,23 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .info-card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px; }
 .info-card-val { font-size: 1rem; font-weight: 600; color: #fff; line-height: 1.5; }
+
+/* ── QR CODE CARD ── */
+.qr-card { text-align: center; }
+.qr-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin-top: 4px;
+}
+.qr-img {
+  width: 140px; height: 140px; object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.3);
+}
+.qr-label {
+  font-size: .75rem; color: var(--text-dim); font-weight: 500;
+}
 
 /* ── CTA BANNER ── */
 .cta-banner {
@@ -880,6 +897,14 @@ footer {
       <div class="info-card-val"><?= $biz_phone ?></div>
     </div>
     <?php endif; ?>
+    <div class="info-card qr-card">
+      <div class="info-card-icon"><span class="material-symbols-outlined">qr_code_2</span></div>
+      <div class="info-card-title">Scan to Visit</div>
+      <div class="qr-wrap">
+        <img src="YOUR_QR_CODE_HERE" alt="QR Code" class="qr-img">
+        <div class="qr-label">Scan to open our shop</div>
+      </div>
+    </div>
   </div>
 </section>
 <?php endif; ?>
