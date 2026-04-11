@@ -755,7 +755,7 @@ if ($active_page === 'sales_report') {
         $top_tenants      = array_slice(array_filter($sales_per_tenant, fn($r) => $r['revenue'] > 0), 0, 5);
 
         $thq = "SELECT sr.id, sr.amount, sr.billing_cycle, sr.reviewed_at AS created_at,
-                       sr.status, t.business_name, t.plan
+                       sr.status, sr.payment_method, sr.payment_reference, t.business_name, t.plan
                 FROM subscription_renewals sr
                 LEFT JOIN tenants t ON t.id = sr.tenant_id
                 WHERE sr.status = 'approved'
@@ -1507,13 +1507,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">📋 Subscription Payment History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
         <?php if(empty($tx_history)):?><div class="empty-state"><p>No subscription payments found for the selected period.</p></div>
-        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
+        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Payment Method</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
         <?php foreach($tx_history as $i=>$tx):?>
         <tr>
           <td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td>
           <td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($tx['business_name']??'—')?></td>
           <td><span class="badge <?=($tx['plan']??'')==='Enterprise'?'plan-ent':(($tx['plan']??'')==='Pro'?'plan-pro':'plan-starter')?>"><?=htmlspecialchars($tx['plan']??'—')?></span></td>
           <td style="font-size:.78rem;"><?=ucfirst($tx['billing_cycle']??'—')?></td>
+          <td style="font-size:.77rem;"><?php $pm_=$tx['payment_method']??'';if(str_starts_with($pm_,'PayMongo')):?><span style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:6px;padding:2px 8px;font-weight:700;font-size:.7rem;">⚡ <?=htmlspecialchars($pm_)?></span><?php elseif($pm_):?><span style="color:var(--text-m);"><?=htmlspecialchars($pm_)?></span><?php if($tx['payment_reference']??''):?><div style="font-size:.68rem;color:var(--text-dim);">Ref: <?=htmlspecialchars($tx['payment_reference'])?></div><?php endif;?><?php else:?>—<?php endif;?></td>
           <td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['amount']??0,2)?></td>
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td>
         </tr>

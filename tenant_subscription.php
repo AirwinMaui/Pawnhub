@@ -1,17 +1,7 @@
 <?php
 /**
  * tenant_subscription.php — Tenant Subscription Page
- *
- * Accessible via: /{slug}?page=subscription  (inside tenant.php)
- * OR as standalone: /tenant_subscription.php
- *
- * Para gamitin sa loob ng tenant.php, i-add sa page routing:
- *   } elseif ($active_page === 'subscription') {
- *       require __DIR__ . '/tenant_subscription_content.php';
- *   }
- *
- * PERO mas madali: i-access directly bilang standalone page.
- * Nag-handle ito ng sariling session check.
+ * Tenants can view their plan and renew via PayMongo OR manually.
  */
 
 require_once __DIR__ . '/session_helper.php';
@@ -21,17 +11,21 @@ require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/theme_helper.php';
 
 // ── Auth check ────────────────────────────────────────────────
-if (empty($_SESSION['user'])) {
-    header('Location: home.php'); exit;
-}
+if (empty($_SESSION['user'])) { header('Location: home.php'); exit; }
 $u   = $_SESSION['user'];
 $tid = (int)$u['tenant_id'];
-
-if ($u['role'] !== 'admin') {
-    header('Location: home.php'); exit;
-}
+if ($u['role'] !== 'admin') { header('Location: home.php'); exit; }
 
 $success_msg = $error_msg = '';
+
+// ── URL feedback ──────────────────────────────────────────────
+if (($_GET['error'] ?? '') === 'paymongo_fail') {
+    $error_msg = '⚠️ PayMongo payment failed or was cancelled. You can try again or use a manual payment method.';
+} elseif (($_GET['error'] ?? '') === 'already_pending') {
+    $error_msg = 'You already have a pending renewal request. Please wait for admin approval.';
+} elseif (($_GET['cancelled'] ?? '') === '1') {
+    $error_msg = 'Payment was cancelled. No charge was made.';
+}
 
 // ── Load tenant ───────────────────────────────────────────────
 $tenant_stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
@@ -71,8 +65,8 @@ $history_stmt = $pdo->prepare("
 $history_stmt->execute([$tid]);
 $renewal_history = $history_stmt->fetchAll();
 
-// ── POST: Submit renewal request ──────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_renewal') {
+// ── POST: Submit MANUAL renewal request ──────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_renewal_manual') {
     if ($pending_renewal) {
         $error_msg = 'You already have a pending renewal request. Please wait for admin approval.';
     } else {
@@ -82,7 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
         $payment_ref    = trim($_POST['payment_reference'] ?? '');
         $notes          = trim($_POST['notes']             ?? '');
 
-        // Plan pricing
         $billing_amounts = [
             'Starter'    => ['monthly' => 0,    'quarterly' => 0,    'annually' => 0],
             'Pro'        => ['monthly' => 999,  'quarterly' => 2697, 'annually' => 9588],
@@ -100,22 +93,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
                 ")->execute([$tid, $plan, $billing_cycle, $amount, $payment_method, $payment_ref, $notes]);
 
-                // Confirmation email to tenant
                 if (function_exists('sendRenewalRequestReceived')) {
                     sendRenewalRequestReceived($tenant['email'], $tenant['owner_name'], $tenant['business_name'], $plan, $slug);
                 }
 
-                // Audit log
                 try {
                     $pdo->prepare("
                         INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
-                        VALUES (?,?,?,?,'RENEWAL_REQUEST','subscription',?,?,?,NOW())
+                        VALUES (?,?,?,?,'RENEWAL_REQUEST_MANUAL','subscription',?,?,?,NOW())
                     ")->execute([$tid, $u['id'], $u['username'], $u['role'], $tid,
-                        "Renewal request submitted for {$tenant['business_name']} ({$plan}, {$billing_cycle}).",
+                        "Manual renewal request submitted for {$tenant['business_name']} ({$plan}, {$billing_cycle}, method: {$payment_method}).",
                         $_SERVER['REMOTE_ADDR'] ?? '::1']);
                 } catch (Throwable $e) {}
 
-                $success_msg = '✅ Renewal request submitted! Admin will review within 24 hours. A confirmation email has been sent to ' . htmlspecialchars($tenant['email']) . '.';
+                $success_msg = '✅ Renewal request submitted! Admin will review within 24 hours.';
 
                 // Reload pending
                 $pending_renewal_stmt->execute([$tid]);
@@ -128,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
     }
 }
 
-// ── Status badge helpers ──────────────────────────────────────
+// ── Status badge ──────────────────────────────────────────────
 $status_map = [
     'active'        => ['Active',        '#15803d', '#f0fdf4', '#bbf7d0'],
     'expiring_soon' => ['Expiring Soon', '#d97706', '#fffbeb', '#fde68a'],
@@ -136,6 +127,14 @@ $status_map = [
     'cancelled'     => ['Cancelled',     '#64748b', '#f8fafc', '#e2e8f0'],
 ];
 $sb = $status_map[$sub_stat] ?? ['Unknown', '#64748b', '#f8fafc', '#e2e8f0'];
+
+// ── Plan amounts for JS ───────────────────────────────────────
+$plan_prices_js = [
+    'Starter'    => ['monthly' => 0,    'quarterly' => 0,    'annually' => 0],
+    'Pro'        => ['monthly' => 999,  'quarterly' => 2697, 'annually' => 9588],
+    'Enterprise' => ['monthly' => 2499, 'quarterly' => 6747, 'annually' => 23988],
+];
+$is_paid_plan = in_array($plan, ['Pro', 'Enterprise']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -151,8 +150,7 @@ $sb = $status_map[$sub_stat] ?? ['Unknown', '#64748b', '#f8fafc', '#e2e8f0'];
 :root{--sw:220px;}
 body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc;min-height:100vh;display:flex;}
 .material-symbols-outlined{font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;vertical-align:middle;}
-/* Sidebar */
-.sidebar{width:var(--sw);min-height:100vh;background:rgba(15,23,42,.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;}
+.sidebar{width:var(--sw);min-height:100vh;background:rgba(15,23,42,.97);backdrop-filter:blur(24px);border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;}
 .sb-brand{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:9px;}
 .sb-logo{width:32px;height:32px;background:linear-gradient(135deg,var(--t-primary,#2563eb),var(--t-secondary,#1e3a8a));border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
 .sb-logo img{width:100%;height:100%;object-fit:cover;}
@@ -170,7 +168,6 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 .sb-footer{padding:10px 12px;border-top:1px solid rgba(255,255,255,.07);}
 .sb-logout{display:flex;align-items:center;gap:8px;font-size:.78rem;color:rgba(255,255,255,.35);text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
 .sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);}
-/* Main */
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
 .topbar{height:60px;padding:0 26px;background:rgba(10,14,26,.7);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
 .content{padding:24px 28px;flex:1;}
@@ -178,7 +175,7 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 .page-sub{color:rgba(255,255,255,.4);font-size:.82rem;margin-bottom:24px;}
 .card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:22px;margin-bottom:18px;}
 .card-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.35);margin-bottom:14px;}
-.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:4px;}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;}
 .stat-box{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px;}
 .stat-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:6px;}
 .stat-value{font-size:1.1rem;font-weight:800;color:#fff;}
@@ -190,38 +187,50 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 .alert-warn{background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.25);color:#fcd34d;}
 .alert-info{background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.25);color:#93c5fd;}
 .flabel{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.4);margin-bottom:5px;}
-.finput,.fselect{width:100%;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:9px;color:#fff;font-family:inherit;font-size:.86rem;padding:10px 13px;outline:none;transition:border-color .2s,background .2s;}
+.finput,.fselect{width:100%;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.1);border-radius:9px;color:#fff;font-family:inherit;font-size:.86rem;padding:10px 13px;outline:none;transition:border-color .2s;}
 .finput:focus,.fselect:focus{border-color:var(--t-primary,#2563eb);background:rgba(255,255,255,.1);}
 .finput::placeholder{color:rgba(255,255,255,.25);}
 .fselect option{background:#1e293b;color:#fff;}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
 .form-group{margin-bottom:14px;}
-.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 22px;border-radius:9px;font-family:inherit;font-size:.86rem;font-weight:700;cursor:pointer;border:none;transition:transform .15s;}
-.btn-primary{background:var(--t-primary,#2563eb);color:#fff;box-shadow:0 4px 14px rgba(37,99,235,.25);}
+/* Payment method tabs */
+.pay-tabs{display:flex;gap:0;border:1.5px solid rgba(255,255,255,.1);border-radius:11px;overflow:hidden;margin-bottom:20px;}
+.pay-tab{flex:1;padding:13px 10px;text-align:center;cursor:pointer;background:transparent;border:none;color:rgba(255,255,255,.4);font-family:inherit;font-size:.82rem;font-weight:600;transition:all .2s;border-right:1px solid rgba(255,255,255,.08);}
+.pay-tab:last-child{border-right:none;}
+.pay-tab.active{background:var(--t-primary,#2563eb);color:#fff;}
+.pay-tab:hover:not(.active){background:rgba(255,255,255,.05);color:rgba(255,255,255,.8);}
+.pay-panel{display:none;}
+.pay-panel.active{display:block;}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:11px 24px;border-radius:10px;font-family:inherit;font-size:.86rem;font-weight:700;cursor:pointer;border:none;transition:all .15s;}
+.btn-paymongo{background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;box-shadow:0 4px 18px rgba(37,99,235,.3);width:100%;justify-content:center;font-size:.92rem;padding:14px;}
+.btn-paymongo:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(37,99,235,.4);}
+.btn-primary{background:var(--t-primary,#2563eb);color:#fff;}
 .btn-primary:hover{transform:translateY(-1px);}
-.btn-ghost{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);}
+.amount-display{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 14px;font-size:1.05rem;font-weight:800;color:#60a5fa;margin-bottom:14px;}
 .pending-box{background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.2);border-radius:12px;padding:18px;}
+.paymongo-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25);border-radius:8px;padding:4px 10px;font-size:.72rem;font-weight:700;color:#93c5fd;}
 .history-table{width:100%;border-collapse:collapse;font-size:.8rem;}
 .history-table th{text-align:left;padding:7px 11px;color:rgba(255,255,255,.35);font-size:.67rem;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid rgba(255,255,255,.07);}
 .history-table td{padding:9px 11px;border-bottom:1px solid rgba(255,255,255,.04);color:rgba(255,255,255,.75);vertical-align:middle;}
 .history-table tr:last-child td{border-bottom:none;}
 .expiry-bar-wrap{background:rgba(255,255,255,.08);border-radius:100px;height:6px;margin-top:10px;overflow:hidden;}
 .expiry-bar{height:100%;border-radius:100px;}
-@media(max-width:600px){.form-grid{grid-template-columns:1fr;}.sidebar{display:none;}.main{margin-left:0;}}
+.divider{display:flex;align-items:center;gap:12px;color:rgba(255,255,255,.2);font-size:.75rem;font-weight:600;margin:18px 0;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08);}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr;}.sidebar{display:none;}.main{margin-left:0;}.pay-tabs{flex-direction:column;}.pay-tab{border-right:none;border-bottom:1px solid rgba(255,255,255,.08);}}
 </style>
 </head>
 <body>
 
-<!-- ── Sidebar ─────────────────────────────────────────────── -->
+<!-- ── Sidebar ──────────────────────────────────────────────── -->
 <aside class="sidebar">
   <div class="sb-brand">
     <div class="sb-logo">
       <?php if($logo_url): ?><img src="<?= htmlspecialchars($logo_url) ?>" alt="logo">
       <?php else: ?><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><?php endif; ?>
     </div>
-    <div>
-      <div class="sb-name"><?= htmlspecialchars($logo_text) ?></div>
-    </div>
+    <div><div class="sb-name"><?= htmlspecialchars($logo_text) ?></div></div>
   </div>
   <div class="sb-user">
     <div class="sb-avatar"><?= strtoupper(substr($u['name'] ?? 'A', 0, 1)) ?></div>
@@ -256,15 +265,13 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
   </div>
 </aside>
 
-<!-- ── Main ───────────────────────────────────────────────── -->
+<!-- ── Main ─────────────────────────────────────────────────── -->
 <div class="main">
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <a href="tenant.php?page=dashboard" style="color:rgba(255,255,255,.4);text-decoration:none;display:flex;align-items:center;gap:5px;font-size:.8rem;">
-        <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">arrow_back</span>
-        Back to Dashboard
-      </a>
-    </div>
+    <a href="tenant.php?page=dashboard" style="color:rgba(255,255,255,.4);text-decoration:none;display:flex;align-items:center;gap:5px;font-size:.8rem;">
+      <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">arrow_back</span>
+      Back to Dashboard
+    </a>
     <div style="font-size:.78rem;color:rgba(255,255,255,.3);"><?= date('F d, Y') ?></div>
   </header>
 
@@ -283,17 +290,17 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
     <div class="alert alert-error"><?= htmlspecialchars($error_msg) ?></div>
     <?php endif; ?>
 
-    <!-- ── Current Subscription Status ──────────────────────── -->
+    <!-- ── Current Subscription ────────────────────────────── -->
     <div class="card">
       <div class="card-label">Current Subscription</div>
 
       <?php if ($sub_stat === 'expired' || ($days_left !== null && $days_left < 0)): ?>
       <div class="alert alert-error" style="margin-bottom:16px;">
-        ⛔ <strong>Your subscription has expired.</strong> Submit a renewal request below to restore full access.
+        ⛔ <strong>Your subscription has expired.</strong> Renew below to restore full access.
       </div>
       <?php elseif ($sub_stat === 'expiring_soon' || ($days_left !== null && $days_left <= 7)): ?>
       <div class="alert alert-warn" style="margin-bottom:16px;">
-        ⏰ <strong>Your subscription is expiring soon.</strong> Renew now to avoid service interruption.
+        ⏰ <strong>Your subscription is expiring soon.</strong> Renew now to avoid interruption.
       </div>
       <?php endif; ?>
 
@@ -329,7 +336,7 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
       </div>
     </div>
 
-    <!-- ── Pending Renewal ──────────────────────────────────── -->
+    <!-- ── Pending Renewal ─────────────────────────────────── -->
     <?php if ($pending_renewal): ?>
     <div class="card">
       <div class="card-label">Pending Renewal Request</div>
@@ -337,13 +344,20 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         <p style="color:#93c5fd;font-size:.86rem;font-weight:600;margin-bottom:12px;">
           📋 Your renewal request has been submitted and is under review.
         </p>
-        <p style="color:rgba(255,255,255,.5);font-size:.8rem;margin-bottom:12px;">
-          Our admin will review your payment and activate your subscription within 24 hours. You will receive an email once approved.
+        <p style="color:rgba(255,255,255,.5);font-size:.8rem;margin-bottom:14px;">
+          Our admin will verify your payment and activate your subscription within 24 hours.
+          You'll receive an email once approved.
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.8rem;">
           <div><span style="color:rgba(255,255,255,.4);">Plan:</span> <strong><?= htmlspecialchars($pending_renewal['plan']) ?></strong></div>
           <div><span style="color:rgba(255,255,255,.4);">Billing:</span> <strong><?= ucfirst($pending_renewal['billing_cycle']) ?></strong></div>
-          <div><span style="color:rgba(255,255,255,.4);">Payment:</span> <strong><?= htmlspecialchars($pending_renewal['payment_method']) ?></strong></div>
+          <div>
+            <span style="color:rgba(255,255,255,.4);">Payment:</span>
+            <strong><?= htmlspecialchars($pending_renewal['payment_method']) ?></strong>
+            <?php if (str_starts_with($pending_renewal['payment_method'], 'PayMongo')): ?>
+            <span class="paymongo-badge" style="margin-left:6px;">⚡ PayMongo</span>
+            <?php endif; ?>
+          </div>
           <div><span style="color:rgba(255,255,255,.4);">Ref #:</span> <strong><?= htmlspecialchars($pending_renewal['payment_reference'] ?: '—') ?></strong></div>
           <div><span style="color:rgba(255,255,255,.4);">Submitted:</span> <strong><?= date('M d, Y h:i A', strtotime($pending_renewal['requested_at'])) ?></strong></div>
           <?php if ($pending_renewal['amount'] > 0): ?>
@@ -352,107 +366,142 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         </div>
       </div>
     </div>
+
     <?php else: ?>
 
-    <!-- ── Renewal Request Form ──────────────────────────────── -->
+    <!-- ── Renewal Form ────────────────────────────────────── -->
     <div class="card">
       <div class="card-label">Request Subscription Renewal</div>
 
-      <?php if ($plan === 'Starter'): ?>
-      <div class="alert alert-info" style="margin-bottom:18px;">
-        ℹ️ You are on the <strong>Starter Plan</strong>. Submit a renewal request to extend your access period.
-      </div>
-      <?php endif; ?>
-
-      <form method="POST" action="">
-        <input type="hidden" name="action" value="request_renewal"/>
-
-        <div class="form-grid">
-          <div>
-            <label class="flabel">Current Plan</label>
-            <input type="text" class="finput" value="<?= htmlspecialchars($plan) ?>" disabled/>
-          </div>
-          <div>
-            <label class="flabel">Billing Cycle</label>
-            <select name="billing_cycle" class="fselect" required id="billing_cycle_sel" onchange="updateAmount()">
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly (save ~10%)</option>
-              <option value="annually">Annually (save ~20%)</option>
-            </select>
-          </div>
+      <!-- Billing Cycle selector (shared by both payment methods) -->
+      <div class="form-grid" style="margin-bottom:16px;">
+        <div>
+          <label class="flabel">Current Plan</label>
+          <input type="text" class="finput" value="<?= htmlspecialchars($plan) ?>" disabled/>
         </div>
-
-        <?php if ($plan !== 'Starter'): ?>
-        <div class="form-group">
-          <label class="flabel">Estimated Amount</label>
-          <div id="amount-display" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:10px 14px;font-size:1rem;font-weight:800;color:#60a5fa;">
-            ₱999.00
-          </div>
-        </div>
-        <?php endif; ?>
-
-        <div class="form-group">
-          <label class="flabel">Payment Method</label>
-          <select name="payment_method" class="fselect" required>
-            <option value="">— Select Payment Method —</option>
-            <option value="GCash">GCash</option>
-            <option value="Maya">Maya (PayMaya)</option>
-            <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-            <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-            <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-            <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-            <option value="Cash">Cash (walk-in)</option>
-            <option value="Other">Other</option>
+        <div>
+          <label class="flabel">Billing Cycle</label>
+          <select id="billing_cycle_shared" class="fselect" onchange="syncBillingCycle(this.value)">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly (save ~10%)</option>
+            <option value="annually">Annually (save ~20%)</option>
           </select>
         </div>
+      </div>
 
-        <div class="form-group">
-          <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-          <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+      <?php if ($is_paid_plan): ?>
+      <div class="amount-display" id="amount-display">₱999.00</div>
+      <?php endif; ?>
+
+      <!-- Payment method tabs -->
+      <?php if ($is_paid_plan): ?>
+      <div class="pay-tabs">
+        <button type="button" class="pay-tab active" onclick="switchTab('paymongo')">
+          ⚡ Pay via PayMongo
+        </button>
+        <button type="button" class="pay-tab" onclick="switchTab('manual')">
+          📋 Manual Payment
+        </button>
+      </div>
+
+      <!-- PayMongo Tab -->
+      <div class="pay-panel active" id="panel-paymongo">
+        <div class="alert alert-info" style="margin-bottom:18px;">
+          ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking.
+          Your renewal request will be recorded automatically after payment.
         </div>
-
-        <div class="form-group">
-          <label class="flabel">Additional Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-          <textarea name="notes" class="finput" rows="3" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-        </div>
-
         <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
-          <p style="font-size:.76rem;color:rgba(255,255,255,.4);line-height:1.7;margin:0;">
-            📌 <strong style="color:rgba(255,255,255,.6);">Payment Instructions:</strong><br>
-            After submitting, please send your payment to our GCash/bank account and include your business name as reference.
-            Our admin will verify and activate your subscription within 24 hours.
+          <p style="font-size:.76rem;color:rgba(255,255,255,.4);line-height:1.8;margin:0;">
+            🔒 <strong style="color:rgba(255,255,255,.6);">Secure payment powered by PayMongo.</strong><br>
+            Accepted: GCash, Credit Card, Debit Card, Online Banking<br>
+            After payment, our admin will approve your renewal within 24 hours.
           </p>
         </div>
+        <form method="POST" action="paymongo_renewal.php" id="form-paymongo">
+          <input type="hidden" name="action" value="pay_via_paymongo"/>
+          <input type="hidden" name="billing_cycle" id="pm_billing_cycle" value="monthly"/>
+          <button type="submit" class="btn btn-paymongo">
+            ⚡ Pay Now via PayMongo
+          </button>
+        </form>
+      </div>
 
-        <button type="submit" class="btn btn-primary">
-          <span class="material-symbols-outlined" style="font-size:17px;">send</span>
-          Submit Renewal Request
-        </button>
-      </form>
+      <!-- Manual Tab -->
+      <div class="pay-panel" id="panel-manual">
+      <?php endif; ?>
+
+        <div class="alert alert-info" style="margin-bottom:16px;">
+          📌 <strong>Manual payment:</strong> Send payment to our GCash/bank account, then submit the reference number below.
+          Admin will verify and activate within 24 hours.
+        </div>
+
+        <form method="POST" action="">
+          <input type="hidden" name="action" value="request_renewal_manual"/>
+          <input type="hidden" name="billing_cycle" id="manual_billing_cycle" value="monthly"/>
+
+          <div class="form-group">
+            <label class="flabel">Payment Method</label>
+            <select name="payment_method" class="fselect" required>
+              <option value="">— Select Payment Method —</option>
+              <option value="GCash">GCash</option>
+              <option value="Maya">Maya (PayMaya)</option>
+              <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
+              <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
+              <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
+              <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
+              <option value="Cash">Cash (walk-in)</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+          </div>
+
+          <div class="form-group">
+            <label class="flabel">Additional Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <textarea name="notes" class="finput" rows="3" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <span class="material-symbols-outlined" style="font-size:17px;">send</span>
+            Submit Renewal Request
+          </button>
+        </form>
+
+      <?php if ($is_paid_plan): ?>
+      </div><!-- /panel-manual -->
+      <?php endif; ?>
+
     </div>
     <?php endif; ?>
 
-    <!-- ── Renewal History ──────────────────────────────────── -->
+    <!-- ── Renewal History ─────────────────────────────────── -->
     <?php if (!empty($renewal_history)): ?>
     <div class="card">
       <div class="card-label">Renewal History</div>
       <div style="overflow-x:auto;">
         <table class="history-table">
           <thead>
-            <tr>
-              <th>Date</th><th>Plan</th><th>Billing</th><th>Method</th><th>Amount</th><th>Status</th><th>New Expiry</th>
-            </tr>
+            <tr><th>Date</th><th>Plan</th><th>Billing</th><th>Method</th><th>Amount</th><th>Status</th><th>New Expiry</th></tr>
           </thead>
           <tbody>
             <?php foreach ($renewal_history as $r):
               $rc_color = match($r['status']) { 'approved' => '#15803d', 'rejected' => '#dc2626', default => '#d97706' };
               $rc_bg    = match($r['status']) { 'approved' => '#f0fdf4', 'rejected' => '#fef2f2', default => '#fffbeb' };
+              $is_pm = str_starts_with($r['payment_method'] ?? '', 'PayMongo');
             ?>
             <tr>
               <td style="font-size:.76rem;color:rgba(255,255,255,.4);"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
               <td><?= htmlspecialchars($r['plan']) ?></td>
               <td><?= ucfirst($r['billing_cycle']) ?></td>
-              <td style="color:rgba(255,255,255,.5);"><?= htmlspecialchars($r['payment_method'] ?: '—') ?></td>
+              <td>
+                <?= htmlspecialchars($r['payment_method'] ?: '—') ?>
+                <?php if ($is_pm): ?>
+                <span class="paymongo-badge" style="margin-left:4px;font-size:.65rem;">⚡ PM</span>
+                <?php endif; ?>
+              </td>
               <td>₱<?= number_format($r['amount'], 2) ?></td>
               <td><span class="badge" style="color:<?= $rc_color ?>;background:<?= $rc_bg ?>;"><?= ucfirst($r['status']) ?></span></td>
               <td style="font-size:.76rem;color:rgba(255,255,255,.5);"><?= $r['new_subscription_end'] ? date('M d, Y', strtotime($r['new_subscription_end'])) : '—' ?></td>
@@ -470,20 +519,40 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 <script>
 // Pricing table
 const prices = {
-    Starter:    { monthly: 0,    quarterly: 0,    annually: 0 },
-    Pro:        { monthly: 999,  quarterly: 2697, annually: 9588 },
-    Enterprise: { monthly: 2499, quarterly: 6747, annually: 23988 },
+  Starter:    { monthly: 0,    quarterly: 0,    annually: 0 },
+  Pro:        { monthly: 999,  quarterly: 2697, annually: 9588 },
+  Enterprise: { monthly: 2499, quarterly: 6747, annually: 23988 },
 };
 const plan = '<?= addslashes($plan) ?>';
-function updateAmount() {
-    const cycle = document.getElementById('billing_cycle_sel')?.value || 'monthly';
-    const amt = prices[plan]?.[cycle] ?? 0;
-    const el = document.getElementById('amount-display');
-    if (el) {
-        el.textContent = amt > 0 ? '₱' + amt.toLocaleString('en-PH', {minimumFractionDigits:2}) : 'Free';
-    }
+
+function updateAmount(cycle) {
+  const amt = prices[plan]?.[cycle] ?? 0;
+  const el = document.getElementById('amount-display');
+  if (el) {
+    el.textContent = amt > 0
+      ? '₱' + amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })
+      : 'Free';
+  }
 }
-updateAmount();
+
+function syncBillingCycle(val) {
+  // Sync hidden inputs in both forms
+  const pm = document.getElementById('pm_billing_cycle');
+  const mn = document.getElementById('manual_billing_cycle');
+  if (pm) pm.value = val;
+  if (mn) mn.value = val;
+  updateAmount(val);
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.pay-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pay-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// Init
+updateAmount('monthly');
 </script>
 </body>
 </html>
