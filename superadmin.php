@@ -184,7 +184,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         // ── Activate tenant & user ─────────────────────────────
-        $pdo->prepare("UPDATE tenants SET status='active' WHERE id=?")->execute([$tid]);
+        $pdo->prepare("UPDATE tenants SET status='active',
+            subscription_start = CURDATE(),
+            subscription_end   = DATE_ADD(CURDATE(), INTERVAL 1 MONTH),
+            subscription_status = 'active',
+            renewal_reminded_7d = 0,
+            renewal_reminded_3d = 0,
+            renewal_reminded_1d = 0
+            WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
 
         // ── Send approval/login email ──────────────────────────
@@ -227,8 +234,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid ({$t_row['business_name']}). Email sent: " . ($email_sent ? 'yes' : 'no'),$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
 
         $success_msg = $email_sent
-            ? "✅ Tenant approved! Login link sent to <strong>{$t_row['email']}</strong>."
-            : "✅ Tenant approved! ⚠️ Email could not be sent — check mailer.php settings.";
+            ? "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). Invitation sent to <strong>{$t_row['email']}</strong>."
+            : "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). ⚠️ Email could not be sent — check mailer.php settings.";
         $active_page = 'tenants';
         end_approve:;
     }
@@ -1324,16 +1331,17 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         document.getElementById('set-sub-tid').value = tid;
         document.getElementById('set-sub-biz').textContent = biz;
 
-        // Always auto-fill: start = today, end = today + 1 month
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
         const nextMonth = new Date(today);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
         const nextMonthStr = nextMonth.toISOString().split('T')[0];
 
-        document.getElementById('set-sub-start').value = todayStr;
-        document.getElementById('set-sub-end').value = nextMonthStr;
-        document.getElementById('set-sub-plan').value = '';
+        // If tenant already has dates, show them for editing.
+        // If blank (no subscription yet), auto-fill today → +1 month.
+        document.getElementById('set-sub-start').value = start || todayStr;
+        document.getElementById('set-sub-end').value   = end   || nextMonthStr;
+        document.getElementById('set-sub-plan').value  = '';
         document.getElementById('set-sub-modal').classList.add('open');
     }
     function filterSubTable(q) {
