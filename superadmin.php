@@ -8,6 +8,7 @@ if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
 
+
 $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = $error_msg = '';
 
@@ -307,12 +308,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $new_plan  = in_array($_POST['sub_plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['sub_plan'] : null;
 
         if ($start && $end_date && strtotime($start) && strtotime($end_date)) {
+            // Fetch tenant name for a more descriptive audit log
+            $t_info_stmt = $pdo->prepare("SELECT business_name, plan FROM tenants WHERE id=? LIMIT 1");
+            $t_info_stmt->execute([$tid_s]);
+            $t_info_row = $t_info_stmt->fetch();
+            $t_biz_name = $t_info_row['business_name'] ?? "Tenant #$tid_s";
+            $t_cur_plan = $t_info_row['plan'] ?? '';
+
             $updates = "subscription_start=?, subscription_end=?, subscription_status='active', renewal_reminded_7d=0, renewal_reminded_3d=0, renewal_reminded_1d=0";
             $params  = [$start, $end_date];
             if ($new_plan) { $updates .= ", plan=?"; $params[] = $new_plan; }
             $params[] = $tid_s;
             $pdo->prepare("UPDATE tenants SET {$updates} WHERE id=?")->execute($params);
-            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_MANUAL_SET','subscription',?,?,?,NOW())")->execute([$tid_s,$u['id'],$u['username'],'super_admin',$tid_s,"Manually set subscription: {$start} to {$end_date}." . ($new_plan ? " Plan: {$new_plan}." : ''),$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $plan_note = $new_plan ? " Plan set to: {$new_plan}." : " Plan unchanged ({$t_cur_plan}).";
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_MANUAL_SET','subscription',?,?,?,NOW())")->execute([$tid_s,$u['id'],$u['username'],'super_admin',$tid_s,"Subscription set for \"{$t_biz_name}\": Start {$start}, Expiry {$end_date}.{$plan_note}",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
             $success_msg = 'Subscription dates updated successfully.';
         } else {
             $error_msg = 'Invalid dates provided.';
@@ -1212,8 +1221,16 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     function openSetSubModal(tid, biz, start, end, plan) {
         document.getElementById('set-sub-tid').value = tid;
         document.getElementById('set-sub-biz').textContent = biz;
-        document.getElementById('set-sub-start').value = start;
-        document.getElementById('set-sub-end').value = end;
+
+        // Always auto-fill: start = today, end = today + 1 month
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const nextMonth = new Date(today);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        const nextMonthStr = nextMonth.toISOString().split('T')[0];
+
+        document.getElementById('set-sub-start').value = todayStr;
+        document.getElementById('set-sub-end').value = nextMonthStr;
         document.getElementById('set-sub-plan').value = '';
         document.getElementById('set-sub-modal').classList.add('open');
     }

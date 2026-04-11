@@ -32,8 +32,11 @@ if (!empty($_SESSION['user'])) {
 
     // Audit log
     try {
-        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'USER_LOGOUT','user',?,?,?,NOW())")
-            ->execute([$u['tenant_id']??null, $u['id'], $u['username'], $u['role'], (string)$u['id'], $u['name'].' logged out.', $_SERVER['REMOTE_ADDR']??'::1']);
+        $logout_action = ($u['role'] === 'super_admin') ? 'SUPER_ADMIN_LOGOUT' : 'USER_LOGOUT';
+        $role_label = ucfirst($u['role']);
+        $logout_msg = $role_label . ' "' . $u['username'] . '" (' . $u['name'] . ') logged out.';
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,'user',?,?,?,NOW())")
+            ->execute([$u['tenant_id']??null, $u['id'], $u['username'], $u['role'], $logout_action, (string)$u['id'], $logout_msg, $_SERVER['REMOTE_ADDR']??'::1']);
     } catch (PDOException $e) {}
 } elseif ($role_hint !== 'super_admin') {
     // Session expired but we know it's a tenant user — try to get slug from DB via referer

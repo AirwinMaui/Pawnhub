@@ -112,6 +112,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 error_log('Welcome email failed: ' . $e->getMessage());
             }
 
+            // ── Audit log: new tenant admin registered ───────
+            try {
+                $reg_msg = 'Tenant admin "' . $username . '" (' . $fullname . ') registered account for ' . $tenant['business_name'] . '.';
+                $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,'admin','TENANT_ADMIN_REGISTER','user',?,?,?,NOW())")
+                    ->execute([$tenant['id'], $new_uid, $username, (string)$new_uid, $reg_msg, $_SERVER['REMOTE_ADDR'] ?? '::1']);
+            } catch (Throwable $e) {}
             // Redirect to tenant login page with success message — do NOT auto-login
             $login_url = '/' . urlencode($slug) . '?login=1&registered=1';
             header('Location: ' . $login_url);
@@ -156,6 +162,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 'tenant_name' => $user['tenant_name'],
                 'tenant_slug' => $tenant['slug'] ?? $slug,
             ];
+            // ── Audit log: user login ─────────────────────────
+            try {
+                $role_label = ucfirst($user['role']);
+                $login_msg = $role_label . ' "' . $user['username'] . '" (' . $user['fullname'] . ') logged in to ' . $tenant['business_name'] . '.';
+                $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'USER_LOGIN','user',?,?,?,NOW())")
+                    ->execute([$user['tenant_id'], $user['id'], $user['username'], $user['role'], (string)$user['id'], $login_msg, $_SERVER['REMOTE_ADDR'] ?? '::1']);
+            } catch (Throwable $e) {}
             if ($user['role'] === 'admin')   { header('Location: tenant.php');  exit; }
             if ($user['role'] === 'manager') { header('Location: manager.php'); exit; }
             if ($user['role'] === 'staff')   { header('Location: staff.php');   exit; }

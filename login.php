@@ -46,6 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'tenant_id'   => $user['tenant_id'],
                     'tenant_name' => $user['tenant_name'],
                 ];
+                // ── Audit log: Super Admin login ──────────────────
+                try {
+                    $login_msg = 'Super Admin "' . $user['username'] . '" logged in.';
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (NULL,?,?,?,'SUPER_ADMIN_LOGIN','user',?,?,?,NOW())")
+                        ->execute([$user['id'], $user['username'], 'super_admin', $user['id'], $login_msg, $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                } catch (Throwable $e) {}
                 header('Location: superadmin.php'); exit;
             }
         } else {
