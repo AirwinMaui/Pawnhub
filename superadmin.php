@@ -57,11 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo->prepare("INSERT INTO tenant_invitations (tenant_id,email,owner_name,token,status,expires_at,created_by) VALUES (?,?,?,?,'pending',?,?)")
                         ->execute([$new_tid,$email,$oname,$token,$expires_at,$u['id']]);
                     $pdo->commit();
-                    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\" and sent invitation to $email.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-                    $sent = sendTenantInvitation($email, $oname, $bname, $token, $slug);
-                    $success_msg = $sent
-                        ? "✅ Tenant \"$bname\" created! Invitation sent to $email."
-                        : "⚠️ Tenant created but email failed. Token: $token — Check mailer.php settings.";
+                    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\" (pending approval). Invitation will be sent upon approval.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+                    // ── No email yet — invitation will be sent when SA approves the tenant ──
+                    $success_msg = "✅ Tenant \"<strong>$bname</strong>\" added and is now pending approval. Send the invitation email when you approve the tenant.";
                     $active_page = 'tenants';
                 } catch (PDOException $e) {
                     $pdo->rollBack();
@@ -190,21 +188,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
 
         // ── Send approval/login email ──────────────────────────
-        // For self-signup tenants (no invitation), always send sendTenantApproved.
-        // For SA-invited tenants (tenant_invitations exists), their invite email
-        // already contained the setup link, but we still send a confirmation.
+        // For SA-invited tenants: send the invitation/setup email (with token link).
+        // For self-signup tenants (no invitation token): send the approved/login email.
         $email_sent = false;
         if (!empty($t_row['email']) && !empty($slug)) {
             try {
-                // sendTenantApproved sends the login link with the slug
-                $email_sent = sendTenantApproved(
-                    $t_row['email'],
-                    $t_row['owner_name'],
-                    $t_row['business_name'],
-                    $slug
-                );
+                // Check if this tenant was SA-invited (has a pending invitation token)
+                $inv_stmt = $pdo->prepare("SELECT token, owner_name FROM tenant_invitations WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1");
+                $inv_stmt->execute([$tid]);
+                $inv_row = $inv_stmt->fetch();
+
+                if ($inv_row) {
+                    // SA-invited tenant: send the setup/invitation email with the token link
+                    $email_sent = sendTenantInvitation(
+                        $t_row['email'],
+                        $t_row['owner_name'],
+                        $t_row['business_name'],
+                        $inv_row['token'],
+                        $slug
+                    );
+                } else {
+                    // Self-signup tenant: send the approved/login link email
+                    $email_sent = sendTenantApproved(
+                        $t_row['email'],
+                        $t_row['owner_name'],
+                        $t_row['business_name'],
+                        $slug
+                    );
+                }
                 if (!$email_sent) {
-                    error_log("[Approve] sendTenantApproved returned false for tenant_id={$tid} email={$t_row['email']}");
+                    error_log("[Approve] Email returned false for tenant_id={$tid} email={$t_row['email']}");
                 }
             } catch (Throwable $mail_err) {
                 error_log('[Approve] Approval email exception: ' . $mail_err->getMessage());
