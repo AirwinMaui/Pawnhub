@@ -640,50 +640,85 @@ if ($active_page === 'reports') {
 }
 
 // ── SALES REPORT DATA ─────────────────────────────────────────
+// ── SUPER ADMIN SUBSCRIPTION REVENUE REPORT ──────────────────
+// Shows the Super Admin's OWN income from approved tenant subscription
+// renewals — NOT the tenants' pawn transaction revenue.
 $sales_data = $sales_summary = $sales_per_tenant = $top_tenants = $tx_history = [];
 $sales_chart_labels = $sales_chart_data = [];
 
 if ($active_page === 'sales_report') {
     try {
-        $sq = "SELECT COUNT(*) AS total_transactions, COUNT(DISTINCT tenant_id) AS active_tenants,
-                 COALESCE(SUM(loan_amount),0) AS total_revenue,
-                 COALESCE(AVG(loan_amount),0) AS avg_transaction
-               FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+        $sq = "SELECT COUNT(*) AS total_transactions,
+                      COUNT(DISTINCT sr.tenant_id) AS active_tenants,
+                      COALESCE(SUM(sr.amount), 0)  AS total_revenue,
+                      COALESCE(AVG(sr.amount), 0)  AS avg_transaction
+               FROM subscription_renewals sr
+               WHERE sr.status = 'approved'
+                 AND DATE(sr.reviewed_at) BETWEEN ? AND ?";
         $sp = [$sales_date_from, $sales_date_to];
-        if ($sales_tenant) { $sq .= " AND tenant_id=?"; $sp[] = $sales_tenant; }
+        if ($sales_tenant) { $sq .= " AND sr.tenant_id = ?"; $sp[] = $sales_tenant; }
         $s = $pdo->prepare($sq); $s->execute($sp); $sales_summary = $s->fetch();
 
         if ($sales_period === 'daily') {
-            $tq = "SELECT DATE(created_at) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(loan_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+            $tq = "SELECT DATE(sr.reviewed_at) AS period_label,
+                          COUNT(*) AS tx_count,
+                          COALESCE(SUM(sr.amount), 0) AS revenue
+                   FROM subscription_renewals sr
+                   WHERE sr.status = 'approved'
+                     AND DATE(sr.reviewed_at) BETWEEN ? AND ?";
+            $group = " GROUP BY DATE(sr.reviewed_at) ORDER BY DATE(sr.reviewed_at) ASC";
         } elseif ($sales_period === 'weekly') {
-            $tq = "SELECT CONCAT(YEAR(created_at),'-W',LPAD(WEEK(created_at),2,'0')) AS period_label, COUNT(*) AS tx_count, COALESCE(SUM(loan_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+            $tq = "SELECT CONCAT(YEAR(sr.reviewed_at),'-W',LPAD(WEEK(sr.reviewed_at),2,'0')) AS period_label,
+                          COUNT(*) AS tx_count,
+                          COALESCE(SUM(sr.amount), 0) AS revenue
+                   FROM subscription_renewals sr
+                   WHERE sr.status = 'approved'
+                     AND DATE(sr.reviewed_at) BETWEEN ? AND ?";
+            $group = " GROUP BY period_label ORDER BY period_label ASC";
         } else {
-            $tq = "SELECT DATE_FORMAT(created_at,'%b %Y') AS period_label, DATE_FORMAT(created_at,'%Y-%m') AS sort_key, COUNT(*) AS tx_count, COALESCE(SUM(loan_amount),0) AS revenue FROM pawn_transactions WHERE DATE(created_at) BETWEEN ? AND ?";
+            $tq = "SELECT DATE_FORMAT(sr.reviewed_at,'%b %Y') AS period_label,
+                          DATE_FORMAT(sr.reviewed_at,'%Y-%m') AS sort_key,
+                          COUNT(*) AS tx_count,
+                          COALESCE(SUM(sr.amount), 0) AS revenue
+                   FROM subscription_renewals sr
+                   WHERE sr.status = 'approved'
+                     AND DATE(sr.reviewed_at) BETWEEN ? AND ?";
+            $group = " GROUP BY sort_key, period_label ORDER BY sort_key ASC";
         }
         $tp = [$sales_date_from, $sales_date_to];
-        if ($sales_tenant) { $tq .= " AND tenant_id=?"; $tp[] = $sales_tenant; }
-        $tq .= $sales_period === 'monthly' ? " GROUP BY sort_key, period_label ORDER BY sort_key ASC" : " GROUP BY period_label ORDER BY period_label ASC";
+        if ($sales_tenant) { $tq .= " AND sr.tenant_id = ?"; $tp[] = $sales_tenant; }
+        $tq .= $group;
         $ts = $pdo->prepare($tq); $ts->execute($tp); $sales_data = $ts->fetchAll();
         $sales_chart_labels = array_column($sales_data, 'period_label');
         $sales_chart_data   = array_column($sales_data, 'revenue');
 
         $ptq = "SELECT t.business_name, t.plan,
-                  COUNT(pt.id) AS tx_count, COALESCE(SUM(pt.loan_amount),0) AS revenue,
-                  COALESCE(AVG(pt.loan_amount),0) AS avg_tx, MAX(pt.created_at) AS last_tx
-                FROM tenants t LEFT JOIN pawn_transactions pt ON pt.tenant_id=t.id
-                  AND DATE(pt.created_at) BETWEEN ? AND ?
-                WHERE t.status='active'";
+                       COUNT(sr.id)                AS tx_count,
+                       COALESCE(SUM(sr.amount), 0) AS revenue,
+                       COALESCE(AVG(sr.amount), 0) AS avg_tx,
+                       MAX(sr.reviewed_at)         AS last_tx
+                FROM tenants t
+                LEFT JOIN subscription_renewals sr
+                  ON sr.tenant_id = t.id
+                  AND sr.status = 'approved'
+                  AND DATE(sr.reviewed_at) BETWEEN ? AND ?
+                WHERE t.status = 'active'";
         $ptp = [$sales_date_from, $sales_date_to];
-        if ($sales_tenant) { $ptq .= " AND t.id=?"; $ptp[] = $sales_tenant; }
+        if ($sales_tenant) { $ptq .= " AND t.id = ?"; $ptp[] = $sales_tenant; }
         $ptq .= " GROUP BY t.id ORDER BY revenue DESC";
         $pts = $pdo->prepare($ptq); $pts->execute($ptp);
         $sales_per_tenant = $pts->fetchAll();
-        $top_tenants      = array_slice($sales_per_tenant, 0, 5);
+        $top_tenants      = array_slice(array_filter($sales_per_tenant, fn($r) => $r['revenue'] > 0), 0, 5);
 
-        $thq = "SELECT pt.*, t.business_name FROM pawn_transactions pt LEFT JOIN tenants t ON t.id=pt.tenant_id WHERE DATE(pt.created_at) BETWEEN ? AND ?";
+        $thq = "SELECT sr.id, sr.amount, sr.billing_cycle, sr.reviewed_at AS created_at,
+                       sr.status, t.business_name, t.plan
+                FROM subscription_renewals sr
+                LEFT JOIN tenants t ON t.id = sr.tenant_id
+                WHERE sr.status = 'approved'
+                  AND DATE(sr.reviewed_at) BETWEEN ? AND ?";
         $thp = [$sales_date_from, $sales_date_to];
-        if ($sales_tenant) { $thq .= " AND pt.tenant_id=?"; $thp[] = $sales_tenant; }
-        $thq .= " ORDER BY pt.created_at DESC LIMIT 100";
+        if ($sales_tenant) { $thq .= " AND sr.tenant_id = ?"; $thp[] = $sales_tenant; }
+        $thq .= " ORDER BY sr.reviewed_at DESC LIMIT 100";
         $ths = $pdo->prepare($thq); $ths->execute($thp); $tx_history = $ths->fetchAll();
 
     } catch (PDOException $e) {
@@ -1371,7 +1406,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           </select>
           <label>From:</label><input type="date" name="sales_from" class="filter-input" value="<?=htmlspecialchars($sales_date_from)?>">
           <label>To:</label><input type="date" name="sales_to" class="filter-input" value="<?=htmlspecialchars($sales_date_to)?>">
-          <label>Tenant:</label>
+          <label>Filter by Tenant:</label>
           <select name="sales_tenant" class="filter-select"><option value="0">All Tenants</option>
             <?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$sales_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?>
           </select>
@@ -1381,26 +1416,26 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </form>
 
       <div class="summary-grid">
-        <div class="summary-item"><div class="summary-num" style="color:var(--success);">₱<?=number_format($sales_summary['total_revenue']??0,2)?></div><div class="summary-lbl">Total Revenue</div></div>
-        <div class="summary-item"><div class="summary-num" style="color:var(--blue-acc);"><?=number_format($sales_summary['total_transactions']??0)?></div><div class="summary-lbl">Total Transactions</div></div>
-        <div class="summary-item"><div class="summary-num"><?=$sales_summary['active_tenants']??0?></div><div class="summary-lbl">Active Tenants</div></div>
-        <div class="summary-item"><div class="summary-num" style="color:#7c3aed;">₱<?=number_format($sales_summary['avg_transaction']??0,2)?></div><div class="summary-lbl">Avg. Transaction</div></div>
+        <div class="summary-item"><div class="summary-num" style="color:var(--success);">₱<?=number_format($sales_summary['total_revenue']??0,2)?></div><div class="summary-lbl">Total Subscription Revenue</div></div>
+        <div class="summary-item"><div class="summary-num" style="color:var(--blue-acc);"><?=number_format($sales_summary['total_transactions']??0)?></div><div class="summary-lbl">Renewals Collected</div></div>
+        <div class="summary-item"><div class="summary-num"><?=$sales_summary['active_tenants']??0?></div><div class="summary-lbl">Paying Tenants</div></div>
+        <div class="summary-item"><div class="summary-num" style="color:#7c3aed;">₱<?=number_format($sales_summary['avg_transaction']??0,2)?></div><div class="summary-lbl">Avg. Payment</div></div>
       </div>
 
       <div class="card">
-        <div class="card-hdr"><span class="card-title">📈 Revenue Trend — <?=ucfirst($sales_period)?></span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
-        <?php if(empty($sales_data)):?><div class="empty-state"><p>No transaction data for the selected period.</p></div>
+        <div class="card-hdr"><span class="card-title">📈 Subscription Revenue Trend — <?=ucfirst($sales_period)?></span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
+        <?php if(empty($sales_data)):?><div class="empty-state"><p>No subscription payments collected in the selected period.</p></div>
         <?php else:?><div class="chart-wrap" style="height:260px;"><canvas id="salesTrendChart"></canvas></div>
         <script>
-        new Chart(document.getElementById('salesTrendChart'),{type:'line',data:{labels:<?=json_encode($sales_chart_labels)?>,datasets:[{label:'Revenue (₱)',data:<?=json_encode(array_map('floatval',$sales_chart_data))?>,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#2563eb'},{label:'Transactions',data:<?=json_encode(array_map('intval',array_column($sales_data,'tx_count')))?>,borderColor:'#10b981',backgroundColor:'transparent',borderWidth:2,tension:0.4,pointRadius:3,pointBackgroundColor:'#10b981',yAxisID:'y2'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94a3b8'}},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:10},color:'#94a3b8'},beginAtZero:true,title:{display:true,text:'Revenue (₱)',font:{size:10},color:'#94a3b8'}},y2:{position:'right',grid:{display:false},ticks:{font:{size:10},color:'#10b981'},beginAtZero:true,title:{display:true,text:'Transactions',font:{size:10},color:'#10b981'}}}}});
+        new Chart(document.getElementById('salesTrendChart'),{type:'line',data:{labels:<?=json_encode($sales_chart_labels)?>,datasets:[{label:'Subscription Revenue (₱)',data:<?=json_encode(array_map('floatval',$sales_chart_data))?>,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#2563eb'},{label:'Renewals',data:<?=json_encode(array_map('intval',array_column($sales_data,'tx_count')))?>,borderColor:'#10b981',backgroundColor:'transparent',borderWidth:2,tension:0.4,pointRadius:3,pointBackgroundColor:'#10b981',yAxisID:'y2'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94a3b8'}},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:10},color:'#94a3b8'},beginAtZero:true,title:{display:true,text:'Revenue (₱)',font:{size:10},color:'#94a3b8'}},y2:{position:'right',grid:{display:false},ticks:{font:{size:10},color:'#10b981'},beginAtZero:true,title:{display:true,text:'Renewals',font:{size:10},color:'#10b981'}}}}});
         </script><?php endif;?>
       </div>
 
       <div class="two-col">
         <div class="card" style="overflow-x:auto;">
-          <div class="card-hdr"><span class="card-title">🏢 Sales Per Tenant</span></div>
+          <div class="card-hdr"><span class="card-title">🏢 Subscription Payments Per Tenant</span></div>
           <?php if(empty($sales_per_tenant)):?><div class="empty-state"><p>No data.</p></div>
-          <?php else:?><table><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Tx Count</th><th>Revenue (₱)</th><th>Avg (₱)</th><th>Last Tx</th></tr></thead><tbody>
+          <?php else:?><table><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Renewals</th><th>Amount Paid (₱)</th><th>Avg (₱)</th><th>Last Payment</th></tr></thead><tbody>
           <?php foreach($sales_per_tenant as $i=>$r):?>
           <tr><td><span class="badge <?=$i===0?'rank-1':($i===1?'rank-2':($i===2?'rank-3':'b-gray'))?>">#<?=$i+1?></span></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td style="font-weight:700;"><?=number_format($r['tx_count'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($r['revenue'],2)?></td><td>₱<?=number_format($r['avg_tx'],2)?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=$r['last_tx']?date('M d, Y',strtotime($r['last_tx'])):'—'?></td></tr>
           <?php endforeach;?></tbody>
@@ -1408,8 +1443,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           </table><?php endif;?>
         </div>
         <div class="card">
-          <div class="card-hdr"><span class="card-title">🏆 Top Performing Tenants</span></div>
-          <?php if(empty($top_tenants)):?><div class="empty-state"><p>No data.</p></div>
+          <div class="card-hdr"><span class="card-title">🏆 Top Paying Tenants</span></div>
+          <?php if(empty($top_tenants)):?><div class="empty-state"><p>No subscription payments in this period.</p></div>
           <?php else:$mx=max(array_column($top_tenants,'revenue'));$bar_colors=['#2563eb','#10b981','#d97706','#7c3aed','#dc2626'];
           foreach($top_tenants as $i=>$r):$bp=$mx>0?round($r['revenue']/$mx*100):0;$bc=$bar_colors[$i]??'#94a3b8';?>
           <div style="margin-bottom:14px;">
@@ -1418,18 +1453,25 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
               <span style="font-size:.78rem;font-weight:700;color:var(--success);">₱<?=number_format($r['revenue'],0)?></span>
             </div>
             <div style="height:7px;background:#f1f5f9;border-radius:100px;overflow:hidden;"><div style="height:100%;width:<?=$bp?>%;background:<?=$bc?>;border-radius:100px;"></div></div>
-            <div style="font-size:.7rem;color:var(--text-dim);margin-top:2px;"><?=number_format($r['tx_count'])?> transactions</div>
+            <div style="font-size:.7rem;color:var(--text-dim);margin-top:2px;"><?=number_format($r['tx_count'])?> renewal<?=$r['tx_count']!=1?'s':''?></div>
           </div>
           <?php endforeach;endif;?>
         </div>
       </div>
 
       <div class="card" style="overflow-x:auto;">
-        <div class="card-hdr"><span class="card-title">📋 Transaction History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
-        <?php if(empty($tx_history)):?><div class="empty-state"><p>No transactions found.</p></div>
-        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Ticket No.</th><th>Amount (₱)</th><th>Status</th><th>Date</th></tr></thead><tbody>
-        <?php foreach($tx_history as $i=>$tx):$ts=$tx['status']??'';?>
-        <tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($tx['business_name']??'—')?></td><td class="ticket-tag"><?=htmlspecialchars($tx['ticket_no']??$tx['id'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['loan_amount']??0,2)?></td><td><span class="badge <?=$ts==='active'?'b-green':($ts==='redeemed'?'b-blue':($ts==='forfeited'?'b-red':'b-gray'))?>"><?=ucfirst($ts)?></span></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td></tr>
+        <div class="card-hdr"><span class="card-title">📋 Subscription Payment History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
+        <?php if(empty($tx_history)):?><div class="empty-state"><p>No subscription payments found for the selected period.</p></div>
+        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
+        <?php foreach($tx_history as $i=>$tx):?>
+        <tr>
+          <td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td>
+          <td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($tx['business_name']??'—')?></td>
+          <td><span class="badge <?=($tx['plan']??'')==='Enterprise'?'plan-ent':(($tx['plan']??'')==='Pro'?'plan-pro':'plan-starter')?>"><?=htmlspecialchars($tx['plan']??'—')?></span></td>
+          <td style="font-size:.78rem;"><?=ucfirst($tx['billing_cycle']??'—')?></td>
+          <td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['amount']??0,2)?></td>
+          <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td>
+        </tr>
         <?php endforeach;?></tbody></table><?php endif;?>
       </div>
 
