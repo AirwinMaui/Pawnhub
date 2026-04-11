@@ -352,6 +352,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($dup->fetch()) {
                 $error_msg = 'This email is already registered in the system.';
             } else {
+                // DDL (CREATE TABLE) must run OUTSIDE a transaction — MySQL DDL causes
+                // an implicit commit, which would silently end any active transaction and
+                // make the subsequent rollBack() throw "There is no active transaction".
+                $pdo->exec("CREATE TABLE IF NOT EXISTS super_admin_invitations (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    token VARCHAR(128) NOT NULL UNIQUE,
+                    used TINYINT(1) NOT NULL DEFAULT 0,
+                    used_at DATETIME DEFAULT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_by INT DEFAULT NULL
+                )");
+
                 try {
                     $pdo->beginTransaction();
 
@@ -367,17 +381,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $sa_token     = bin2hex(random_bytes(32));
                     $sa_expires   = date('Y-m-d H:i:s', strtotime('+24 hours'));
 
-                    // Store in super_admin_invitations (create if not exists)
-                    $pdo->exec("CREATE TABLE IF NOT EXISTS super_admin_invitations (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        user_id INT NOT NULL,
-                        token VARCHAR(128) NOT NULL UNIQUE,
-                        used TINYINT(1) NOT NULL DEFAULT 0,
-                        used_at DATETIME DEFAULT NULL,
-                        expires_at DATETIME NOT NULL,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        created_by INT DEFAULT NULL
-                    )");
                     $pdo->prepare("INSERT INTO super_admin_invitations (user_id, token, expires_at, created_by) VALUES (?, ?, ?, ?)")
                         ->execute([$new_sa_id, $sa_token, $sa_expires, $u['id']]);
 
@@ -403,7 +406,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
 
                 } catch (PDOException $e) {
-                    $pdo->rollBack();
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     $error_msg = 'Database error: ' . $e->getMessage();
                 }
             }
