@@ -12,6 +12,10 @@ if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
 $active_page = $_GET['page'] ?? 'dashboard';
 $success_msg = $error_msg = '';
 
+// Only the original "System Super Admin" (username = 'superadmin') may add or remove
+// other Super Admin accounts. All other super admins are restricted from these actions.
+$is_main_sa = ($u['username'] === 'superadmin');
+
 // ── POST ACTIONS ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
@@ -338,6 +342,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // ── ADD ANOTHER SUPER ADMIN (token-based invite, no password here) ──
     if ($_POST['action'] === 'add_super_admin') {
+        if (!$is_main_sa) {
+            $error_msg = 'Only the System Super Admin can add new Super Admin accounts.';
+            $active_page = 'settings';
+        } else {
         $sa_fullname = trim($_POST['sa_fullname'] ?? '');
         $sa_username = trim($_POST['sa_username'] ?? '');
         $sa_email    = trim($_POST['sa_email']    ?? '');
@@ -413,11 +421,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
         }
+        } // end else ($is_main_sa)
         $active_page = 'settings';
     }
 
     // ── REMOVE SUPER ADMIN ────────────────────────────────────
     if ($_POST['action'] === 'remove_super_admin') {
+        if (!$is_main_sa) {
+            $error_msg = 'Only the System Super Admin can remove Super Admin accounts.';
+            $active_page = 'settings';
+        } else {
         $target_id = intval($_POST['target_id'] ?? 0);
         if ($target_id === (int)$u['id']) {
             $error_msg = 'You cannot remove your own Super Admin account.';
@@ -439,6 +452,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error_msg = 'Super Admin account not found.';
             }
         }
+        } // end else ($is_main_sa)
         $active_page = 'settings';
     }
 }
@@ -1476,9 +1490,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr">
             <span class="card-title">🛡️ Super Admin Accounts</span>
+            <?php if ($is_main_sa): ?>
             <button type="button" onclick="document.getElementById('addSuperAdminModal').classList.add('open')" class="btn-sm btn-primary" style="font-size:.75rem;">
               ➕ Add Super Admin
             </button>
+            <?php endif; ?>
           </div>
           <?php
             // Fetch all super admins
@@ -1502,12 +1518,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                   <td>
                     <?php if ((int)$sa['id'] === (int)$u['id']): ?>
                       <span class="badge b-purple">You</span>
-                    <?php else: ?>
+                    <?php elseif ($is_main_sa): ?>
                       <form method="POST" style="display:inline;" onsubmit="return confirm('Remove Super Admin \"<?= htmlspecialchars($sa['username'], ENT_QUOTES) ?>\"? This cannot be undone.')">
                         <input type="hidden" name="action" value="remove_super_admin">
                         <input type="hidden" name="target_id" value="<?= $sa['id'] ?>">
                         <button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Remove</button>
                       </form>
+                    <?php else: ?>
+                      <span style="font-size:.72rem;color:var(--text-dim);">—</span>
                     <?php endif; ?>
                   </td>
                 </tr>
