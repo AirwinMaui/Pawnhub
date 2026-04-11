@@ -724,9 +724,8 @@ function sendSuperAdminInvitation(string $toEmail, string $toName, string $usern
 
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
-          You have been invited to join <strong>PawnHub</strong> as a <strong>Super Admin</strong>.<br>
-          Your username is: <strong style="font-family:monospace;color:#1e3a8a;">' . htmlspecialchars($username) . '</strong><br><br>
-          Click the button below to set up your password and activate your account.
+          You have been invited to join <strong>PawnHub</strong> as a <strong>Super Admin</strong>.<br><br>
+          Click the button below to <strong>set up your username and password</strong> and activate your account.
           This link expires in <strong>24 hours</strong>.
         </p>
 

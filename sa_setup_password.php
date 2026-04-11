@@ -81,24 +81,36 @@ if (!$token) {
 
 // ── Handle password submission ────────────────────────────────
 if ($step === 'setup' && $setup_user && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $password = trim($_POST['password'] ?? '');
-    $confirm  = trim($_POST['confirm']  ?? '');
+    $new_username = trim($_POST['username'] ?? '');
+    $password     = trim($_POST['password'] ?? '');
+    $confirm      = trim($_POST['confirm']  ?? '');
 
-    if (!$password || !$confirm) {
-        $error = 'Please fill in both password fields.';
+    if (!$new_username || !$password || !$confirm) {
+        $error = 'Please fill in all fields.';
+    } elseif (!preg_match('/^[a-zA-Z0-9_]{3,30}$/', $new_username)) {
+        $error = 'Username must be 3–30 characters, letters, numbers, and underscores only.';
     } elseif (strlen($password) < 8) {
         $error = 'Password must be at least 8 characters.';
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
     } else {
+        // Check username uniqueness (exclude self)
+        $chk = $pdo->prepare("SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1");
+        $chk->execute([$new_username, $setup_user['user_id']]);
+        if ($chk->fetch()) {
+            $error = 'That username is already taken. Please choose another.';
+        }
+    }
+
+    if (!$error) {
         $hashed = password_hash($password, PASSWORD_BCRYPT);
 
         try {
             $pdo->beginTransaction();
 
-            // Set password and activate account
-            $pdo->prepare("UPDATE users SET password = ?, status = 'approved' WHERE id = ? AND role = 'super_admin'")
-                ->execute([$hashed, $setup_user['user_id']]);
+            // Set username, password, and activate account
+            $pdo->prepare("UPDATE users SET username = ?, password = ?, status = 'approved' WHERE id = ? AND role = 'super_admin'")
+                ->execute([$new_username, $hashed, $setup_user['user_id']]);
 
             // Mark token as used
             if ($setup_user['_source'] === 'sa_invitations') {
@@ -112,19 +124,19 @@ if ($step === 'setup' && $setup_user && $_SERVER['REQUEST_METHOD'] === 'POST') {
             // Audit log
             try {
                 $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
-                    VALUES (NULL, ?, ?, 'super_admin', 'SA_SETUP_PASSWORD', 'user', ?, 'New Super Admin set up their password and activated their account.', ?, NOW())")
-                    ->execute([$setup_user['user_id'], $setup_user['username'], $setup_user['user_id'], $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                    VALUES (NULL, ?, ?, 'super_admin', 'SA_SETUP_PASSWORD', 'user', ?, 'New Super Admin set username and password, account activated.', ?, NOW())")
+                    ->execute([$setup_user['user_id'], $new_username, $setup_user['user_id'], $_SERVER['REMOTE_ADDR'] ?? '::1']);
             } catch (PDOException $e) {}
 
             $pdo->commit();
 
-            // Send "Account Ready" confirmation email
+            // Send "Account Ready" confirmation email with the username they just set
             try {
                 require_once __DIR__ . '/mailer.php';
                 sendSuperAdminAccountReady(
                     $setup_user['email'],
                     $setup_user['fullname'],
-                    $setup_user['username']
+                    $new_username
                 );
             } catch (Throwable $mail_err) {
                 error_log('[SA Setup] Account ready email failed: ' . $mail_err->getMessage());
@@ -446,14 +458,14 @@ h1 {
     </div>
     <div>
       <div class="user-box-name"><?= htmlspecialchars($setup_user['fullname']) ?></div>
-      <div class="user-box-username">@<?= htmlspecialchars($setup_user['username']) ?></div>
       <div class="user-box-email"><?= htmlspecialchars($setup_user['email']) ?></div>
+      <div style="font-size:.72rem;color:#7c3aed;margin-top:2px;">Super Admin Account</div>
     </div>
   </div>
 
   <div class="info-box">
-    🔒 Choose a strong password that you haven't used before.<br>
-    After setting your password, you'll be directed to the login page.
+    👤 First, choose your <strong>username</strong> — this is what you'll use to log in.<br>
+    🔒 Then create a <strong>strong password</strong>. After setup, you'll be directed to the login page.
   </div>
 
   <?php if ($error): ?>
@@ -465,6 +477,17 @@ h1 {
 
   <form method="POST" class="form">
     <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>">
+
+    <div>
+      <label class="lbl">Choose a Username *</label>
+      <input type="text" name="username" id="uname" class="inp"
+        placeholder="e.g. mariasantos"
+        value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
+        required autocomplete="off"
+        pattern="[a-zA-Z0-9_]{3,30}"
+        title="3–30 characters, letters, numbers, underscores only">
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:4px;">3–30 characters. Letters, numbers, and underscores only.</div>
+    </div>
 
     <div>
       <label class="lbl">New Password <span style="font-size:.63rem;color:#94a3b8;">(min. 8 characters)</span></label>
@@ -488,7 +511,7 @@ h1 {
       </div>
     </div>
 
-    <button type="submit" class="btn"><?= isset($setup_user['_source']) && $setup_user['_source'] === 'password_resets' && ($setup_user['status'] ?? '') === 'approved' ? '🔑 Reset My Password' : '🛡️ Activate My Account' ?></button>
+    <button type="submit" class="btn"><?= isset($setup_user['_source']) && $setup_user['_source'] === 'password_resets' && ($setup_user['status'] ?? '') === 'approved' ? '🔑 Reset My Password' : '🛡️ Activate My Account →' ?></button>
   </form>
   <?php endif; ?>
 

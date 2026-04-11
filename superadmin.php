@@ -342,23 +342,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $sa_username = trim($_POST['sa_username'] ?? '');
         $sa_email    = trim($_POST['sa_email']    ?? '');
 
-        if (!$sa_fullname || !$sa_username || !$sa_email) {
-            $error_msg = 'Please fill in all fields for the new Super Admin.';
+        if (!$sa_fullname || !$sa_email) {
+            $error_msg = 'Please fill in all required fields.';
         } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
             $error_msg = 'Invalid email address.';
         } else {
-            $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
-            $dup->execute([$sa_username, $sa_email]);
+            $dup = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+            $dup->execute([$sa_email]);
             if ($dup->fetch()) {
-                $error_msg = 'Username or email is already in use.';
+                $error_msg = 'This email is already registered in the system.';
             } else {
                 try {
                     $pdo->beginTransaction();
 
-                    // Insert with status='pending' — password will be set via email link
+                    // Insert with status='pending', username temporarily blank
+                    // The new SA will set their own username + password via the setup link
+                    $temp_username = 'sa_pending_' . bin2hex(random_bytes(4));
                     $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
                         VALUES (?, ?, ?, '', 'super_admin', 'pending', 0, NULL, NOW())")
-                        ->execute([$sa_fullname, $sa_username, $sa_email]);
+                        ->execute([$sa_fullname, $temp_username, $sa_email]);
                     $new_sa_id = $pdo->lastInsertId();
 
                     // Generate setup token (24 hours)
@@ -386,16 +388,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
                             VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
                             ->execute([$u['id'], $u['username'], $new_sa_id,
-                                "Super Admin \"{$u['username']}\" invited new Super Admin \"{$sa_username}\" ({$sa_email}). Invitation email sent.",
+                                "Super Admin \"{$u['username']}\" invited new Super Admin \"{$sa_fullname}\" ({$sa_email}). Invitation email sent.",
                                 $_SERVER['REMOTE_ADDR'] ?? '::1']);
                     } catch (PDOException $e) {}
 
-                    // Send invitation email with setup link
+                    // Send invitation email with setup link (no username yet — they set it themselves)
                     require_once __DIR__ . '/mailer.php';
-                    $sent = sendSuperAdminInvitation($sa_email, $sa_fullname, $sa_username, $sa_token);
+                    $sent = sendSuperAdminInvitation($sa_email, $sa_fullname, '', $sa_token);
 
                     if ($sent) {
-                        $success_msg = "✅ Invitation sent to <strong>{$sa_email}</strong>! They will receive an email to set up their password.";
+                        $success_msg = "✅ Invitation sent to <strong>{$sa_email}</strong>! They will receive an email to set up their own username and password.";
                     } else {
                         $success_msg = "⚠️ Super Admin account created but email failed to send. Setup link: <code>" . APP_URL . "/sa_setup_password.php?token={$sa_token}</code>";
                     }
@@ -1951,14 +1953,10 @@ function updatePlanCard(selected){
       </div>
       <form method="POST" action="?page=settings">
         <input type="hidden" name="action" value="add_super_admin">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-          <div style="grid-column:1/-1;">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+          <div>
             <label class="flabel">Full Name *</label>
             <input type="text" name="sa_fullname" class="finput" placeholder="e.g. Maria Santos" required>
-          </div>
-          <div>
-            <label class="flabel">Username *</label>
-            <input type="text" name="sa_username" class="finput" placeholder="e.g. mariasantos" required autocomplete="off">
           </div>
           <div>
             <label class="flabel">Email *</label>
