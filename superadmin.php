@@ -194,6 +194,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             WHERE id=?")->execute([$tid]);
         $pdo->prepare("UPDATE users SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")->execute([$u['id'], $uid]);
 
+        // ── Auto-record subscription payment in sales report ───
+        // Maps the tenant's plan to a numeric amount so it shows up
+        // in the Sales Report as SA income from subscriptions.
+        $plan_amounts = ['Starter' => 0, 'Pro' => 999, 'Enterprise' => 2499];
+        $sub_amount   = $plan_amounts[$t_row['plan']] ?? 0;
+        if ($sub_amount > 0) {
+            try {
+                $pdo->prepare("INSERT INTO subscription_renewals
+                    (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at, reviewed_by, reviewed_at, new_subscription_end)
+                    VALUES (?, ?, 'monthly', 'Initial Subscription', 'AUTO — Tenant Approved', ?, 'approved', NOW(), ?, NOW(), DATE_ADD(CURDATE(), INTERVAL 1 MONTH))")
+                    ->execute([$tid, $t_row['plan'], $sub_amount, $u['id']]);
+            } catch (PDOException $e) {
+                error_log('[Approve] Could not record subscription_renewals: ' . $e->getMessage());
+            }
+        }
+
         // ── Send approval/login email ──────────────────────────
         // For SA-invited tenants: send the invitation/setup email (with token link).
         // For self-signup tenants (no invitation token): send the approved/login email.
@@ -344,6 +360,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($new_plan) { $updates .= ", plan=?"; $params[] = $new_plan; }
             $params[] = $tid_s;
             $pdo->prepare("UPDATE tenants SET {$updates} WHERE id=?")->execute($params);
+
+            // Record this manual set as a subscription payment in the Sales Report
+            // only if it's a paid plan and there's no existing approved renewal for today
+            $effective_plan = $new_plan ?: $t_cur_plan;
+            $plan_amounts   = ['Starter' => 0, 'Pro' => 999, 'Enterprise' => 2499];
+            $sub_amount     = $plan_amounts[$effective_plan] ?? 0;
+            if ($sub_amount > 0) {
+                try {
+                    // Avoid duplicate: check if there's already an approved renewal today for this tenant
+                    $dup = $pdo->prepare("SELECT id FROM subscription_renewals WHERE tenant_id=? AND status='approved' AND DATE(reviewed_at)=CURDATE() LIMIT 1");
+                    $dup->execute([$tid_s]);
+                    if (!$dup->fetch()) {
+                        $pdo->prepare("INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at, reviewed_by, reviewed_at, new_subscription_end)
+                            VALUES (?, ?, 'monthly', 'Manual Set', 'AUTO — SA Set Dates', ?, 'approved', NOW(), ?, NOW(), ?)")
+                            ->execute([$tid_s, $effective_plan, $sub_amount, $u['id'], $end_date]);
+                    }
+                } catch (PDOException $e) {
+                    error_log('[SetSub] Could not record subscription_renewals: ' . $e->getMessage());
+                }
+            }
             $plan_note = $new_plan ? " Plan set to: {$new_plan}." : " Plan unchanged ({$t_cur_plan}).";
             try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_MANUAL_SET','subscription',?,?,?,NOW())")->execute([$tid_s,$u['id'],$u['username'],'super_admin',$tid_s,"Subscription set for \"{$t_biz_name}\": Start {$start}, Expiry {$end_date}.{$plan_note}",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
             $success_msg = 'Subscription dates updated successfully.';
