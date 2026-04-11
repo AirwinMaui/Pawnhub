@@ -117,6 +117,19 @@ if ($step === 'setup' && $setup_user && $_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (PDOException $e) {}
 
             $pdo->commit();
+
+            // Send "Account Ready" confirmation email
+            try {
+                require_once __DIR__ . '/mailer.php';
+                sendSuperAdminAccountReady(
+                    $setup_user['email'],
+                    $setup_user['fullname'],
+                    $setup_user['username']
+                );
+            } catch (Throwable $mail_err) {
+                error_log('[SA Setup] Account ready email failed: ' . $mail_err->getMessage());
+            }
+
             $step = 'done';
 
         } catch (PDOException $e) {

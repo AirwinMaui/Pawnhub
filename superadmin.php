@@ -336,41 +336,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
 
-    // ── ADD ANOTHER SUPER ADMIN ───────────────────────────────
+    // ── ADD ANOTHER SUPER ADMIN (token-based invite, no password here) ──
     if ($_POST['action'] === 'add_super_admin') {
         $sa_fullname = trim($_POST['sa_fullname'] ?? '');
         $sa_username = trim($_POST['sa_username'] ?? '');
         $sa_email    = trim($_POST['sa_email']    ?? '');
-        $sa_password = trim($_POST['sa_password'] ?? '');
-        $sa_confirm  = trim($_POST['sa_confirm']  ?? '');
 
-        if (!$sa_fullname || !$sa_username || !$sa_email || !$sa_password || !$sa_confirm) {
-            $error_msg   = 'Please fill in all fields for the new Super Admin.';
-        } elseif (strlen($sa_password) < 8) {
-            $error_msg   = 'Password must be at least 8 characters.';
-        } elseif ($sa_password !== $sa_confirm) {
-            $error_msg   = 'Passwords do not match.';
+        if (!$sa_fullname || !$sa_username || !$sa_email) {
+            $error_msg = 'Please fill in all fields for the new Super Admin.';
         } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
-            $error_msg   = 'Invalid email address.';
+            $error_msg = 'Invalid email address.';
         } else {
             $dup = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
             $dup->execute([$sa_username, $sa_email]);
             if ($dup->fetch()) {
                 $error_msg = 'Username or email is already in use.';
             } else {
-                $hashed_pw = password_hash($sa_password, PASSWORD_DEFAULT);
-                $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
-                    VALUES (?, ?, ?, ?, 'super_admin', 'approved', 0, NULL, NOW())")
-                    ->execute([$sa_fullname, $sa_username, $sa_email, $hashed_pw]);
-                $new_sa_id = $pdo->lastInsertId();
                 try {
-                    $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
-                        VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
-                        ->execute([$u['id'], $u['username'], $new_sa_id,
-                            "Super Admin \"{$u['username']}\" added new Super Admin \"{$sa_username}\" ({$sa_email}).",
-                            $_SERVER['REMOTE_ADDR'] ?? '::1']);
-                } catch (PDOException $e) {}
-                $success_msg = "✅ New Super Admin \"<strong>{$sa_fullname}</strong>\" (@{$sa_username}) added successfully!";
+                    $pdo->beginTransaction();
+
+                    // Insert with status='pending' — password will be set via email link
+                    $pdo->prepare("INSERT INTO users (fullname, username, email, password, role, status, is_suspended, tenant_id, created_at)
+                        VALUES (?, ?, ?, '', 'super_admin', 'pending', 0, NULL, NOW())")
+                        ->execute([$sa_fullname, $sa_username, $sa_email]);
+                    $new_sa_id = $pdo->lastInsertId();
+
+                    // Generate setup token (24 hours)
+                    $sa_token     = bin2hex(random_bytes(32));
+                    $sa_expires   = date('Y-m-d H:i:s', strtotime('+24 hours'));
+
+                    // Store in super_admin_invitations (create if not exists)
+                    $pdo->exec("CREATE TABLE IF NOT EXISTS super_admin_invitations (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        token VARCHAR(128) NOT NULL UNIQUE,
+                        used TINYINT(1) NOT NULL DEFAULT 0,
+                        used_at DATETIME DEFAULT NULL,
+                        expires_at DATETIME NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        created_by INT DEFAULT NULL
+                    )");
+                    $pdo->prepare("INSERT INTO super_admin_invitations (user_id, token, expires_at, created_by) VALUES (?, ?, ?, ?)")
+                        ->execute([$new_sa_id, $sa_token, $sa_expires, $u['id']]);
+
+                    $pdo->commit();
+
+                    // Audit log
+                    try {
+                        $pdo->prepare("INSERT INTO audit_logs (tenant_id, actor_user_id, actor_username, actor_role, action, entity_type, entity_id, message, ip_address, created_at)
+                            VALUES (NULL, ?, ?, 'super_admin', 'ADD_SUPER_ADMIN', 'user', ?, ?, ?, NOW())")
+                            ->execute([$u['id'], $u['username'], $new_sa_id,
+                                "Super Admin \"{$u['username']}\" invited new Super Admin \"{$sa_username}\" ({$sa_email}). Invitation email sent.",
+                                $_SERVER['REMOTE_ADDR'] ?? '::1']);
+                    } catch (PDOException $e) {}
+
+                    // Send invitation email with setup link
+                    require_once __DIR__ . '/mailer.php';
+                    $sent = sendSuperAdminInvitation($sa_email, $sa_fullname, $sa_username, $sa_token);
+
+                    if ($sent) {
+                        $success_msg = "✅ Invitation sent to <strong>{$sa_email}</strong>! They will receive an email to set up their password.";
+                    } else {
+                        $success_msg = "⚠️ Super Admin account created but email failed to send. Setup link: <code>" . APP_URL . "/sa_setup_password.php?token={$sa_token}</code>";
+                    }
+
+                } catch (PDOException $e) {
+                    $pdo->rollBack();
+                    $error_msg = 'Database error: ' . $e->getMessage();
+                }
             }
         }
         $active_page = 'settings';
@@ -1913,9 +1946,12 @@ function updatePlanCard(selected){
       <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#92400e;margin-bottom:16px;line-height:1.7;">
         ⚠️ <strong>Warning:</strong> Super Admins have unrestricted access to all tenants, data, and system settings. Only add someone you fully trust.
       </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#1d4ed8;margin-bottom:16px;line-height:1.7;">
+        📧 An invitation email will be sent to the new Super Admin with a link to <strong>set up their own password</strong>. The link expires in <strong>24 hours</strong>.
+      </div>
       <form method="POST" action="?page=settings">
         <input type="hidden" name="action" value="add_super_admin">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
           <div style="grid-column:1/-1;">
             <label class="flabel">Full Name *</label>
             <input type="text" name="sa_fullname" class="finput" placeholder="e.g. Maria Santos" required>
@@ -1928,29 +1964,11 @@ function updatePlanCard(selected){
             <label class="flabel">Email *</label>
             <input type="email" name="sa_email" class="finput" placeholder="e.g. maria@email.com" required>
           </div>
-          <div>
-            <label class="flabel">Password * <span style="color:#94a3b8;font-size:.65rem;">(min. 8 chars)</span></label>
-            <div style="position:relative;">
-              <input type="password" name="sa_password" id="sa-pw" class="finput" placeholder="••••••••" required autocomplete="new-password" style="padding-right:42px;">
-              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-              </button>
-            </div>
-          </div>
-          <div>
-            <label class="flabel">Confirm Password *</label>
-            <div style="position:relative;">
-              <input type="password" name="sa_confirm" id="sa-pw2" class="finput" placeholder="••••••••" required style="padding-right:42px;">
-              <button type="button" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#94a3b8;display:flex;align-items:center;padding:0;" onclick="const f=document.getElementById('sa-pw2');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
-                <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">visibility</span>
-              </button>
-            </div>
-          </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addSuperAdminModal').classList.remove('open')">Cancel</button>
           <button type="submit" class="btn-sm btn-primary" style="background:linear-gradient(135deg,#4338ca,#7c3aed);border-color:#7c3aed;">
-            🛡️ Create Super Admin
+            📧 Send Invitation
           </button>
         </div>
       </form>

@@ -23,6 +23,7 @@ if (!file_exists($_autoload)) {
         function sendSubscriptionExpired(): bool  { return false; }
         function sendSubscriptionRenewed(): bool  { return false; }
         function sendRenewalRequestReceived(): bool { return false; }
+        function sendSuperAdminAccountReady(): bool { return false; }
     }
     return;
 }
@@ -761,6 +762,75 @@ function sendSuperAdminInvitation(string $toEmail, string $toName, string $usern
     return sendMail($toEmail, $toName, '🛡️ PawnHub — You\'re Invited as Super Admin', $html);
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN ACCOUNT READY — sent after new SA sets their password
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sendSuperAdminAccountReady(string $toEmail, string $toName, string $username): bool
+{
+    $loginLink = APP_URL . '/login.php';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Super Admin Portal</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px;">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2rem;margin:0 0 6px;">🛡️✅</p>
+          <p style="color:#15803d;font-size:1.1rem;font-weight:800;margin:0 0 4px;">Your Account is Ready!</p>
+          <p style="color:#16a34a;font-size:.84rem;margin:0;">Super Admin access activated</p>
+        </div>
+
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
+          Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
+          Your <strong>PawnHub Super Admin</strong> account has been successfully activated.<br>
+          Your username is: <strong style="font-family:monospace;color:#1e3a8a;">' . htmlspecialchars($username) . '</strong><br><br>
+          You can now log in to the Super Admin portal anytime using the button below.
+        </p>
+
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 8px;">Your Login Details</p>
+          <p style="font-size:.88rem;color:#0f172a;margin:0 0 4px;">👤 Username: <strong style="font-family:monospace;">' . htmlspecialchars($username) . '</strong></p>
+          <p style="font-size:.88rem;color:#0f172a;margin:0;">🌐 Portal: <a href="' . $loginLink . '" style="color:#2563eb;">' . $loginLink . '</a></p>
+        </div>
+
+        <div style="text-align:center;margin:28px 0;">
+          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(109,40,217,.35);">
+            Go to Super Admin Login →
+          </a>
+        </div>
+
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+          <p style="color:#92400e;font-size:.82rem;margin:0;line-height:1.6;">
+            🔒 <strong>Keep your credentials safe.</strong><br>
+            Never share your password with anyone. If you suspect unauthorized access, contact the system administrator immediately.
+          </p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, '🛡️ PawnHub — Your Super Admin Account is Ready', $html);
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // SUPER ADMIN PASSWORD RESET — sent when SA requests forgot password
 // ─────────────────────────────────────────────────────────────────────────────
