@@ -67,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error_msg = 'Password must be at least 8 characters.';
     } elseif ($password !== $confirm) {
         $error_msg = 'Passwords do not match.';
-    } elseif (!preg_match('/^[a-zA-Z0-9_]{3,30}$/', $username)) {
-        $error_msg = 'Username must be 3–30 characters (letters, numbers, underscore only).';
+    } elseif (!preg_match('/^[a-zA-Z0-9_]{1,30}@[a-zA-Z0-9_\-]+\.com$/', $username)) {
+        $error_msg = 'Username must be in the format: yourname@' . $slug . '.com';
     } else {
         // Check uniqueness
         $chk = $pdo->prepare("SELECT id FROM users WHERE (email=? OR username=?) AND tenant_id=? LIMIT 1");
@@ -738,13 +738,19 @@ function validateForm() {
 (function() {
   const slugSuffix = '@<?= addslashes($slug) ?>.com';
   const usernameInput = document.getElementById('username');
-  if (!usernameInput || usernameInput.value) return;
+  if (!usernameInput) return;
 
-  // When fullname is filled, auto-suggest a username
+  // If field already has a value (POST re-render), ensure suffix is present
+  if (usernameInput.value && !usernameInput.value.endsWith(slugSuffix)) {
+    const base = usernameInput.value.replace(/@[^@]*$/, '');
+    usernameInput.value = base + slugSuffix;
+  }
+
+  // When fullname is filled, auto-suggest a username (only if field is empty)
   const fullnameInput = document.getElementById('fullname');
   if (fullnameInput) {
     fullnameInput.addEventListener('blur', function () {
-      if (!usernameInput.value) {
+      if (!usernameInput.value || usernameInput.value === slugSuffix) {
         const base = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
         if (base) usernameInput.value = base + slugSuffix;
       }
@@ -764,8 +770,12 @@ function validateForm() {
     if (this.selectionStart > prot && (e.key === 'Backspace' || e.key === 'Delete')) e.preventDefault();
   });
   usernameInput.addEventListener('focus', function () {
-    if (!this.value) this.value = slugSuffix;
-    // Place cursor before the @slug.com suffix so user types in the right spot
+    if (!this.value || this.value === slugSuffix) {
+      this.value = slugSuffix;
+      this.setSelectionRange(0, 0);
+      return;
+    }
+    // Place cursor before the suffix so user types in the right spot
     const pos = this.value.length - slugSuffix.length;
     this.setSelectionRange(pos, pos);
   });
