@@ -80,7 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!move_uploaded_file($file_tmp, $upload_path)) {
                     $error = 'Failed to upload file. Please try again.';
                 } else {
-                    $payment_status = $needs_payment ? 'pending' : 'unpaid';
+                    // 'unpaid' for all new registrations — webhook sets 'paid' after PayMongo confirms
+                    // ⚠️ 'pending' is NOT a valid ENUM in tenants.payment_status
+                    $payment_status = 'unpaid';
                     $pdo->beginTransaction();
                     try {
                         $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
@@ -279,15 +281,25 @@ select.glass-input option {
     <h2 class="text-2xl font-extrabold text-white mb-3">Application Submitted! 🎉</h2>
     <p class="text-white/60 text-sm leading-relaxed mb-6">
       Your pawnshop registration has been submitted successfully.<br><br>
-      Our Super Admin will review your <strong style="color:#86efac;">Business Permit</strong> and <strong style="color:#86efac;">Payment Details</strong>.<br>
-      Once approved, you can login using your username and password.
+      <?php if ($plan === 'Starter'): ?>
+        Our Super Admin will review your <strong style="color:#86efac;">Business Permit</strong>.<br>
+        Once approved, you will receive an <strong style="color:#86efac;">email with your login link</strong>.
+      <?php else: ?>
+        Our Super Admin will review your <strong style="color:#86efac;">Business Permit</strong> and <strong style="color:#86efac;">Payment</strong>.<br>
+        Once approved, you will receive an <strong style="color:#86efac;">email with your login link</strong>.
+      <?php endif; ?>
     </p>
+    <?php if ($plan === 'Starter'): ?>
     <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;font-size:0.8rem;color:#86efac;margin-bottom:24px;">
-      📋 The Super Admin will verify your submitted documents before activating your account.
+      📋 The Super Admin will verify your Business Permit before activating your account.<br>
+      <strong>Check your email</strong> — your login link will be sent once approved.
     </div>
-    <a href="login.php" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;padding:13px 32px;border-radius:12px;font-size:0.92rem;font-weight:700;transition:all 0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
-      Go to Login →
-    </a>
+    <?php else: ?>
+    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 16px;font-size:0.8rem;color:#86efac;margin-bottom:24px;">
+      📋 The Super Admin will verify your Business Permit and Payment before activating your account.<br>
+      <strong>Check your email</strong> — your login link will be sent once approved.
+    </div>
+    <?php endif; ?>
   </div>
 
   <?php else: ?>
