@@ -93,6 +93,22 @@ try {
     $cnt2 = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored'");
     $cnt2->execute([$tid]); $active_pawns = (int)$cnt2->fetchColumn();
 } catch (Throwable $e) { $total_customers = 0; $active_pawns = 0; }
+
+// Promos & Announcements
+$promos = [];
+try {
+    $promo_stmt = $pdo->prepare("
+        SELECT * FROM tenant_promos
+        WHERE tenant_id = ?
+          AND is_active = 1
+          AND (start_date IS NULL OR start_date <= NOW())
+          AND (end_date IS NULL OR end_date >= NOW())
+        ORDER BY is_pinned DESC, created_at DESC
+        LIMIT 12
+    ");
+    $promo_stmt->execute([$tid]);
+    $promos = $promo_stmt->fetchAll();
+} catch (Throwable $e) { $promos = []; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -706,6 +722,9 @@ footer {
     <?php if($total_items > 0): ?>
     <a href="#shop" class="nav-link">Shop</a>
     <?php endif; ?>
+    <?php if(!empty($promos)): ?>
+    <a href="#promos" class="nav-link">Promos</a>
+    <?php endif; ?>
     <?php if($biz_addr || $biz_phone): ?>
     <a href="#info" class="nav-link">About</a>
     <?php endif; ?>
@@ -781,6 +800,85 @@ footer {
     </div>
   </div>
 </section>
+
+<?php if(!empty($promos)): ?>
+<!-- PROMOS & ANNOUNCEMENTS -->
+<section id="promos" style="padding-top:0;">
+  <div class="section-hdr">
+    <div>
+      <div class="section-label">📢 News</div>
+      <h2 class="section-title">Promos &amp; Announcements</h2>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:16px;">
+    <?php foreach($promos as $promo):
+      $type_color = match($promo['type'] ?? 'announcement') {
+        'promo'       => 'var(--primary)',
+        'sale'        => '#f59e0b',
+        'warning'     => '#ef4444',
+        default       => 'var(--accent)',
+      };
+      $type_icon = match($promo['type'] ?? 'announcement') {
+        'promo'       => 'local_offer',
+        'sale'        => 'sell',
+        'warning'     => 'warning',
+        default       => 'campaign',
+      };
+      $type_label = match($promo['type'] ?? 'announcement') {
+        'promo'   => 'Promo',
+        'sale'    => 'Sale',
+        'warning' => 'Notice',
+        default   => 'Announcement',
+      };
+    ?>
+    <div style="
+      background:var(--surface);border:1px solid var(--border);border-radius:18px;
+      overflow:hidden;display:flex;flex-direction:column;
+      <?= !empty($promo['is_pinned']) ? 'border-color:color-mix(in srgb,'.htmlspecialchars($type_color).' 40%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,'.htmlspecialchars($type_color).' 15%,transparent);' : '' ?>
+    ">
+      <?php if(!empty($promo['image_url'])): ?>
+      <div style="height:160px;overflow:hidden;">
+        <img src="<?= htmlspecialchars($promo['image_url']) ?>" alt="" style="width:100%;height:100%;object-fit:cover;">
+      </div>
+      <?php endif; ?>
+      <div style="padding:18px 20px;flex:1;display:flex;flex-direction:column;gap:10px;">
+        <!-- Type badge + pinned -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 10px;border-radius:100px;background:color-mix(in srgb,<?= htmlspecialchars($type_color) ?> 15%,transparent);color:<?= htmlspecialchars($type_color) ?>;border:1px solid color-mix(in srgb,<?= htmlspecialchars($type_color) ?> 30%,transparent);">
+            <span class="material-symbols-outlined" style="font-size:12px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $type_icon ?></span>
+            <?= $type_label ?>
+          </span>
+          <?php if(!empty($promo['is_pinned'])): ?>
+          <span style="font-size:.62rem;font-weight:700;color:var(--text-dim);display:flex;align-items:center;gap:4px;">
+            <span class="material-symbols-outlined" style="font-size:12px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">push_pin</span>Pinned
+          </span>
+          <?php endif; ?>
+        </div>
+        <!-- Title -->
+        <div style="font-size:1rem;font-weight:700;color:#fff;line-height:1.3;"><?= htmlspecialchars($promo['title']) ?></div>
+        <!-- Body -->
+        <?php if(!empty($promo['body'])): ?>
+        <div style="font-size:.84rem;color:var(--text-m);line-height:1.65;flex:1;"><?= nl2br(htmlspecialchars($promo['body'])) ?></div>
+        <?php endif; ?>
+        <!-- Date range -->
+        <?php if(!empty($promo['start_date']) || !empty($promo['end_date'])): ?>
+        <div style="font-size:.72rem;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:4px;">
+          <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">event</span>
+          <?php
+            $from = !empty($promo['start_date']) ? date('M d, Y', strtotime($promo['start_date'])) : null;
+            $to   = !empty($promo['end_date'])   ? date('M d, Y', strtotime($promo['end_date'])) : null;
+            if ($from && $to) echo "Valid: {$from} – {$to}";
+            elseif ($from)    echo "Starts: {$from}";
+            elseif ($to)      echo "Until: {$to}";
+          ?>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 
 <?php if(!empty($featured)): ?>
 <!-- FEATURED -->

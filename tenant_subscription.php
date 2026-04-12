@@ -119,6 +119,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
     }
 }
 
+// ── POST: Submit UPGRADE request ─────────────────────────────
+// Logic: tenant wants to move from current plan → a higher plan.
+// We calculate proration credit = unused days × daily rate of current plan,
+// then subtract from the new plan's first month cost. Admin approves & applies it.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_upgrade') {
+    if ($pending_renewal) {
+        $error_msg = 'You already have a pending renewal/upgrade request. Please wait for admin approval.';
+    } else {
+        $upgrade_to     = trim($_POST['upgrade_to']     ?? '');
+        $billing_cycle  = in_array($_POST['billing_cycle'] ?? '', ['monthly','quarterly','annually'])
+                          ? $_POST['billing_cycle'] : 'monthly';
+        $payment_method = trim($_POST['payment_method']    ?? '');
+        $payment_ref    = trim($_POST['payment_reference'] ?? '');
+        $notes          = trim($_POST['notes']             ?? '');
+
+        $plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
+        $billing_amounts = [
+            'Starter'    => ['monthly' => 0,    'quarterly' => 0,    'annually' => 0],
+            'Pro'        => ['monthly' => 999,  'quarterly' => 2697, 'annually' => 9588],
+            'Enterprise' => ['monthly' => 2499, 'quarterly' => 6747, 'annually' => 23988],
+        ];
+
+        $valid_targets = ['Pro', 'Enterprise'];
+        $is_valid_upgrade = isset($plan_hierarchy[$upgrade_to])
+            && isset($plan_hierarchy[$plan])
+            && $plan_hierarchy[$upgrade_to] > $plan_hierarchy[$plan];
+
+        if (!in_array($upgrade_to, $valid_targets) || !$is_valid_upgrade) {
+            $error_msg = 'Invalid upgrade target. You can only upgrade to a higher plan.';
+        } elseif (!$payment_method) {
+            $error_msg = 'Please select a payment method.';
+        } else {
+            // ── Proration: credit for unused days on current paid plan ──
+            $proration_credit = 0;
+            $proration_note   = '';
+            if ($sub_end && $days_left > 0 && $is_paid_plan) {
+                // Determine current plan's monthly rate to calculate daily rate
+                $current_monthly = $billing_amounts[$plan]['monthly'] ?? 0;
+                $daily_rate      = $current_monthly / 30;
+                $proration_credit = round($daily_rate * $days_left, 2);
+                $proration_note  = "Proration credit of ₱{$proration_credit} applied "
+                    . "({$days_left} unused days × ₱" . number_format($daily_rate, 2) . "/day on {$plan} plan).";
+            }
+
+            $new_price   = $billing_amounts[$upgrade_to][$billing_cycle] ?? 0;
+            $amount_due  = max(0, $new_price - $proration_credit);
+
+            $upgrade_notes = "PLAN UPGRADE: {$plan} → {$upgrade_to} ({$billing_cycle})."
+                . ($proration_note ? " {$proration_note}" : '')
+                . ($notes ? " Notes: {$notes}" : '');
+
+            try {
+                $pdo->prepare("
+                    INSERT INTO subscription_renewals
+                        (tenant_id, plan, billing_cycle, amount, payment_method, payment_reference,
+                         notes, status, requested_at, is_upgrade, upgrade_from, upgrade_to, proration_credit)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(),
+                        1, ?, ?, ?)
+                ")->execute([
+                    $tid, $upgrade_to, $billing_cycle, $amount_due,
+                    $payment_method, $payment_ref, $upgrade_notes,
+                    $plan, $upgrade_to, $proration_credit
+                ]);
+
+                try {
+                    $pdo->prepare("
+                        INSERT INTO audit_logs
+                            (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                        VALUES (?,?,?,?,'PLAN_UPGRADE_REQUEST','subscription',?,?,?,NOW())
+                    ")->execute([
+                        $tid, $u['id'], $u['username'], $u['role'], $tid,
+                        "Upgrade request submitted: {$plan} → {$upgrade_to} ({$billing_cycle}). Amount due: ₱{$amount_due}. {$proration_note}",
+                        $_SERVER['REMOTE_ADDR'] ?? '::1'
+                    ]);
+                } catch (Throwable $e) {}
+
+                $success_msg = "✅ Upgrade request submitted! Admin will review and activate your {$upgrade_to} plan within 24 hours.";
+
+                // Reload pending renewal
+                $pending_renewal_stmt->execute([$tid]);
+                $pending_renewal = $pending_renewal_stmt->fetch();
+
+            } catch (PDOException $e) {
+                // Fallback: column may not exist yet — retry without new columns
+                try {
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, amount, payment_method, payment_reference, notes, status, requested_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+                    ")->execute([
+                        $tid, $upgrade_to, $billing_cycle, $amount_due,
+                        $payment_method, $payment_ref, $upgrade_notes
+                    ]);
+                    $success_msg = "✅ Upgrade request submitted! Admin will review and activate your {$upgrade_to} plan within 24 hours.";
+                    $pending_renewal_stmt->execute([$tid]);
+                    $pending_renewal = $pending_renewal_stmt->fetch();
+                } catch (PDOException $e2) {
+                    $error_msg = 'Database error: ' . $e2->getMessage();
+                }
+            }
+        }
+    }
+}
+
 // ── Status badge ──────────────────────────────────────────────
 $status_map = [
     'active'        => ['Active',        '#15803d', '#f0fdf4', '#bbf7d0'],
@@ -135,6 +239,18 @@ $plan_prices_js = [
     'Enterprise' => ['monthly' => 2499, 'quarterly' => 6747, 'annually' => 23988],
 ];
 $is_paid_plan = in_array($plan, ['Pro', 'Enterprise']);
+
+// ── Upgrade options — plans higher than current ───────────────
+$plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
+$current_rank   = $plan_hierarchy[$plan] ?? 0;
+$upgrade_targets = array_filter(['Pro', 'Enterprise'], fn($p) => ($plan_hierarchy[$p] ?? 0) > $current_rank);
+
+// Proration preview: credit for unused days on current paid billing
+$proration_preview = 0;
+if ($sub_end && $days_left > 0 && $is_paid_plan) {
+    $current_monthly     = $plan_prices_js[$plan]['monthly'] ?? 0;
+    $proration_preview   = round(($current_monthly / 30) * $days_left, 2);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -477,32 +593,185 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
     </div>
     <?php endif; ?>
 
+    <!-- ── Upgrade Plan ───────────────────────────────────────── -->
+    <?php if (!empty($upgrade_targets) && !$pending_renewal): ?>
+    <div class="card" style="border-color:rgba(139,92,246,.25);background:rgba(139,92,246,.05);">
+      <div class="card-label" style="color:rgba(196,181,253,.8);">
+        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">rocket_launch</span>
+        Upgrade Your Plan
+      </div>
+
+      <!-- Plan comparison cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
+        <?php
+        $plan_details = [
+          'Pro' => [
+            'price_monthly' => 999,
+            'color'  => '#3b82f6',
+            'icon'   => 'workspace_premium',
+            'perks'  => ['Theme & Branding','Manager Invitations','Audit Logs','Advanced Reports','Priority Support'],
+          ],
+          'Enterprise' => [
+            'price_monthly' => 2499,
+            'color'  => '#a78bfa',
+            'icon'   => 'diamond',
+            'perks'  => ['Everything in Pro','Data Export (PDF/Excel)','White Label Branding','Dedicated Account Manager','Custom Integrations'],
+          ],
+        ];
+        foreach ($upgrade_targets as $target):
+          $pd = $plan_details[$target];
+        ?>
+        <div style="background:rgba(255,255,255,.04);border:1.5px solid color-mix(in srgb,<?= $pd['color'] ?> 35%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;opacity:.06;">
+            <span class="material-symbols-outlined" style="font-size:100px;color:<?= $pd['color'] ?>"><?= $pd['icon'] ?></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:<?= $pd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $pd['icon'] ?></span>
+            <span style="font-size:.9rem;font-weight:800;color:#fff;"><?= $target ?></span>
+          </div>
+          <div style="margin-bottom:12px;">
+            <span style="font-size:1.4rem;font-weight:800;color:#fff;">₱<?= number_format($pd['price_monthly']) ?></span>
+            <span style="font-size:.72rem;color:rgba(255,255,255,.4);">/month</span>
+          </div>
+          <?php foreach ($pd['perks'] as $perk): ?>
+          <div style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:rgba(255,255,255,.6);margin-bottom:5px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:<?= $pd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">check_circle</span>
+            <?= htmlspecialchars($perk) ?>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <?php if ($proration_preview > 0): ?>
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        💡 <strong>Proration Credit:</strong> You have <strong><?= $days_left ?> days remaining</strong> on your <?= htmlspecialchars($plan) ?> plan.
+        We'll apply a credit of <strong>₱<?= number_format($proration_preview, 2) ?></strong> toward your upgrade — so you only pay the difference!
+      </div>
+      <?php endif; ?>
+
+      <form method="POST" id="upgradeForm">
+        <input type="hidden" name="action" value="request_upgrade"/>
+
+        <div class="form-grid" style="margin-bottom:14px;">
+          <div>
+            <label class="flabel">Upgrade To</label>
+            <select name="upgrade_to" id="upgrade_to" class="fselect" onchange="updateUpgradeAmount()" required>
+              <option value="">— Select Target Plan —</option>
+              <?php foreach ($upgrade_targets as $target): ?>
+              <option value="<?= htmlspecialchars($target) ?>"><?= htmlspecialchars($target) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label class="flabel">Billing Cycle</label>
+            <select name="billing_cycle" id="upgrade_billing_cycle" class="fselect" onchange="updateUpgradeAmount()">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly (save ~10%)</option>
+              <option value="annually">Annually (save ~20%)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Amount Due Preview -->
+        <div id="upgrade-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
+            <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
+            <div style="color:#fff;font-weight:700;text-align:right;" id="upg-new-price">—</div>
+            <?php if ($proration_preview > 0): ?>
+            <div style="color:rgba(255,255,255,.45);">Proration Credit:</div>
+            <div style="color:#6ee7b7;font-weight:700;text-align:right;" id="upg-credit">− ₱<?= number_format($proration_preview, 2) ?></div>
+            <?php endif; ?>
+            <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
+            <div style="font-size:1.05rem;font-weight:800;color:#a78bfa;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="upg-total">—</div>
+          </div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:10px;line-height:1.5;">
+            * Admin will verify payment and switch your plan within 24 hours. Your new plan starts immediately upon approval.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="flabel">Payment Method</label>
+          <select name="payment_method" class="fselect" required>
+            <option value="">— Select Payment Method —</option>
+            <option value="GCash">GCash</option>
+            <option value="Maya">Maya (PayMaya)</option>
+            <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
+            <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
+            <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
+            <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
+            <option value="Cash">Cash (walk-in)</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+          <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+        </div>
+
+        <div class="form-group">
+          <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+          <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);width:100%;justify-content:center;font-size:.92rem;padding:14px;">
+          <span class="material-symbols-outlined" style="font-size:17px;">rocket_launch</span>
+          Submit Upgrade Request
+        </button>
+      </form>
+    </div>
+    <?php elseif ($plan === 'Enterprise'): ?>
+    <div class="card" style="text-align:center;padding:28px;">
+      <span class="material-symbols-outlined" style="font-size:40px;color:#a78bfa;display:block;margin-bottom:10px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">diamond</span>
+      <div style="font-size:.9rem;font-weight:700;color:#fff;margin-bottom:4px;">You're on the Enterprise Plan</div>
+      <div style="font-size:.78rem;color:rgba(255,255,255,.4);">You already have access to all features. No upgrades available.</div>
+    </div>
+    <?php endif; ?>
+
     <!-- ── Renewal History ─────────────────────────────────── -->
     <?php if (!empty($renewal_history)): ?>
     <div class="card">
-      <div class="card-label">Renewal History</div>
+      <div class="card-label">Renewal &amp; Upgrade History</div>
       <div style="overflow-x:auto;">
         <table class="history-table">
           <thead>
-            <tr><th>Date</th><th>Plan</th><th>Billing</th><th>Method</th><th>Amount</th><th>Status</th><th>New Expiry</th></tr>
+            <tr><th>Date</th><th>Type</th><th>Plan</th><th>Billing</th><th>Method</th><th>Amount</th><th>Status</th><th>New Expiry</th></tr>
           </thead>
           <tbody>
             <?php foreach ($renewal_history as $r):
               $rc_color = match($r['status']) { 'approved' => '#15803d', 'rejected' => '#dc2626', default => '#d97706' };
               $rc_bg    = match($r['status']) { 'approved' => '#f0fdf4', 'rejected' => '#fef2f2', default => '#fffbeb' };
-              $is_pm = str_starts_with($r['payment_method'] ?? '', 'PayMongo');
+              $is_pm    = str_starts_with($r['payment_method'] ?? '', 'PayMongo');
+              $is_upg   = !empty($r['is_upgrade']);
             ?>
             <tr>
               <td style="font-size:.76rem;color:rgba(255,255,255,.4);"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
-              <td><?= htmlspecialchars($r['plan']) ?></td>
+              <td>
+                <?php if ($is_upg): ?>
+                <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(139,92,246,.2);color:#c4b5fd;">Upgrade</span>
+                <?php else: ?>
+                <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(59,130,246,.15);color:#93c5fd;">Renewal</span>
+                <?php endif; ?>
+              </td>
+              <td>
+                <?= htmlspecialchars($r['plan']) ?>
+                <?php if ($is_upg && !empty($r['upgrade_from'])): ?>
+                <span style="font-size:.65rem;color:rgba(255,255,255,.3);"> (from <?= htmlspecialchars($r['upgrade_from']) ?>)</span>
+                <?php endif; ?>
+              </td>
               <td><?= ucfirst($r['billing_cycle']) ?></td>
               <td>
                 <?= htmlspecialchars($r['payment_method'] ?: '—') ?>
-                <?php if ($is_pm): ?>
-                <span class="paymongo-badge" style="margin-left:4px;font-size:.65rem;">⚡ PM</span>
+                <?php if ($is_pm): ?><span class="paymongo-badge" style="margin-left:4px;font-size:.65rem;">⚡ PM</span><?php endif; ?>
+              </td>
+              <td>
+                ₱<?= number_format($r['amount'], 2) ?>
+                <?php if (!empty($r['proration_credit']) && $r['proration_credit'] > 0): ?>
+                <div style="font-size:.65rem;color:#6ee7b7;">Credit: ₱<?= number_format($r['proration_credit'], 2) ?></div>
                 <?php endif; ?>
               </td>
-              <td>₱<?= number_format($r['amount'], 2) ?></td>
               <td><span class="badge" style="color:<?= $rc_color ?>;background:<?= $rc_bg ?>;"><?= ucfirst($r['status']) ?></span></td>
               <td style="font-size:.76rem;color:rgba(255,255,255,.5);"><?= $r['new_subscription_end'] ? date('M d, Y', strtotime($r['new_subscription_end'])) : '—' ?></td>
             </tr>
@@ -524,6 +793,11 @@ const prices = {
   Enterprise: { monthly: 2499, quarterly: 6747, annually: 23988 },
 };
 const plan = '<?= addslashes($plan) ?>';
+const prorationCredit = <?= json_encode($proration_preview) ?>;
+
+function fmt(n) {
+  return '₱' + parseFloat(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+}
 
 function updateAmount(cycle) {
   const amt = prices[plan]?.[cycle] ?? 0;
@@ -536,7 +810,6 @@ function updateAmount(cycle) {
 }
 
 function syncBillingCycle(val) {
-  // Sync hidden inputs in both forms
   const pm = document.getElementById('pm_billing_cycle');
   const mn = document.getElementById('manual_billing_cycle');
   if (pm) pm.value = val;
@@ -551,8 +824,31 @@ function switchTab(tab) {
   event.currentTarget.classList.add('active');
 }
 
+// ── Upgrade amount calculator ─────────────────────────────────
+function updateUpgradeAmount() {
+  const targetPlan  = document.getElementById('upgrade_to')?.value;
+  const cycle       = document.getElementById('upgrade_billing_cycle')?.value || 'monthly';
+  const box         = document.getElementById('upgrade-amount-box');
+  const newPriceEl  = document.getElementById('upg-new-price');
+  const creditEl    = document.getElementById('upg-credit');
+  const totalEl     = document.getElementById('upg-total');
+
+  if (!targetPlan || !box) return;
+
+  const newPrice = prices[targetPlan]?.[cycle] ?? 0;
+  const credit   = prorationCredit || 0;
+  const amtDue   = Math.max(0, newPrice - credit);
+
+  if (newPriceEl) newPriceEl.textContent = fmt(newPrice);
+  if (creditEl)   creditEl.textContent   = '− ' + fmt(credit);
+  if (totalEl)    totalEl.textContent    = fmt(amtDue);
+
+  box.style.display = targetPlan ? 'block' : 'none';
+}
+
 // Init
 updateAmount('monthly');
+updateUpgradeAmount();
 </script>
 </body>
 </html>

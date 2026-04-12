@@ -91,15 +91,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $inv && !$error) {
 }
 
 if ($success) {
-    // Get tenant slug to build branded login page URL
+    // After setup, redirect tenant owner to their public HOME page (not login).
+    // The home page is a friendlier landing — they can sign in from there.
     $slug_stmt = $pdo->prepare("SELECT slug FROM tenants WHERE id = ? LIMIT 1");
     $slug_stmt->execute([$inv['tenant_id']]);
     $slug_row    = $slug_stmt->fetch();
     $tenant_slug = $slug_row['slug'] ?? '';
     $login_url   = !empty($tenant_slug)
-        ? '/' . urlencode($tenant_slug) . '?login=1&registered=1'
-        : 'login.php';
-    // Redirect to tenant login page after 4 seconds
+        ? '/' . urlencode($tenant_slug)   // ← home page, not /?login=1
+        : 'home.php';
+    // Redirect to tenant home page after 4 seconds
     header('refresh:4;url=' . $login_url);
 }
 ?>
@@ -223,8 +224,8 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
         You can now sign in using the username and password you just created.
       </p>
       <div class="state-redirect">
-        ⏳ Redirecting to your login page in 4 seconds...<br>
-        <a href="<?= htmlspecialchars($login_url) ?>">Go to Login Page →</a>
+        ⏳ Redirecting to your shop home page in 4 seconds...<br>
+        <a href="<?= htmlspecialchars($login_url) ?>">Go to Your Shop →</a>
       </div>
     </div>
   </div>
@@ -343,6 +344,44 @@ function togglePw(id, btn) {
   f.type = show ? 'text' : 'password';
   btn.textContent = show ? 'visibility_off' : 'visibility';
 }
+
+// ── Auto-suggest username with @slug suffix ───────────────────
+(function() {
+  const slugSuffix = '@<?= addslashes($inv['slug'] ?? '') ?>';
+  const usernameInput = document.querySelector('input[name="username"]');
+  if (!usernameInput || usernameInput.value) return; // skip if already filled (POST error)
+
+  // Pre-fill with owner name + slug suffix on page load
+  const ownerName = '<?= addslashes(strtolower(preg_replace('/\s+/', '', $inv['owner_name'] ?? ''))) ?>';
+  if (ownerName) {
+    usernameInput.value = ownerName + slugSuffix;
+  }
+
+  // When user types, ensure @slug suffix stays
+  usernameInput.addEventListener('input', function () {
+    const val = this.value;
+    if (!val.endsWith(slugSuffix)) {
+      // Strip any existing @... suffix and re-add
+      const base = val.replace(/@[^@]*$/, '');
+      this.value = base + slugSuffix;
+      // Move cursor before @slug
+      const pos = base.length;
+      this.setSelectionRange(pos, pos);
+    }
+  });
+
+  // Prevent user from deleting the suffix
+  usernameInput.addEventListener('keydown', function (e) {
+    const val = this.value;
+    const cursorPos = this.selectionStart;
+    const protectedStart = val.length - slugSuffix.length;
+    if (cursorPos > protectedStart) {
+      if (['Backspace','Delete','ArrowLeft'].includes(e.key) && e.key !== 'ArrowLeft') {
+        e.preventDefault();
+      }
+    }
+  });
+})();
 </script>
 </body>
 </html>

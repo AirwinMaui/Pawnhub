@@ -578,7 +578,7 @@ nav {
             <input type="text" id="username" name="username" class="finput mono" placeholder="juandelacruz"
               pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters/numbers/underscore only"
               required value="<?= htmlspecialchars($_POST['username']??'') ?>">
-            <span style="font-size:.69rem;color:var(--text-dim);margin-top:4px;">Letters, numbers, underscore only. 3–30 characters.</span>
+            <span style="font-size:.69rem;color:var(--text-dim);margin-top:4px;">Your username will be in the format <strong style="color:var(--text-m);">yourname@<?= htmlspecialchars($slug) ?></strong></span>
           </div>
           <div class="fg">
             <label class="flabel" for="password">Password <span>*</span></label>
@@ -733,6 +733,41 @@ function validateForm() {
   document.getElementById('submitBtn').innerHTML = '<span class="ms">hourglass_top</span> Submitting...';
   return true;
 }
+
+// ── Auto-suggest username with @slug suffix ───────────────────
+(function() {
+  const slugSuffix = '@<?= addslashes($slug) ?>';
+  const usernameInput = document.getElementById('username');
+  if (!usernameInput || usernameInput.value) return;
+
+  // When fullname is filled, auto-suggest a username
+  const fullnameInput = document.getElementById('fullname');
+  if (fullnameInput) {
+    fullnameInput.addEventListener('blur', function () {
+      if (!usernameInput.value) {
+        const base = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+        if (base) usernameInput.value = base + slugSuffix;
+      }
+    });
+  }
+
+  usernameInput.addEventListener('input', function () {
+    const val = this.value;
+    if (!val.endsWith(slugSuffix)) {
+      const base = val.replace(/@[^@]*$/, '');
+      this.value = base + slugSuffix;
+      this.setSelectionRange(base.length, base.length);
+    }
+  });
+  usernameInput.addEventListener('keydown', function (e) {
+    const prot = this.value.length - slugSuffix.length;
+    if (this.selectionStart > prot && (e.key === 'Backspace' || e.key === 'Delete')) e.preventDefault();
+  });
+  usernameInput.addEventListener('focus', function () {
+    if (!this.value) this.value = slugSuffix;
+    this.setSelectionRange(0, 0);
+  });
+})();
 </script>
 </body>
 </html>

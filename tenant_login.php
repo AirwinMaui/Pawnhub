@@ -118,8 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,'admin','TENANT_ADMIN_REGISTER','user',?,?,?,NOW())")
                     ->execute([$tenant['id'], $new_uid, $username, (string)$new_uid, $reg_msg, $_SERVER['REMOTE_ADDR'] ?? '::1']);
             } catch (Throwable $e) {}
-            // Redirect to tenant login page with success message — do NOT auto-login
-            $login_url = '/' . urlencode($slug) . '?login=1&registered=1';
+            // Redirect to tenant HOME page (public shop) after registration — friendlier landing
+            $login_url = '/' . urlencode($slug);
             header('Location: ' . $login_url);
             exit;
         }
@@ -479,6 +479,33 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
   <span class="bdot"></span>
   <span class="btxt">System Online</span>
 </div>
+
+<?php if ($mode === 'register' && $inv): ?>
+<script>
+// ── Auto-suggest username with @slug suffix ───────────────────
+(function() {
+  const slugSuffix = '@<?= addslashes($slug ?? '') ?>';
+  const usernameInput = document.querySelector('input[name="username"]');
+  if (!usernameInput || usernameInput.value) return;
+
+  const ownerName = '<?= addslashes(strtolower(preg_replace('/\s+/', '', $inv['owner_name'] ?? ''))) ?>';
+  if (ownerName) usernameInput.value = ownerName + slugSuffix;
+
+  usernameInput.addEventListener('input', function () {
+    const val = this.value;
+    if (!val.endsWith(slugSuffix)) {
+      const base = val.replace(/@[^@]*$/, '');
+      this.value = base + slugSuffix;
+      this.setSelectionRange(base.length, base.length);
+    }
+  });
+  usernameInput.addEventListener('keydown', function (e) {
+    const prot = this.value.length - slugSuffix.length;
+    if (this.selectionStart > prot && (e.key === 'Backspace' || e.key === 'Delete')) e.preventDefault();
+  });
+})();
+</script>
+<?php endif; ?>
 
 </body>
 </html>

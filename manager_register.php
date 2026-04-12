@@ -383,6 +383,32 @@ function togglePw(id, btn) {
   f.type = show ? 'text' : 'password';
   btn.textContent = show ? 'visibility_off' : 'visibility';
 }
+
+// ── Auto-suggest username with @slug suffix ───────────────────
+(function() {
+  const slugSuffix = '@<?= addslashes($inv_slug ?? '') ?>';
+  const usernameInput = document.querySelector('input[name="username"]');
+  if (!usernameInput || usernameInput.value) return;
+
+  const ownerName = '<?= addslashes(strtolower(preg_replace('/\s+/', '', $inv_name ?? ''))) ?>';
+  if (ownerName) usernameInput.value = ownerName + slugSuffix;
+
+  usernameInput.addEventListener('input', function () {
+    const val = this.value;
+    if (!val.endsWith(slugSuffix)) {
+      const base = val.replace(/@[^@]*$/, '');
+      this.value = base + slugSuffix;
+      const pos = base.length;
+      this.setSelectionRange(pos, pos);
+    }
+  });
+  usernameInput.addEventListener('keydown', function (e) {
+    const val = this.value;
+    const cur = this.selectionStart;
+    const prot = val.length - slugSuffix.length;
+    if (cur > prot && (e.key === 'Backspace' || e.key === 'Delete')) e.preventDefault();
+  });
+})();
 </script>
 </body>
 </html>
