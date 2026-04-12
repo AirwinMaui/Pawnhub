@@ -118,8 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,'admin','TENANT_ADMIN_REGISTER','user',?,?,?,NOW())")
                     ->execute([$tenant['id'], $new_uid, $username, (string)$new_uid, $reg_msg, $_SERVER['REMOTE_ADDR'] ?? '::1']);
             } catch (Throwable $e) {}
-            // Redirect to tenant HOME page (public shop) after registration — friendlier landing
-            $login_url = '/' . urlencode($slug);
+            // Redirect to tenant LOGIN page after registration — user still needs to sign in
+            // ?registered=1 shows the "Account created successfully!" green banner
+            $login_url = '/' . urlencode($slug) . '?login=1&registered=1';
             header('Location: ' . $login_url);
             exit;
         }
@@ -404,7 +405,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         <?php if (!empty($_GET['registered'])): ?>
         <div style="display:flex;align-items:flex-start;gap:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:11px 14px;font-size:.81rem;color:#15803d;margin-bottom:16px;">
           <span class="material-symbols-outlined" style="font-size:17px;flex-shrink:0;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
-          <div><strong>Account created successfully!</strong> You can now sign in with your new username and password.</div>
+          <div><strong>Account ready!</strong> You can now sign in with your username and password.</div>
         </div>
         <?php endif; ?>
 

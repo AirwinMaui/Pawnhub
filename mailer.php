@@ -122,7 +122,8 @@ function sendTenantInvitation(string $toEmail, string $toName, string $businessN
 
 function sendTenantWelcome(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+    // After setting up password via invitation — send them to login page with success banner
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1&registered=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -170,7 +171,9 @@ function sendTenantWelcome(string $toEmail, string $toName, string $businessName
 
 function sendTenantApproved(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+    // Approved after signup — send them to login page, they already have a password set
+    // ?registered=1 shows the green success banner "Account approved, you can now sign in"
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1&registered=1';
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
