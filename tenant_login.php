@@ -367,11 +367,21 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
           <div>
             <label class="lbl">Password * (min. 8 characters)</label>
             <div class="pw-wrap">
-              <input type="password" name="password" id="pw1" class="inp" placeholder="Create a strong password" required>
+              <input type="password" name="password" id="pw1" class="inp" placeholder="Create a strong password" required oninput="checkStrength(this.value)">
               <button type="button" class="pw-btn"
                 onclick="const f=document.getElementById('pw1');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
                 <span class="material-symbols-outlined">visibility</span>
               </button>
+            </div>
+            <!-- Password Strength Meter -->
+            <div style="margin-top:6px;">
+              <div style="height:5px;background:#e2e2e4;border-radius:99px;overflow:hidden;">
+                <div id="str_bar" style="height:100%;width:0;border-radius:99px;transition:width .3s,background .3s;"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                <span id="str_lbl" style="font-size:.68rem;font-weight:700;color:#aaa;transition:color .3s;"></span>
+                <span style="font-size:.65rem;color:#999;">8+ chars, uppercase, numbers & symbols</span>
+              </div>
             </div>
           </div>
 
@@ -483,9 +493,34 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 
 <?php if ($mode === 'register' && $inv): ?>
 <script>
+function checkStrength(pw) {
+  const bar = document.getElementById('str_bar');
+  const lbl = document.getElementById('str_lbl');
+  if (!bar) return;
+  let score = 0;
+  if (pw.length >= 8)           score++;
+  if (pw.length >= 12)          score++;
+  if (/[A-Z]/.test(pw))         score++;
+  if (/[0-9]/.test(pw))         score++;
+  if (/[^A-Za-z0-9]/.test(pw))  score++;
+  const cfg = [
+    { w: '0%',   c: '#e2e2e4', l: '' },
+    { w: '25%',  c: '#ef4444', l: 'Weak' },
+    { w: '50%',  c: '#f97316', l: 'Fair' },
+    { w: '75%',  c: '#eab308', l: 'Good' },
+    { w: '100%', c: '#22c55e', l: 'Strong' },
+    { w: '100%', c: '#16a34a', l: 'Very Strong' },
+  ];
+  const s = cfg[score] ?? cfg[0];
+  bar.style.width      = s.w;
+  bar.style.background = s.c;
+  lbl.textContent      = s.l;
+  lbl.style.color      = s.c;
+}
+
 // ── Auto-suggest username with @slug suffix ───────────────────
 (function() {
-  const slugSuffix = '@<?= addslashes($slug ?? '') ?>';
+  const slugSuffix = '@<?= addslashes($slug ?? '') ?>.com';
   const usernameInput = document.querySelector('input[name="username"]');
   if (!usernameInput || usernameInput.value) return;
 
