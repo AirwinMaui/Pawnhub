@@ -578,7 +578,7 @@ nav {
             <input type="text" id="username" name="username" class="finput mono" placeholder="juandelacruz"
               pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters/numbers/underscore only"
               required value="<?= htmlspecialchars($_POST['username']??'') ?>">
-            <span style="font-size:.69rem;color:var(--text-dim);margin-top:4px;">Your username will be in the format <strong style="color:var(--text-m);">yourname@<?= htmlspecialchars($slug) ?></strong></span>
+            <span style="font-size:.69rem;color:var(--text-dim);margin-top:4px;">Your username will be in the format <strong style="color:var(--text-m);">yourname@<?= htmlspecialchars($slug) ?>.com</strong></span>
           </div>
           <div class="fg">
             <label class="flabel" for="password">Password <span>*</span></label>
@@ -765,7 +765,9 @@ function validateForm() {
   });
   usernameInput.addEventListener('focus', function () {
     if (!this.value) this.value = slugSuffix;
-    this.setSelectionRange(0, 0);
+    // Place cursor before the @slug.com suffix so user types in the right spot
+    const pos = this.value.length - slugSuffix.length;
+    this.setSelectionRange(pos, pos);
   });
 })();
 </script>
