@@ -80,9 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!move_uploaded_file($file_tmp, $upload_path)) {
                     $error = 'Failed to upload file. Please try again.';
                 } else {
-                    // 'unpaid' for all new registrations — webhook sets 'paid' after PayMongo confirms
-                    // ⚠️ 'pending' is NOT a valid ENUM in tenants.payment_status
-                    $payment_status = 'unpaid';
+                    // Starter is free — use 'free' so the ENUM doesn't truncate.
+                    // Pro / Enterprise start as 'unpaid' until the PayMongo webhook sets 'paid'.
+                    $payment_status = $needs_payment ? 'unpaid' : 'free';
                     $pdo->beginTransaction();
                     try {
                         $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
