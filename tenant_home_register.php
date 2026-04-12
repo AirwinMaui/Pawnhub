@@ -736,7 +736,7 @@ function validateForm() {
 
 // ── Auto-suggest username with @slug suffix ───────────────────
 (function() {
-  const slugSuffix = '@<?= addslashes($slug) ?>';
+  const slugSuffix = '@<?= addslashes($slug) ?>.com';
   const usernameInput = document.getElementById('username');
   if (!usernameInput || usernameInput.value) return;
 
