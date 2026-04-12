@@ -122,7 +122,8 @@ function sendTenantInvitation(string $toEmail, string $toName, string $businessN
 
 function sendTenantWelcome(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $homeLink  = APP_URL . '/' . urlencode($slug);              // → public home page
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1'; // → login page (for bookmark tip)
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -139,16 +140,16 @@ function sendTenantWelcome(string $toEmail, string $toName, string $businessName
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
           Your <strong>' . htmlspecialchars($businessName) . '</strong> account on PawnHub is fully set up.
-          Use the button below to sign in anytime.
+          Click the button below to visit your shop home page.
         </p>
         <div style="text-align:center;margin:28px 0;">
-          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
-            Go to My Login Page →
+          <a href="' . $homeLink . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
+            Visit My Shop →
           </a>
         </div>
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
           <p style="color:#15803d;font-size:.82rem;margin:0;line-height:1.6;">
-            🔖 <strong>Tip:</strong> I-bookmark ang link na ito para madaling ma-access next time:<br>
+            🔖 <strong>Tip:</strong> I-bookmark ang login link mo para madaling ma-access next time:<br>
             <a href="' . $loginLink . '" style="color:#2563eb;">' . $loginLink . '</a>
           </p>
         </div>
@@ -309,7 +310,8 @@ function sendStaffInvitation(string $toEmail, string $toName, string $businessNa
 
 function sendStaffWelcome(string $toEmail, string $toName, string $businessName, string $role, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $homeLink  = APP_URL . '/' . urlencode($slug);              // → public home page
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1'; // → login page (bookmark tip)
     $roleLabel = ucfirst($role);
     $roleColor = $role === 'cashier' ? '#7c3aed' : '#2563eb';
     $roleBg    = $role === 'cashier' ? 'linear-gradient(135deg,#4c1d95,#7c3aed)' : 'linear-gradient(135deg,#1e3a8a,#2563eb)';
@@ -325,18 +327,16 @@ function sendStaffWelcome(string $toEmail, string $toName, string $businessName,
         <h2 style="font-size:1.25rem;font-weight:800;color:#0f172a;margin:0 0 8px;">Welcome to the team! 🚀</h2>
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
-          Your <strong>' . $roleLabel . '</strong> account for <strong>' . htmlspecialchars($businessName) . '</strong> is ready. Use the link below to sign in anytime.
+          Your <strong>' . $roleLabel . '</strong> account for <strong>' . htmlspecialchars($businessName) . '</strong> is ready. Click the button below to visit the shop.
         </p>
         <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
-          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 8px;">Your Branch Login Page</p>
-          <p style="font-size:.9rem;font-weight:700;color:#0f172a;margin:0 0 4px;">' . htmlspecialchars($businessName) . '</p>
-          <p style="font-size:.8rem;color:' . $roleColor . ';word-break:break-all;margin:0 0 14px;"><a href="' . $loginLink . '" style="color:' . $roleColor . ';">' . $loginLink . '</a></p>
-          <a href="' . $loginLink . '" style="display:inline-block;background:' . $roleBg . ';color:#fff;text-decoration:none;padding:12px 28px;border-radius:9px;font-size:.88rem;font-weight:700;">Go to My Login Page →</a>
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 8px;">Your Branch</p>
+          <p style="font-size:.9rem;font-weight:700;color:#0f172a;margin:0 0 14px;">' . htmlspecialchars($businessName) . '</p>
+          <a href="' . $homeLink . '" style="display:inline-block;background:' . $roleBg . ';color:#fff;text-decoration:none;padding:12px 28px;border-radius:9px;font-size:.88rem;font-weight:700;">Visit My Shop →</a>
         </div>
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
-          <p style="color:#15803d;font-size:.82rem;margin:0;line-height:1.7;">🔖 <strong>Tip:</strong> Bookmark this login link for quick access next time.</p>
+          <p style="color:#15803d;font-size:.82rem;margin:0;line-height:1.7;">🔖 <strong>Tip:</strong> Bookmark your login link for quick access next time:<br><a href="' . $loginLink . '" style="color:#2563eb;">' . $loginLink . '</a></p>
         </div>
-        <p style="color:#94a3b8;font-size:.76rem;word-break:break-all;">Or copy this link: <a href="' . $loginLink . '" style="color:#2563eb;">' . $loginLink . '</a></p>
       </div>
       <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
         <p style="color:#94a3b8;font-size:.74rem;margin:0;">© ' . date('Y') . ' PawnHub · All rights reserved<br>This is an automated message, please do not reply.</p>
@@ -390,7 +390,8 @@ function sendManagerInvitation(string $toEmail, string $toName, string $business
 
 function sendManagerWelcome(string $toEmail, string $toName, string $businessName, string $slug): bool
 {
-    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $homeLink  = APP_URL . '/' . urlencode($slug);              // → public home page
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1'; // → login page (bookmark tip)
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
@@ -403,16 +404,15 @@ function sendManagerWelcome(string $toEmail, string $toName, string $businessNam
         <h2 style="font-size:1.25rem;font-weight:800;color:#0f172a;margin:0 0 8px;">Welcome, Branch Manager! 🚀</h2>
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
-          Your <strong>Manager</strong> account for <strong>' . htmlspecialchars($businessName) . '</strong> is ready. Use the link below to sign in anytime.
+          Your <strong>Manager</strong> account for <strong>' . htmlspecialchars($businessName) . '</strong> is ready. Click the button below to visit the shop.
         </p>
         <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
-          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 8px;">Your Branch Login Page</p>
-          <p style="font-size:.9rem;font-weight:700;color:#0f172a;margin:0 0 4px;">' . htmlspecialchars($businessName) . '</p>
-          <p style="font-size:.8rem;color:#059669;word-break:break-all;margin:0 0 14px;"><a href="' . $loginLink . '" style="color:#059669;">' . $loginLink . '</a></p>
-          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#064e3b,#059669);color:#fff;text-decoration:none;padding:12px 28px;border-radius:9px;font-size:.88rem;font-weight:700;">Go to My Login Page →</a>
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 8px;">Your Branch</p>
+          <p style="font-size:.9rem;font-weight:700;color:#0f172a;margin:0 0 14px;">' . htmlspecialchars($businessName) . '</p>
+          <a href="' . $homeLink . '" style="display:inline-block;background:linear-gradient(135deg,#064e3b,#059669);color:#fff;text-decoration:none;padding:12px 28px;border-radius:9px;font-size:.88rem;font-weight:700;">Visit My Shop →</a>
         </div>
         <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
-          <p style="color:#065f46;font-size:.82rem;margin:0;line-height:1.7;">🔖 <strong>Tip:</strong> Bookmark this login link for quick access next time.</p>
+          <p style="color:#065f46;font-size:.82rem;margin:0;line-height:1.7;">🔖 <strong>Tip:</strong> Bookmark your login link for quick access next time:<br><a href="' . $loginLink . '" style="color:#059669;">' . $loginLink . '</a></p>
         </div>
       </div>
       <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">

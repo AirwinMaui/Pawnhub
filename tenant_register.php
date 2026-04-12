@@ -98,9 +98,9 @@ if ($success) {
     $slug_row    = $slug_stmt->fetch();
     $tenant_slug = $slug_row['slug'] ?? '';
     $login_url   = !empty($tenant_slug)
-        ? '/' . urlencode($tenant_slug)   // ← home page, not /?login=1
+        ? '/' . urlencode($tenant_slug) . '?login=1'   // ← go straight to login
         : 'home.php';
-    // Redirect to tenant home page after 4 seconds
+    // Redirect to tenant login page after 4 seconds
     header('refresh:4;url=' . $login_url);
 }
 ?>
@@ -347,7 +347,7 @@ function togglePw(id, btn) {
 
 // ── Auto-suggest username with @slug suffix ───────────────────
 (function() {
-  const slugSuffix = '@<?= addslashes($inv['slug'] ?? '') ?>';
+  const slugSuffix = '@<?= addslashes($inv['slug'] ?? '') ?>.com';
   const usernameInput = document.querySelector('input[name="username"]');
   if (!usernameInput || usernameInput.value) return; // skip if already filled (POST error)
 

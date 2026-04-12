@@ -392,7 +392,7 @@ function togglePw(id, btn) {
 
 // ── Auto-suggest username with @slug suffix ───────────────────
 (function() {
-  const slugSuffix = '@<?= addslashes($inv_slug ?? '') ?>';
+  const slugSuffix = '@<?= addslashes($inv_slug ?? '') ?>.com';
   const usernameInput = document.querySelector('input[name="username"]');
   if (!usernameInput || usernameInput.value) return;
 
