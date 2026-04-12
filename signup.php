@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // Starter is free — use 'free' so the ENUM doesn't truncate.
                     // Pro / Enterprise start as 'unpaid' until the PayMongo webhook sets 'paid'.
-                    $payment_status = $needs_payment ? 'unpaid' : 'free';
+                    $payment_status = 'pending'; // ENUM: pending|paid|failed|free — webhook sets 'paid' after PayMongo confirms
                     $pdo->beginTransaction();
                     try {
                         $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
