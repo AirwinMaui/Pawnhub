@@ -57,6 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $valid_roles = ['manager', 'staff', 'cashier'];
 
+    // Build expected suffix and strip it to get the base username for validation
+    $slug_suffix = '@' . $slug . '.com';
+    $base_username = '';
+    if (str_ends_with($username, $slug_suffix)) {
+        $base_username = substr($username, 0, strlen($username) - strlen($slug_suffix));
+    }
+
     if (!$fullname || !$email || !$username || !$password || !$role) {
         $error_msg = 'Please fill in all required fields.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -67,8 +74,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error_msg = 'Password must be at least 8 characters.';
     } elseif ($password !== $confirm) {
         $error_msg = 'Passwords do not match.';
-    } elseif (!preg_match('/^[a-zA-Z0-9_]{1,30}@[a-zA-Z0-9_\-]+\.com$/', $username)) {
-        $error_msg = 'Username must be in the format: yourname@' . $slug . '.com';
+    } elseif (
+        !str_ends_with($username, $slug_suffix) ||
+        !preg_match('/^[a-zA-Z0-9_]{1,30}$/', $base_username)
+    ) {
+        $error_msg = 'Username must be in the format: yourname@' . $slug . '.com (only letters, numbers, underscores before the @)';
     } else {
         // Check uniqueness
         $chk = $pdo->prepare("SELECT id FROM users WHERE (email=? OR username=?) AND tenant_id=? LIMIT 1");
@@ -576,7 +586,6 @@ nav {
           <div class="fg form-full">
             <label class="flabel" for="username">Username <span>*</span></label>
             <input type="text" id="username" name="username" class="finput mono" placeholder="juandelacruz"
-              pattern="[a-zA-Z0-9_]{3,30}" title="3–30 characters, letters/numbers/underscore only"
               required value="<?= htmlspecialchars($_POST['username']??'') ?>">
             <span style="font-size:.69rem;color:var(--text-dim);margin-top:4px;">Your username will be in the format <strong style="color:var(--text-m);">yourname@<?= htmlspecialchars($slug) ?>.com</strong></span>
           </div>
@@ -734,50 +743,71 @@ function validateForm() {
   return true;
 }
 
-// ── Auto-suggest username with @slug suffix ───────────────────
+// ── Username field with @slug suffix ────────────────────────
 (function() {
   const slugSuffix = '@<?= addslashes($slug) ?>.com';
   const usernameInput = document.getElementById('username');
   if (!usernameInput) return;
 
-  // If field already has a value (POST re-render), ensure suffix is present
-  if (usernameInput.value && !usernameInput.value.endsWith(slugSuffix)) {
-    const base = usernameInput.value.replace(/@[^@]*$/, '');
-    usernameInput.value = base + slugSuffix;
+  // On page load: if value already has the suffix (POST re-render), leave it.
+  // If it has some other @suffix or is empty, normalise it.
+  function normalise(val) {
+    // Strip any existing @... suffix so we only keep the base part
+    const base = val.replace(/@.*$/, '');
+    return base + slugSuffix;
   }
 
-  // When fullname is filled, auto-suggest a username (only if field is empty)
+  // Initialise on load
+  if (usernameInput.value) {
+    // Already has the correct suffix → leave alone; otherwise normalise
+    if (!usernameInput.value.endsWith(slugSuffix)) {
+      usernameInput.value = normalise(usernameInput.value);
+    }
+  }
+
+  // Auto-suggest from Full Name (only when field is blank / just has the suffix)
   const fullnameInput = document.getElementById('fullname');
   if (fullnameInput) {
     fullnameInput.addEventListener('blur', function () {
-      if (!usernameInput.value || usernameInput.value === slugSuffix) {
+      const current = usernameInput.value;
+      if (!current || current === slugSuffix) {
         const base = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
         if (base) usernameInput.value = base + slugSuffix;
       }
     });
   }
 
+  // While typing: keep suffix locked at the end
   usernameInput.addEventListener('input', function () {
     const val = this.value;
     if (!val.endsWith(slugSuffix)) {
-      const base = val.replace(/@[^@]*$/, '');
+      // Get cursor position before we modify the string
+      const selStart = this.selectionStart;
+      const base = val.replace(/@.*$/, '').replace(/[^a-zA-Z0-9_]/g, '');
       this.value = base + slugSuffix;
-      this.setSelectionRange(base.length, base.length);
+      // Restore cursor to end of the base part
+      const pos = Math.min(selStart, base.length);
+      this.setSelectionRange(pos, pos);
     }
   });
+
+  // Prevent deleting the suffix with Backspace / Delete
   usernameInput.addEventListener('keydown', function (e) {
-    const prot = this.value.length - slugSuffix.length;
-    if (this.selectionStart > prot && (e.key === 'Backspace' || e.key === 'Delete')) e.preventDefault();
+    const protectedStart = this.value.length - slugSuffix.length;
+    if (protectedStart < 0) return;
+    if (e.key === 'Backspace' && this.selectionStart <= protectedStart && this.selectionEnd <= protectedStart) return;
+    if ((e.key === 'Backspace' || e.key === 'Delete') && this.selectionStart >= protectedStart) {
+      e.preventDefault();
+    }
   });
+
+  // On focus: place cursor before the suffix
   usernameInput.addEventListener('focus', function () {
     if (!this.value || this.value === slugSuffix) {
       this.value = slugSuffix;
-      this.setSelectionRange(0, 0);
-      return;
     }
-    // Place cursor before the suffix so user types in the right spot
     const pos = this.value.length - slugSuffix.length;
-    this.setSelectionRange(pos, pos);
+    setTimeout(() => this.setSelectionRange(pos, pos), 0);
   });
 })();
 </script>
