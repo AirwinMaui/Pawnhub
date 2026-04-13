@@ -877,117 +877,9 @@ try { $audit_actions_list = $pdo->query("SELECT DISTINCT action FROM audit_logs 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-:root{--sw:252px;--sw-col:62px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;--text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;}
+:root{--sw:252px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;--text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;}
 body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;}
-
-/* ── SIDEBAR DRAWER / SLIDE ANIMATION ──────────────────────────
-   Desktop  : collapses to icon-only strip (width transition)
-   Mobile   : full off-canvas drawer (translateX slide + fade overlay)
-──────────────────────────────────────────────────────────────── */
-.sidebar{
-  width:var(--sw);
-  min-height:100vh;
-  background:var(--navy);
-  display:flex;
-  flex-direction:column;
-  position:fixed;
-  left:0;top:0;bottom:0;
-  z-index:300;
-  overflow-y:auto;
-  overflow-x:hidden;
-  /* Smooth slide + width transition */
-  transition:
-    width        .28s cubic-bezier(.4,0,.2,1),
-    transform    .32s cubic-bezier(.4,0,.2,1),
-    box-shadow   .32s ease,
-    opacity      .28s ease;
-  will-change: transform, width;
-}
-
-/* Desktop collapsed → icon strip */
-.sidebar.collapsed{width:var(--sw-col);}
-.sidebar.collapsed .sb-name,.sidebar.collapsed .sb-badge,
-.sidebar.collapsed .sb-uname,.sidebar.collapsed .sb-urole,
-.sidebar.collapsed .sb-section,.sidebar.collapsed .sb-item-text,
-.sidebar.collapsed .sb-pill{display:none;}
-.sidebar.collapsed .sb-brand{justify-content:center;padding:18px 0;}
-.sidebar.collapsed .sb-user{justify-content:center;padding:10px 0;}
-.sidebar.collapsed .sb-logout{justify-content:center;}
-
-/* Toggle button */
-.sb-toggle{
-  position:absolute;top:22px;right:-13px;
-  width:26px;height:26px;
-  background:var(--blue-acc);border-radius:50%;
-  border:2.5px solid var(--bg);
-  cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  z-index:400;
-  box-shadow:0 2px 8px rgba(0,0,0,.25);
-  transition:transform .2s ease, background .15s;
-}
-.sb-toggle:hover{background:#1d4ed8;}
-.sb-toggle svg{width:11px;height:11px;stroke:#fff;stroke-width:2.5;transition:transform .28s cubic-bezier(.4,0,.2,1);}
-.sidebar.collapsed .sb-toggle svg{transform:rotate(180deg);}
-
-/* Mobile hamburger button (hidden on desktop) */
-.sb-hamburger{
-  display:none;
-  position:fixed;top:14px;left:14px;
-  width:36px;height:36px;
-  background:var(--navy);
-  border:none;border-radius:9px;
-  cursor:pointer;
-  align-items:center;justify-content:center;
-  z-index:500;
-  box-shadow:0 2px 10px rgba(0,0,0,.25);
-  transition:background .15s;
-}
-.sb-hamburger:hover{background:#1e3a6e;}
-.sb-hamburger svg{width:18px;height:18px;stroke:#fff;stroke-width:2.5;}
-
-/* Overlay backdrop (mobile only) */
-.sb-overlay{
-  display:none;
-  position:fixed;inset:0;
-  background:rgba(15,23,42,.55);
-  z-index:250;
-  opacity:0;
-  transition:opacity .32s ease;
-  backdrop-filter:blur(2px);
-  -webkit-backdrop-filter:blur(2px);
-}
-.sb-overlay.visible{opacity:1;}
-
-/* Main content shift */
-.main{
-  margin-left:var(--sw);
-  flex:1;display:flex;flex-direction:column;
-  transition:margin-left .28s cubic-bezier(.4,0,.2,1);
-}
-.main.sb-collapsed{margin-left:var(--sw-col);}
-
-/* ── MOBILE STYLES ─────────────────────────────────────────── */
-@media(max-width:768px){
-  /* Sidebar starts off-screen, slides in */
-  .sidebar{
-    transform:translateX(-100%);
-    box-shadow:none;
-    width:var(--sw) !important; /* always full width on mobile */
-  }
-  .sidebar.mobile-open{
-    transform:translateX(0);
-    box-shadow:6px 0 40px rgba(0,0,0,.35);
-  }
-  /* Overlay shows only on mobile */
-  .sb-overlay{display:block;}
-  /* Hamburger shows on mobile */
-  .sb-hamburger{display:flex;}
-  /* Desktop toggle button hidden on mobile */
-  .sb-toggle{display:none;}
-  /* Main content full width on mobile */
-  .main{margin-left:0 !important;}
-}
+.sidebar{width:var(--sw);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;}
 .sb-brand{padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;}
 .sb-logo{width:36px;height:36px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .sb-logo svg{width:18px;height:18px;}
@@ -998,18 +890,13 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .sb-uname{font-size:.78rem;font-weight:600;color:#fff;} .sb-urole{font-size:.62rem;color:rgba(255,255,255,.35);}
 .sb-nav{flex:1;padding:10px 0;}
 .sb-section{font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25);padding:10px 16px 4px;}
-.sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:background .2s cubic-bezier(.4,0,.2,1), color .2s, transform .2s cubic-bezier(.4,0,.2,1);}
-.sb-item:hover{background:rgba(255,255,255,.08);color:#fff;transform:translateX(5px);}
-.sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;transform:translateX(5px);}
-.sb-item svg{width:15px;height:15px;flex-shrink:0;} .sb-item-text{transition:opacity .2s;}
-.sidebar.collapsed .sb-item{justify-content:center;padding:10px 0;margin:2px 6px;transform:translateX(0);}
-.sidebar.collapsed .sb-item:hover{transform:translateX(5px);}
-.sidebar.collapsed .sb-item.active{transform:translateX(5px);}
-.sidebar.collapsed .sb-item svg{width:18px;height:18px;flex-shrink:0;}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .15s;}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff;} .sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;} .sb-item svg{width:15px;height:15px;flex-shrink:0;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:100px;}
 .sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);}
 .sb-logout{display:flex;align-items:center;gap:8px;font-size:.8rem;color:rgba(255,255,255,.35);text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
 .sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);} .sb-logout svg{width:14px;height:14px;}
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
 .topbar{height:58px;padding:0 26px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
 .topbar-title{font-size:1rem;font-weight:700;}
 .super-chip{font-size:.7rem;font-weight:700;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;padding:3px 10px;border-radius:100px;}
@@ -1079,23 +966,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 </head>
 <body>
 
-<!-- ══ OVERLAY BACKDROP (mobile drawer) ════════════════════════ -->
-<div class="sb-overlay" id="sbOverlay" onclick="closeSidebarMobile()"></div>
-
-<!-- ══ HAMBURGER (mobile only) ════════════════════════════════ -->
-<button class="sb-hamburger" id="sbHamburger" onclick="openSidebarMobile()" title="Open menu" aria-label="Open navigation">
-  <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="3" y1="6"  x2="21" y2="6"/>
-    <line x1="3" y1="12" x2="21" y2="12"/>
-    <line x1="3" y1="18" x2="21" y2="18"/>
-  </svg>
-</button>
-
 <!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
-<aside class="sidebar" id="sidebar">
-  <button class="sb-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
-    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-  </button>
+<aside class="sidebar">
   <div class="sb-brand">
     <div class="sb-logo"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div>
     <div><div class="sb-name">PawnHub</div><div class="sb-badge">Super Admin</div></div>
@@ -1107,39 +979,39 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <nav class="sb-nav">
     <div class="sb-section">Overview</div>
     <a href="?page=dashboard" class="sb-item <?= $active_page==='dashboard'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="sb-item-text">Dashboard</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard
     </a>
     <div class="sb-section">Management</div>
     <a href="?page=tenants" class="sb-item <?= $active_page==='tenants'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><span class="sb-item-text">Tenant Management</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>Tenant Management
       <?php if($pending_tenants>0):?><span class="sb-pill"><?=$pending_tenants?></span><?php endif;?>
     </a>
     <a href="?page=invitations" class="sb-item <?= $active_page==='invitations'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sb-item-text">Email Invitations</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email Invitations
       <?php if($pending_inv>0):?><span class="sb-pill"><?=$pending_inv?></span><?php endif;?>
     </a>
     <a href="?page=subscriptions" class="sb-item <?= $active_page==='subscriptions'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg><span class="sb-item-text">Subscriptions</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Subscriptions
       <?php if($pending_sub_count>0):?><span class="sb-pill"><?=$pending_sub_count?></span><?php endif;?>
     </a>
     <div class="sb-section">Analytics</div>
     <a href="?page=reports" class="sb-item <?= $active_page==='reports'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span class="sb-item-text">Reports</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports
     </a>
     <a href="?page=sales_report" class="sb-item <?= $active_page==='sales_report'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span class="sb-item-text">Sales Report</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Sales Report
     </a>
     <div class="sb-section">System</div>
     <a href="?page=audit_logs" class="sb-item <?= $active_page==='audit_logs'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span class="sb-item-text">Audit Logs</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Audit Logs
     </a>
     <a href="?page=settings" class="sb-item <?= $active_page==='settings'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="sb-item-text">Settings</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings
     </a>
   </nav>
   <div class="sb-footer">
     <a href="logout.php?role=super_admin" class="sb-logout">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="sb-item-text">Sign Out</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out
     </a>
   </div>
 </aside>
@@ -2363,72 +2235,5 @@ function updatePlanCard(selected){
   </div>
 </div>
 
-<script>
-/* ══ SIDEBAR DRAWER ANIMATION ══════════════════════════════════
-   Desktop : toggle collapsed/expanded (width slide)
-   Mobile  : slide-in drawer with overlay backdrop
-═══════════════════════════════════════════════════════════════ */
-
-const isMobile = () => window.innerWidth <= 768;
-
-// ── Desktop toggle (collapse ↔ expand) ──────────────────────
-function toggleSidebar() {
-  if (isMobile()) { openSidebarMobile(); return; }
-  const sb   = document.getElementById('sidebar');
-  const main = document.querySelector('.main');
-  sb.classList.toggle('collapsed');
-  main.classList.toggle('sb-collapsed');
-  localStorage.setItem('sb_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
-}
-
-// ── Mobile: slide sidebar IN ─────────────────────────────────
-function openSidebarMobile() {
-  const sb      = document.getElementById('sidebar');
-  const overlay = document.getElementById('sbOverlay');
-  // Trigger reflow so transition plays from off-screen
-  sb.style.transition = 'transform .32s cubic-bezier(.4,0,.2,1), box-shadow .32s ease';
-  sb.classList.add('mobile-open');
-  overlay.classList.add('visible');
-  document.body.style.overflow = 'hidden'; // prevent scroll behind
-  // Hide hamburger while drawer is open
-  const hbg = document.getElementById('sbHamburger');
-  if (hbg) hbg.style.opacity = '0';
-}
-
-// ── Mobile: slide sidebar OUT ────────────────────────────────
-function closeSidebarMobile() {
-  const sb      = document.getElementById('sidebar');
-  const overlay = document.getElementById('sbOverlay');
-  sb.classList.remove('mobile-open');
-  overlay.classList.remove('visible');
-  document.body.style.overflow = '';
-  const hbg = document.getElementById('sbHamburger');
-  if (hbg) hbg.style.opacity = '1';
-}
-
-// ── Close on Escape key ──────────────────────────────────────
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && isMobile()) closeSidebarMobile();
-});
-
-// ── Restore desktop collapse state on load ───────────────────
-(function () {
-  if (!isMobile() && localStorage.getItem('sb_collapsed') === '1') {
-    document.getElementById('sidebar').classList.add('collapsed');
-    const m = document.querySelector('.main');
-    if (m) m.classList.add('sb-collapsed');
-  }
-})();
-
-// ── Handle resize: clean up mobile state when going desktop ──
-window.addEventListener('resize', () => {
-  if (!isMobile()) {
-    closeSidebarMobile();           // remove mobile-open / overlay
-    document.body.style.overflow = '';
-    const hbg = document.getElementById('sbHamburger');
-    if (hbg) hbg.style.opacity = '1';
-  }
-});
-</script>
 </body>
-</html>
+</html> 
