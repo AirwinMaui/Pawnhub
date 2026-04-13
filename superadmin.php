@@ -912,8 +912,6 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .sidebar.collapsed .sb-pill{display:none;}
 .sidebar.collapsed .sb-brand{justify-content:center;padding:18px 0;}
 .sidebar.collapsed .sb-user{justify-content:center;padding:10px 0;}
-.sidebar.collapsed .sb-item{justify-content:center;padding:10px 0;margin:2px 6px;}
-.sidebar.collapsed .sb-item svg{width:18px;height:18px;flex-shrink:0;}
 .sidebar.collapsed .sb-logout{justify-content:center;}
 
 /* Toggle button */
@@ -1000,10 +998,14 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .sb-uname{font-size:.78rem;font-weight:600;color:#fff;} .sb-urole{font-size:.62rem;color:rgba(255,255,255,.35);}
 .sb-nav{flex:1;padding:10px 0;}
 .sb-section{font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25);padding:10px 16px 4px;}
-.sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1);}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:background .2s cubic-bezier(.4,0,.2,1), color .2s, transform .2s cubic-bezier(.4,0,.2,1);}
 .sb-item:hover{background:rgba(255,255,255,.08);color:#fff;transform:translateX(5px);}
 .sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;transform:translateX(5px);}
 .sb-item svg{width:15px;height:15px;flex-shrink:0;} .sb-item-text{transition:opacity .2s;}
+.sidebar.collapsed .sb-item{justify-content:center;padding:10px 0;margin:2px 6px;transform:translateX(0);}
+.sidebar.collapsed .sb-item:hover{transform:translateX(5px);}
+.sidebar.collapsed .sb-item.active{transform:translateX(5px);}
+.sidebar.collapsed .sb-item svg{width:18px;height:18px;flex-shrink:0;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:100px;}
 .sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);}
 .sb-logout{display:flex;align-items:center;gap:8px;font-size:.8rem;color:rgba(255,255,255,.35);text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
