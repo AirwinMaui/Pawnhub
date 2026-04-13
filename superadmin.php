@@ -879,19 +879,117 @@ try { $audit_actions_list = $pdo->query("SELECT DISTINCT action FROM audit_logs 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{--sw:252px;--sw-col:62px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;--text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;}
 body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;}
-.sidebar{width:var(--sw);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;overflow-x:hidden;transition:width .25s cubic-bezier(.4,0,.2,1);}
+
+/* ── SIDEBAR DRAWER / SLIDE ANIMATION ──────────────────────────
+   Desktop  : collapses to icon-only strip (width transition)
+   Mobile   : full off-canvas drawer (translateX slide + fade overlay)
+──────────────────────────────────────────────────────────────── */
+.sidebar{
+  width:var(--sw);
+  min-height:100vh;
+  background:var(--navy);
+  display:flex;
+  flex-direction:column;
+  position:fixed;
+  left:0;top:0;bottom:0;
+  z-index:300;
+  overflow-y:auto;
+  overflow-x:hidden;
+  /* Smooth slide + width transition */
+  transition:
+    width        .28s cubic-bezier(.4,0,.2,1),
+    transform    .32s cubic-bezier(.4,0,.2,1),
+    box-shadow   .32s ease,
+    opacity      .28s ease;
+  will-change: transform, width;
+}
+
+/* Desktop collapsed → icon strip */
 .sidebar.collapsed{width:var(--sw-col);}
-.sidebar.collapsed .sb-name,.sidebar.collapsed .sb-badge,.sidebar.collapsed .sb-uname,.sidebar.collapsed .sb-urole,.sidebar.collapsed .sb-section,.sidebar.collapsed .sb-item-text,.sidebar.collapsed .sb-pill{display:none;}
+.sidebar.collapsed .sb-name,.sidebar.collapsed .sb-badge,
+.sidebar.collapsed .sb-uname,.sidebar.collapsed .sb-urole,
+.sidebar.collapsed .sb-section,.sidebar.collapsed .sb-item-text,
+.sidebar.collapsed .sb-pill{display:none;}
 .sidebar.collapsed .sb-brand{justify-content:center;padding:18px 0;}
 .sidebar.collapsed .sb-user{justify-content:center;padding:10px 0;}
 .sidebar.collapsed .sb-item{justify-content:center;padding:10px 0;margin:2px 6px;}
 .sidebar.collapsed .sb-item svg{width:18px;height:18px;flex-shrink:0;}
 .sidebar.collapsed .sb-logout{justify-content:center;}
-.sb-toggle{position:absolute;top:22px;right:-13px;width:26px;height:26px;background:var(--blue-acc);border-radius:50%;border:2.5px solid var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.25);}
-.sb-toggle svg{width:11px;height:11px;stroke:#fff;stroke-width:2.5;transition:transform .25s;}
+
+/* Toggle button */
+.sb-toggle{
+  position:absolute;top:22px;right:-13px;
+  width:26px;height:26px;
+  background:var(--blue-acc);border-radius:50%;
+  border:2.5px solid var(--bg);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  z-index:400;
+  box-shadow:0 2px 8px rgba(0,0,0,.25);
+  transition:transform .2s ease, background .15s;
+}
+.sb-toggle:hover{background:#1d4ed8;}
+.sb-toggle svg{width:11px;height:11px;stroke:#fff;stroke-width:2.5;transition:transform .28s cubic-bezier(.4,0,.2,1);}
 .sidebar.collapsed .sb-toggle svg{transform:rotate(180deg);}
-.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1);}
+
+/* Mobile hamburger button (hidden on desktop) */
+.sb-hamburger{
+  display:none;
+  position:fixed;top:14px;left:14px;
+  width:36px;height:36px;
+  background:var(--navy);
+  border:none;border-radius:9px;
+  cursor:pointer;
+  align-items:center;justify-content:center;
+  z-index:500;
+  box-shadow:0 2px 10px rgba(0,0,0,.25);
+  transition:background .15s;
+}
+.sb-hamburger:hover{background:#1e3a6e;}
+.sb-hamburger svg{width:18px;height:18px;stroke:#fff;stroke-width:2.5;}
+
+/* Overlay backdrop (mobile only) */
+.sb-overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(15,23,42,.55);
+  z-index:250;
+  opacity:0;
+  transition:opacity .32s ease;
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+}
+.sb-overlay.visible{opacity:1;}
+
+/* Main content shift */
+.main{
+  margin-left:var(--sw);
+  flex:1;display:flex;flex-direction:column;
+  transition:margin-left .28s cubic-bezier(.4,0,.2,1);
+}
 .main.sb-collapsed{margin-left:var(--sw-col);}
+
+/* ── MOBILE STYLES ─────────────────────────────────────────── */
+@media(max-width:768px){
+  /* Sidebar starts off-screen, slides in */
+  .sidebar{
+    transform:translateX(-100%);
+    box-shadow:none;
+    width:var(--sw) !important; /* always full width on mobile */
+  }
+  .sidebar.mobile-open{
+    transform:translateX(0);
+    box-shadow:6px 0 40px rgba(0,0,0,.35);
+  }
+  /* Overlay shows only on mobile */
+  .sb-overlay{display:block;}
+  /* Hamburger shows on mobile */
+  .sb-hamburger{display:flex;}
+  /* Desktop toggle button hidden on mobile */
+  .sb-toggle{display:none;}
+  /* Main content full width on mobile */
+  .main{margin-left:0 !important;}
+}
 .sb-brand{padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;}
 .sb-logo{width:36px;height:36px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .sb-logo svg{width:18px;height:18px;}
@@ -908,7 +1006,6 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);}
 .sb-logout{display:flex;align-items:center;gap:8px;font-size:.8rem;color:rgba(255,255,255,.35);text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
 .sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);} .sb-logout svg{width:14px;height:14px;}
-.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
 .topbar{height:58px;padding:0 26px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
 .topbar-title{font-size:1rem;font-weight:700;}
 .super-chip{font-size:.7rem;font-weight:700;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#fff;padding:3px 10px;border-radius:100px;}
@@ -977,6 +1074,18 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 </style>
 </head>
 <body>
+
+<!-- ══ OVERLAY BACKDROP (mobile drawer) ════════════════════════ -->
+<div class="sb-overlay" id="sbOverlay" onclick="closeSidebarMobile()"></div>
+
+<!-- ══ HAMBURGER (mobile only) ════════════════════════════════ -->
+<button class="sb-hamburger" id="sbHamburger" onclick="openSidebarMobile()" title="Open menu" aria-label="Open navigation">
+  <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3" y1="6"  x2="21" y2="6"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+</button>
 
 <!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
 <aside class="sidebar" id="sidebar">
@@ -2251,21 +2360,71 @@ function updatePlanCard(selected){
 </div>
 
 <script>
-function toggleSidebar(){
-  const sb = document.getElementById('sidebar');
+/* ══ SIDEBAR DRAWER ANIMATION ══════════════════════════════════
+   Desktop : toggle collapsed/expanded (width slide)
+   Mobile  : slide-in drawer with overlay backdrop
+═══════════════════════════════════════════════════════════════ */
+
+const isMobile = () => window.innerWidth <= 768;
+
+// ── Desktop toggle (collapse ↔ expand) ──────────────────────
+function toggleSidebar() {
+  if (isMobile()) { openSidebarMobile(); return; }
+  const sb   = document.getElementById('sidebar');
   const main = document.querySelector('.main');
   sb.classList.toggle('collapsed');
   main.classList.toggle('sb-collapsed');
   localStorage.setItem('sb_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
 }
-// Restore state on load
-(function(){
-  if(localStorage.getItem('sb_collapsed')==='1'){
+
+// ── Mobile: slide sidebar IN ─────────────────────────────────
+function openSidebarMobile() {
+  const sb      = document.getElementById('sidebar');
+  const overlay = document.getElementById('sbOverlay');
+  // Trigger reflow so transition plays from off-screen
+  sb.style.transition = 'transform .32s cubic-bezier(.4,0,.2,1), box-shadow .32s ease';
+  sb.classList.add('mobile-open');
+  overlay.classList.add('visible');
+  document.body.style.overflow = 'hidden'; // prevent scroll behind
+  // Hide hamburger while drawer is open
+  const hbg = document.getElementById('sbHamburger');
+  if (hbg) hbg.style.opacity = '0';
+}
+
+// ── Mobile: slide sidebar OUT ────────────────────────────────
+function closeSidebarMobile() {
+  const sb      = document.getElementById('sidebar');
+  const overlay = document.getElementById('sbOverlay');
+  sb.classList.remove('mobile-open');
+  overlay.classList.remove('visible');
+  document.body.style.overflow = '';
+  const hbg = document.getElementById('sbHamburger');
+  if (hbg) hbg.style.opacity = '1';
+}
+
+// ── Close on Escape key ──────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isMobile()) closeSidebarMobile();
+});
+
+// ── Restore desktop collapse state on load ───────────────────
+(function () {
+  if (!isMobile() && localStorage.getItem('sb_collapsed') === '1') {
     document.getElementById('sidebar').classList.add('collapsed');
-    const m=document.querySelector('.main');
-    if(m) m.classList.add('sb-collapsed');
+    const m = document.querySelector('.main');
+    if (m) m.classList.add('sb-collapsed');
   }
 })();
+
+// ── Handle resize: clean up mobile state when going desktop ──
+window.addEventListener('resize', () => {
+  if (!isMobile()) {
+    closeSidebarMobile();           // remove mobile-open / overlay
+    document.body.style.overflow = '';
+    const hbg = document.getElementById('sbHamburger');
+    if (hbg) hbg.style.opacity = '1';
+  }
+});
 </script>
 </body>
 </html>
