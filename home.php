@@ -108,6 +108,7 @@ section[id] { scroll-margin-top: 80px; }
       <a href="#roles"    class="text-white/80 hover:text-white transition-all font-medium">Roles</a>
       <a href="#pricing"  class="text-white/80 hover:text-white transition-all font-medium">Pricing</a>
       <a href="#stats"    class="text-white/80 hover:text-white transition-all font-medium">Stats</a>
+      <a href="#contact"  class="text-white/80 hover:text-white transition-all font-medium">Contact</a>
     </div>
     <div class="flex items-center gap-3">
       <a href="login.php"  class="hidden sm:block text-white font-semibold hover:opacity-80 transition-all px-4 py-2 rounded-xl hover:bg-white/10">Sign In</a>
@@ -121,6 +122,7 @@ section[id] { scroll-margin-top: 80px; }
     <a href="#features" class="text-white/80 hover:text-white py-2 font-medium">Features</a>
     <a href="#roles"    class="text-white/80 hover:text-white py-2 font-medium">Roles</a>
     <a href="#pricing"  class="text-white/80 hover:text-white py-2 font-medium">Pricing</a>
+    <a href="#contact"  class="text-white/80 hover:text-white py-2 font-medium">Contact</a>
     <div class="flex gap-3 pt-2 border-t border-white/10">
       <a href="login.php"  class="flex-1 text-center py-2.5 rounded-xl glass-effect font-semibold">Sign In</a>
       <a href="signup.php" class="flex-1 text-center py-2.5 rounded-xl bg-blue-500 font-semibold">Register</a>
@@ -392,9 +394,69 @@ section[id] { scroll-margin-top: 80px; }
 
 </main>
 
+<!-- CONTACT US -->
+<section id="contact" class="py-32 relative overflow-hidden">
+  <div class="max-w-5xl mx-auto px-6">
+
+    <div class="text-center mb-16">
+      <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">Get In Touch</span>
+      <h2 class="text-4xl font-bold tracking-tight text-white mt-3 mb-4">Contact Us</h2>
+      <p class="text-lg text-white/70 max-w-xl mx-auto leading-relaxed">Need to renew your subscription or have questions about PawnHub? Reach out to us directly — we respond fast.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8 mb-10">
+
+      <!-- Phone -->
+      <a href="tel:+639452078380"
+        class="group glass-dark rounded-[2rem] p-10 flex flex-col items-center text-center border border-white/10 hover:border-green-500/50 transition-all hover:-translate-y-1 no-underline"
+        style="text-decoration:none;">
+        <div class="w-20 h-20 rounded-full bg-green-500/15 border-2 border-green-500/30 flex items-center justify-center mb-6 group-hover:bg-green-500/25 group-hover:border-green-400/60 transition-all">
+          <span class="material-symbols-outlined text-green-400 text-4xl" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
+        </div>
+        <div class="text-xs font-bold text-green-400 uppercase tracking-widest mb-3">Call / SMS / Viber</div>
+        <div class="text-2xl font-extrabold text-white tracking-tight mb-2">0945 207 8380</div>
+        <div class="text-sm text-white/50 leading-relaxed mb-6">Available Mon–Sat · 8AM to 8PM<br>For subscription renewals &amp; urgent inquiries</div>
+        <span class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-300 text-sm font-semibold group-hover:bg-green-500/30 transition-all">
+          <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
+          Tap to Call
+        </span>
+      </a>
+
+      <!-- Email -->
+      <a href="mailto:mendozakiaro@gmail.com?subject=PawnHub%20Inquiry"
+        class="group glass-dark rounded-[2rem] p-10 flex flex-col items-center text-center border border-white/10 hover:border-blue-500/50 transition-all hover:-translate-y-1 no-underline"
+        style="text-decoration:none;">
+        <div class="w-20 h-20 rounded-full bg-blue-500/15 border-2 border-blue-500/30 flex items-center justify-center mb-6 group-hover:bg-blue-500/25 group-hover:border-blue-400/60 transition-all">
+          <span class="material-symbols-outlined text-blue-400 text-4xl" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">mail</span>
+        </div>
+        <div class="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3">Email Us</div>
+        <div class="text-2xl font-extrabold text-white tracking-tight mb-2">mendozakiaro<wbr>@gmail.com</div>
+        <div class="text-sm text-white/50 leading-relaxed mb-6">For subscription renewal requests<br>and general support inquiries</div>
+        <span class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-300 text-sm font-semibold group-hover:bg-blue-500/30 transition-all">
+          <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">open_in_new</span>
+          Send Email
+        </span>
+      </a>
+
+    </div>
+
+    <!-- Subscription renewal notice -->
+    <div class="glass-dark rounded-2xl px-8 py-6 flex flex-col sm:flex-row items-center gap-5 border border-yellow-500/20">
+      <div class="w-12 h-12 rounded-xl bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center flex-shrink-0">
+        <span class="material-symbols-outlined text-yellow-400 text-2xl" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">info</span>
+      </div>
+      <div>
+        <div class="text-sm font-bold text-yellow-300 mb-1">Subscription Renewal</div>
+        <div class="text-sm text-white/55 leading-relaxed">If your account has been deactivated due to an expired subscription, contact us via call or email above. Once payment is confirmed, your account will be restored within minutes.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
 <!-- FOOTER -->
 <footer class="w-full glass-dark border-t border-white/10">
-  <div class="max-w-7xl mx-auto py-14 px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+  <div class="max-w-7xl mx-auto py-14 px-6 grid grid-cols-2 md:grid-cols-5 gap-8">
     <div class="col-span-2">
       <div class="flex items-center gap-3 mb-4">
         <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
@@ -409,6 +471,7 @@ section[id] { scroll-margin-top: 80px; }
       <a href="#features" class="text-sm text-white/55 hover:text-white transition-colors">Features</a>
       <a href="#roles"    class="text-sm text-white/55 hover:text-white transition-colors">Roles</a>
       <a href="#pricing"  class="text-sm text-white/55 hover:text-white transition-colors">Pricing</a>
+      <a href="#contact"  class="text-sm text-white/55 hover:text-white transition-colors">Contact Us</a>
     </div>
     <div class="flex flex-col gap-3">
       <p class="font-bold text-blue-400 mb-1 text-sm uppercase tracking-wider">Account</p>
@@ -417,6 +480,18 @@ section[id] { scroll-margin-top: 80px; }
       <a href="signup.php?plan=Starter"    class="text-sm text-white/55 hover:text-white transition-colors">Starter Plan</a>
       <a href="signup.php?plan=Pro"        class="text-sm text-white/55 hover:text-white transition-colors">Pro Plan</a>
       <a href="signup.php?plan=Enterprise" class="text-sm text-white/55 hover:text-white transition-colors">Enterprise Plan</a>
+    </div>
+    <div class="flex flex-col gap-3">
+      <p class="font-bold text-blue-400 mb-1 text-sm uppercase tracking-wider">Contact</p>
+      <a href="tel:+639452078380" class="text-sm text-white/55 hover:text-white transition-colors flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm text-green-400" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
+        0945 207 8380
+      </a>
+      <a href="mailto:mendozakiaro@gmail.com" class="text-sm text-white/55 hover:text-white transition-colors flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm text-blue-400" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">mail</span>
+        mendozakiaro@gmail.com
+      </a>
+      <span class="text-xs text-white/30 mt-1">Mon–Sat · 8AM–8PM</span>
     </div>
   </div>
   <div class="border-t border-white/10">
