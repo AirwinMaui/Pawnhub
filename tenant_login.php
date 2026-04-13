@@ -25,8 +25,37 @@ if (!$tenant) {
     exit;
 }
 
-// Block login if tenant is deactivated — load SA contact info for the screen
-$is_deactivated = (isset($tenant['status']) && $tenant['status'] === 'inactive');
+// Block login if tenant is deactivated OR subscription expired 7+ days ago
+// (covers cases where cron hasn't run yet but tenant should be locked out)
+$is_deactivated = false;
+$sub_expired_days = 0;
+
+if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
+    $is_deactivated = true;
+} elseif (
+    !empty($tenant['subscription_end']) &&
+    $tenant['plan'] !== 'Starter' &&
+    ($tenant['subscription_status'] === 'expired' ||
+     strtotime($tenant['subscription_end']) < time())
+) {
+    $days_overdue = (int)floor((time() - strtotime($tenant['subscription_end'])) / 86400);
+    if ($days_overdue >= 7) {
+        $is_deactivated   = true;
+        $sub_expired_days = $days_overdue;
+
+        // Also auto-deactivate now in case cron missed it
+        try {
+            $pdo->prepare("UPDATE tenants SET status='inactive' WHERE id=?")
+                ->execute([$tenant['id']]);
+            $pdo->prepare("
+                UPDATE users SET is_suspended=1, suspended_at=NOW(),
+                suspension_reason='Subscription expired and auto-deactivated after 7 days.'
+                WHERE tenant_id=? AND role != 'admin'
+            ")->execute([$tenant['id']]);
+        } catch (Throwable $e) {}
+    }
+}
+
 $sa_contact_email = '';
 $sa_contact_name  = '';
 if ($is_deactivated) {
@@ -421,7 +450,7 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
         <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:14px;padding:18px 18px 14px;margin-bottom:16px;">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#dc2626;margin-bottom:10px;">What happened?</div>
           <ul style="font-size:.81rem;color:#7f1d1d;line-height:1.8;padding-left:18px;margin:0;">
-            <li>Your subscription has expired</li>
+            <li>Your subscription has expired<?= $sub_expired_days > 0 ? ' <strong>(' . $sub_expired_days . ' days ago)</strong>' : '' ?></li>
             <li>Your account was automatically deactivated</li>
             <li>All staff access has been temporarily suspended</li>
           </ul>
