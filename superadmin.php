@@ -285,7 +285,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'tenants';
     }
 
-    // ── APPROVE SUBSCRIPTION RENEWAL ─────────────────────────
+    // ── EXTEND SUBSCRIPTION 1 MONTH (SA quick action) ─────────
+    // Used when a tenant calls in and SA manually extends their sub by 1 month.
+    // Also re-activates the tenant and unsuspends all users if deactivated.
+    if ($_POST['action'] === 'extend_1_month') {
+        $target_tid = intval($_POST['tenant_id']);
+
+        $t_info = $pdo->prepare("SELECT id, business_name, owner_name, email, plan, slug, status, subscription_end, subscription_status FROM tenants WHERE id=? LIMIT 1");
+        $t_info->execute([$target_tid]);
+        $t_info = $t_info->fetch();
+
+        if ($t_info) {
+            // New end = today + 1 month (not from old expiry — fresh start from today)
+            $new_end = date('Y-m-d', strtotime('+1 month'));
+
+            // Update tenant: reactivate + extend subscription
+            $pdo->prepare("
+                UPDATE tenants SET
+                    status = 'active',
+                    subscription_start = CURDATE(),
+                    subscription_end = ?,
+                    subscription_status = 'active',
+                    renewal_reminded_7d = 0,
+                    renewal_reminded_3d = 0,
+                    renewal_reminded_1d = 0
+                WHERE id = ?
+            ")->execute([$new_end, $target_tid]);
+
+            // Unsuspend all users (covers auto-deactivated + SA deactivated)
+            $pdo->prepare("
+                UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL
+                WHERE tenant_id=? AND is_suspended=1
+            ")->execute([$target_tid]);
+
+            // Record in subscription_renewals for sales report
+            $plan_amounts = ['Starter' => 0, 'Pro' => 999, 'Enterprise' => 2499];
+            $sub_amount   = $plan_amounts[$t_info['plan']] ?? 0;
+            try {
+                $pdo->prepare("
+                    INSERT INTO subscription_renewals
+                        (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at, reviewed_by, reviewed_at, new_subscription_end)
+                    VALUES (?, ?, 'monthly', 'SA Manual Extend', 'AUTO — SA Extended 1 Month', ?, ?, NOW(), ?, NOW(), ?)
+                ")->execute([$target_tid, $t_info['plan'], $sub_amount, 'approved', $u['id'], $new_end]);
+            } catch (PDOException $e) {
+                error_log('[Extend1Mo] Could not record subscription_renewals: ' . $e->getMessage());
+            }
+
+            // Send renewal confirmation email to tenant
+            if (function_exists('sendSubscriptionRenewed')) {
+                try {
+                    sendSubscriptionRenewed(
+                        $t_info['email'],
+                        $t_info['owner_name'],
+                        $t_info['business_name'],
+                        $t_info['plan'],
+                        $new_end,
+                        $t_info['slug']
+                    );
+                } catch (Throwable $e) {}
+            }
+
+            try {
+                $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_EXTEND_1MO','subscription',?,?,?,NOW())")
+                    ->execute([$target_tid,$u['id'],$u['username'],'super_admin',$target_tid,
+                        "SA manually extended subscription for \"{$t_info['business_name']}\" by 1 month. New expiry: {$new_end}. Tenant re-activated.",
+                        $_SERVER['REMOTE_ADDR']??'::1']);
+            } catch (PDOException $e) {}
+
+            $success_msg = "✅ Subscription extended 1 month for <strong>{$t_info['business_name']}</strong>! New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Tenant re-activated and all users unsuspended.";
+        } else {
+            $error_msg = 'Tenant not found.';
+        }
+        $active_page = 'subscriptions';
+    }
     if ($_POST['action'] === 'approve_sub_renewal') {
         $rid = intval($_POST['renewal_id']);
         $billing_months = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
@@ -1317,6 +1389,16 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                     onclick="openSetSubModal(<?= $ts['id'] ?>, '<?= addslashes($ts['business_name']) ?>', '<?= $ts['subscription_start'] ?? '' ?>', '<?= $ts['subscription_end'] ?? '' ?>', '<?= $ts['plan'] ?>')">
                     ✏️ Set Dates
                   </button>
+                  <?php if ($ss_status === 'expired' || $ts['status'] === 'inactive'): ?>
+                  <form method="POST" action="" style="display:inline;">
+                    <input type="hidden" name="action" value="extend_1_month"/>
+                    <input type="hidden" name="tenant_id" value="<?= $ts['id'] ?>"/>
+                    <button type="submit" class="btn-sm btn-success" style="font-size:.73rem;"
+                      onclick="return confirm('Extend subscription of \'<?= addslashes($ts['business_name']) ?>\' by 1 month from today?\n\nThis will:\n• Set new expiry to ' + new Date(Date.now() + 30*86400000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '\n• Re-activate the tenant\n• Unsuspend all users')">
+                      🔄 Extend 1 Month
+                    </button>
+                  </form>
+                  <?php endif; ?>
                 </td>
               </tr>
               <?php endforeach; ?>
