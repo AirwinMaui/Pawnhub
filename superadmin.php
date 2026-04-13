@@ -1164,7 +1164,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
         <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
-        <?php else:?><table><thead><tr><th>ID</th><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Subscription</th><th>Expiry</th><th>Users</th><th>Registered</th><th>Actions</th></tr></thead><tbody>
+        <?php else:?><table style="font-size:.79rem;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
         <?php foreach($tenants as $t):
           // Subscription expiry display logic
           $sub_end   = $t['subscription_end'] ?? null;
@@ -1172,55 +1172,70 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           $sub_stat  = $t['subscription_status'] ?? null;
 
           if (!$sub_end || $t['status'] === 'pending') {
-            $sub_badge   = '<span class="badge b-gray" style="font-size:.67rem;">—</span>';
-            $expiry_cell = '<span style="font-size:.73rem;color:var(--text-dim);">—</span>';
+            $sub_badge   = '<span class="badge b-gray" style="font-size:.63rem;">—</span>';
+            $expiry_cell = '<span style="font-size:.7rem;color:var(--text-dim);">—</span>';
           } elseif ($sub_stat === 'expired' || $days_left < 0) {
             $expired_days    = abs($days_left ?? 0);
             $auto_deact_days = max(0, 7 - $expired_days);
-            $sub_badge = '<span class="badge b-red" style="font-size:.67rem;">❌ Expired</span>';
+            $sub_badge = '<span class="badge b-red" style="font-size:.63rem;">❌ Expired</span>';
             if ($auto_deact_days > 0) {
-              $expiry_cell = '<div style="font-size:.72rem;color:#dc2626;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                           . '<div style="font-size:.67rem;color:#ef4444;">Auto-deactivate in ' . $auto_deact_days . 'd</div>';
+              $expiry_cell = '<div style="font-size:.7rem;color:#dc2626;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                           . '<div style="font-size:.63rem;color:#ef4444;">Deactivate in ' . $auto_deact_days . 'd</div>';
             } else {
-              $expiry_cell = '<div style="font-size:.72rem;color:#dc2626;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                           . '<div style="font-size:.67rem;color:#ef4444;">Overdue ' . $expired_days . 'd</div>';
+              $expiry_cell = '<div style="font-size:.7rem;color:#dc2626;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                           . '<div style="font-size:.63rem;color:#ef4444;">Overdue ' . $expired_days . 'd</div>';
             }
           } elseif ($days_left <= 3) {
-            $sub_badge   = '<span class="badge b-red" style="font-size:.67rem;">🚨 Critical</span>';
-            $expiry_cell = '<div style="font-size:.72rem;color:#dc2626;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.67rem;color:#ef4444;">' . $days_left . ' day(s) left</div>';
+            $sub_badge   = '<span class="badge b-red" style="font-size:.63rem;">🚨 Critical</span>';
+            $expiry_cell = '<div style="font-size:.7rem;color:#dc2626;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.63rem;color:#ef4444;">' . $days_left . 'd left</div>';
           } elseif ($days_left <= 7) {
-            $sub_badge   = '<span class="badge b-orange" style="font-size:.67rem;">⚠️ Expiring</span>';
-            $expiry_cell = '<div style="font-size:.72rem;color:#c2410c;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.67rem;color:#ea580c;">' . $days_left . ' days left</div>';
+            $sub_badge   = '<span class="badge b-orange" style="font-size:.63rem;">⚠️ Expiring</span>';
+            $expiry_cell = '<div style="font-size:.7rem;color:#c2410c;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.63rem;color:#ea580c;">' . $days_left . 'd left</div>';
           } elseif ($days_left <= 14) {
-            $sub_badge   = '<span class="badge b-yellow" style="font-size:.67rem;">⏰ Soon</span>';
-            $expiry_cell = '<div style="font-size:.72rem;color:#b45309;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.67rem;color:#d97706;">' . $days_left . ' days left</div>';
+            $sub_badge   = '<span class="badge b-yellow" style="font-size:.63rem;">⏰ Soon</span>';
+            $expiry_cell = '<div style="font-size:.7rem;color:#b45309;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.63rem;color:#d97706;">' . $days_left . 'd left</div>';
           } else {
-            $sub_badge   = '<span class="badge b-green" style="font-size:.67rem;">✅ Active</span>';
-            $expiry_cell = '<div style="font-size:.72rem;color:var(--text-dim);">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.67rem;color:#16a34a;">' . $days_left . ' days left</div>';
+            $sub_badge   = '<span class="badge b-green" style="font-size:.63rem;">✅ Active</span>';
+            $expiry_cell = '<div style="font-size:.7rem;color:var(--text-dim);white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.63rem;color:#16a34a;">' . $days_left . 'd left</div>';
           }
         ?>
         <tr>
-          <td style="color:var(--text-dim);font-size:.74rem;">#<?=$t['id']?></td>
-          <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
-          <td style="font-size:.79rem;"><?=htmlspecialchars($t['owner_name'])?></td>
-          <td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
-          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td>
-          <td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':($t['status']==='inactive'?'b-red':'b-gray'))?>"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td>
+          <td style="color:var(--text-dim);font-size:.7rem;">#<?=$t['id']?></td>
+          <td>
+            <div style="font-weight:600;font-size:.8rem;"><?=htmlspecialchars($t['business_name'])?></div>
+            <div style="font-size:.68rem;color:var(--text-dim);"><?=htmlspecialchars($t['owner_name'])?></div>
+          </td>
+          <td style="font-size:.71rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
+          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>" style="font-size:.63rem;"><?=$t['plan']?></span></td>
+          <td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':($t['status']==='inactive'?'b-red':'b-gray'))?>" style="font-size:.63rem;"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td>
           <td><?= $sub_badge ?></td>
           <td><?= $expiry_cell ?></td>
-          <td><?=$t['user_count']?></td>
-          <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
+          <td style="text-align:center;"><?=$t['user_count']?></td>
           <td>
-            <?php if($t['status']==='active'):?><form method="POST" style="display:inline;" onsubmit="return confirm('Deactivate? Their users cannot login until reactivated.')"><input type="hidden" name="action" value="deactivate_tenant"><input type="hidden" name="tenant_id" value="<?=$t['id']?>"><button type="submit" class="btn-sm btn-danger" style="font-size:.7rem;">Deactivate</button></form>
-            <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.7rem;">⭐ Plan</button>
-            <?php elseif($t['status']==='inactive'):?><form method="POST" style="display:inline;"><input type="hidden" name="action" value="activate_tenant"><input type="hidden" name="tenant_id" value="<?=$t['id']?>"><button type="submit" class="btn-sm btn-success" style="font-size:.7rem;">Activate</button></form>
-            <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.7rem;">⭐ Plan</button>
-            <?php elseif($t['status']==='pending'):?><button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button><button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
-            <?php else:?><span style="font-size:.73rem;color:var(--text-dim);">—</span><?php endif;?>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+            <?php if($t['status']==='active'):?>
+              <form method="POST" style="margin:0;" onsubmit="return confirm('Deactivate? Their users cannot login until reactivated.')">
+                <input type="hidden" name="action" value="deactivate_tenant">
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>">
+                <button type="submit" class="btn-sm btn-danger" style="font-size:.67rem;padding:4px 9px;margin:0;">Deactivate</button>
+              </form>
+              <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.67rem;padding:4px 9px;margin:0;">⭐ Plan</button>
+            <?php elseif($t['status']==='inactive'):?>
+              <form method="POST" style="margin:0;">
+                <input type="hidden" name="action" value="activate_tenant">
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>">
+                <button type="submit" class="btn-sm btn-success" style="font-size:.67rem;padding:4px 9px;margin:0;">Activate</button>
+              </form>
+              <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.67rem;padding:4px 9px;margin:0;">⭐ Plan</button>
+            <?php elseif($t['status']==='pending'):?>
+              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.67rem;padding:4px 9px;margin:0;">✓ Approve</button>
+              <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.67rem;padding:4px 9px;margin:0;">✗ Reject</button>
+            <?php else:?><span style="font-size:.7rem;color:var(--text-dim);">—</span><?php endif;?>
+            </div>
           </td>
         </tr>
         <?php endforeach;?></tbody></table><?php endif;?>
