@@ -940,9 +940,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 .flabel{display:block;font-size:.74rem;font-weight:600;color:var(--text-m);margin-bottom:4px;}
 .finput{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 11px;font-family:inherit;font-size:.85rem;color:var(--text);outline:none;background:#fff;transition:border .2s;}
 .finput:focus{border-color:var(--blue-acc);box-shadow:0 0 0 3px rgba(37,99,235,.1);} .finput::placeholder{color:#c8d0db;} select.finput{cursor:pointer;}
-.filter-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;}
-.filter-bar label{font-size:.74rem;font-weight:600;color:var(--text-dim);white-space:nowrap;}
-.filter-select,.filter-input{border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:.81rem;color:var(--text);outline:none;background:#fff;transition:border .2s;}
+.filter-bar{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-bottom:16px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;}
+.filter-bar label{font-size:.74rem;font-weight:600;color:var(--text-dim);white-space:nowrap;flex-shrink:0;}
+.filter-bar .filter-group{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
+.filter-bar .filter-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;}
+.filter-select{border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:.81rem;color:var(--text);outline:none;background:#fff;transition:border .2s;min-width:120px;}
+.filter-input{border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;font-family:inherit;font-size:.81rem;color:var(--text);outline:none;background:#fff;transition:border .2s;min-width:130px;}
+.filter-input[type="text"]{min-width:150px;}
 .filter-select:focus,.filter-input:focus{border-color:var(--blue-acc);}
 .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 .summary-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
@@ -961,7 +965,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 .sub-stat-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;}
 .page-section{color:#fff;}
 @media(max-width:1200px){.stats-grid,.summary-grid{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr;}}
-@media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}}
+@media(max-width:900px){.filter-bar{gap:8px;}.filter-bar .filter-actions{margin-left:0;}}
+@media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
 </style>
 </head>
 <body>
@@ -1530,20 +1535,30 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     <?php elseif($active_page==='reports'): ?>
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
         <?php foreach(['tenant_activity'=>['🏢 Tenant Activity','#2563eb','#eff6ff'],'user_registration'=>['👤 User Registration','#16a34a','#f0fdf4'],'usage_statistics'=>['📊 Usage Statistics','#7c3aed','#f3e8ff']] as $rk=>[$rl,$rc2,$rb]):?>
-        <a href="?page=reports&report_type=<?=$rk?>&date_from=<?=$filter_date_from?>&date_to=<?=$filter_date_to?>" style="padding:8px 16px;border-radius:9px;font-size:.8rem;font-weight:700;text-decoration:none;border:2px solid <?=$report_type===$rk?$rc2:'var(--border)'?>;background:<?=$report_type===$rk?$rb:'#fff'?>;color:<?=$report_type===$rk?$rc2:'var(--text-m)'?>;"><?=$rl?></a>
+        <a href="?page=reports&report_type=<?=$rk?>&date_from=<?=$filter_date_from?>&date_to=<?=$filter_date_to?>" style="padding:9px 18px;border-radius:9px;font-size:.82rem;font-weight:700;text-decoration:none;border:2px solid <?=$report_type===$rk?$rc2:'var(--border)'?>;background:<?=$report_type===$rk?$rb:'#fff'?>;color:<?=$report_type===$rk?$rc2:'var(--text-m)'?>;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;"><?=$rl?></a>
         <?php endforeach;?>
       </div>
       <form method="GET"><input type="hidden" name="page" value="reports"><input type="hidden" name="report_type" value="<?=htmlspecialchars($report_type)?>">
         <div class="filter-bar">
-          <label>From:</label><input type="date" name="date_from" class="filter-input" value="<?=htmlspecialchars($filter_date_from)?>">
-          <label>To:</label><input type="date" name="date_to" class="filter-input" value="<?=htmlspecialchars($filter_date_to)?>">
+          <div class="filter-group">
+            <label>From:</label><input type="date" name="date_from" class="filter-input" value="<?=htmlspecialchars($filter_date_from)?>">
+          </div>
+          <div class="filter-group">
+            <label>To:</label><input type="date" name="date_to" class="filter-input" value="<?=htmlspecialchars($filter_date_to)?>">
+          </div>
           <?php if(in_array($report_type,['tenant_activity','user_registration'])):?>
-          <label>Status:</label><select name="filter_status" class="filter-select"><option value="">All</option>
-            <?php if($report_type==='user_registration'):?><option value="approved" <?=$filter_status==='approved'?'selected':''?>>Approved</option><option value="pending" <?=$filter_status==='pending'?'selected':''?>>Pending</option><option value="rejected" <?=$filter_status==='rejected'?'selected':''?>>Rejected</option>
-            <?php else:?><option value="active" <?=$filter_status==='active'?'selected':''?>>Active</option><option value="inactive" <?=$filter_status==='inactive'?'selected':''?>>Inactive</option><option value="pending" <?=$filter_status==='pending'?'selected':''?>>Pending</option><?php endif;?></select>
+          <div class="filter-group">
+            <label>Status:</label><select name="filter_status" class="filter-select"><option value="">All</option>
+              <?php if($report_type==='user_registration'):?><option value="approved" <?=$filter_status==='approved'?'selected':''?>>Approved</option><option value="pending" <?=$filter_status==='pending'?'selected':''?>>Pending</option><option value="rejected" <?=$filter_status==='rejected'?'selected':''?>>Rejected</option>
+              <?php else:?><option value="active" <?=$filter_status==='active'?'selected':''?>>Active</option><option value="inactive" <?=$filter_status==='inactive'?'selected':''?>>Inactive</option><option value="pending" <?=$filter_status==='pending'?'selected':''?>>Pending</option><?php endif;?></select>
+          </div>
           <?php endif;?>
-          <label>Tenant:</label><select name="filter_tenant" class="filter-select"><option value="0">All</option><?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$filter_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?></select>
-          <button type="submit" class="btn-sm btn-primary">Apply</button><a href="?page=reports&report_type=<?=$report_type?>" class="btn-sm">Reset</a>
+          <div class="filter-group">
+            <label>Tenant:</label><select name="filter_tenant" class="filter-select" style="min-width:160px;"><option value="0">All</option><?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$filter_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?></select>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="btn-sm btn-primary">Apply</button><a href="?page=reports&report_type=<?=$report_type?>" class="btn-sm">Reset</a>
+          </div>
         </div>
       </form>
 
@@ -1580,20 +1595,30 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
       <form method="GET"><input type="hidden" name="page" value="sales_report">
         <div class="filter-bar">
-          <label>Period:</label>
-          <select name="sales_period" class="filter-select">
-            <option value="daily"   <?=$sales_period==='daily'  ?'selected':''?>>Daily</option>
-            <option value="weekly"  <?=$sales_period==='weekly' ?'selected':''?>>Weekly</option>
-            <option value="monthly" <?=$sales_period==='monthly'?'selected':''?>>Monthly</option>
-          </select>
-          <label>From:</label><input type="date" name="sales_from" class="filter-input" value="<?=htmlspecialchars($sales_date_from)?>">
-          <label>To:</label><input type="date" name="sales_to" class="filter-input" value="<?=htmlspecialchars($sales_date_to)?>">
-          <label>Filter by Tenant:</label>
-          <select name="sales_tenant" class="filter-select"><option value="0">All Tenants</option>
-            <?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$sales_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?>
-          </select>
-          <button type="submit" class="btn-sm btn-primary">Apply</button>
-          <a href="?page=sales_report" class="btn-sm">Reset</a>
+          <div class="filter-group">
+            <label>Period:</label>
+            <select name="sales_period" class="filter-select">
+              <option value="daily"   <?=$sales_period==='daily'  ?'selected':''?>>Daily</option>
+              <option value="weekly"  <?=$sales_period==='weekly' ?'selected':''?>>Weekly</option>
+              <option value="monthly" <?=$sales_period==='monthly'?'selected':''?>>Monthly</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>From:</label><input type="date" name="sales_from" class="filter-input" value="<?=htmlspecialchars($sales_date_from)?>">
+          </div>
+          <div class="filter-group">
+            <label>To:</label><input type="date" name="sales_to" class="filter-input" value="<?=htmlspecialchars($sales_date_to)?>">
+          </div>
+          <div class="filter-group">
+            <label>Tenant:</label>
+            <select name="sales_tenant" class="filter-select" style="min-width:160px;"><option value="0">All Tenants</option>
+              <?php foreach($tenants as $t):?><option value="<?=$t['id']?>" <?=$sales_tenant===(int)$t['id']?'selected':''?>><?=htmlspecialchars($t['business_name'])?></option><?php endforeach;?>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="btn-sm btn-primary">Apply</button>
+            <a href="?page=sales_report" class="btn-sm">Reset</a>
+          </div>
         </div>
       </form>
 
@@ -1817,15 +1842,25 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
       <form method="GET"><input type="hidden" name="page" value="audit_logs">
         <div class="filter-bar">
-          <label>From:</label><input type="date" name="audit_from" class="filter-input" value="<?=htmlspecialchars($audit_date_from)?>">
-          <label>To:</label><input type="date" name="audit_to" class="filter-input" value="<?=htmlspecialchars($audit_date_to)?>">
-          <label>Action:</label>
-          <select name="audit_action" class="filter-select"><option value="">All Actions</option>
-            <?php foreach($audit_actions_list as $act):?><option value="<?=htmlspecialchars($act)?>" <?=$audit_action===$act?'selected':''?>><?=htmlspecialchars($act)?></option><?php endforeach;?>
-          </select>
-          <label>Actor:</label><input type="text" name="audit_actor" class="filter-input" placeholder="Search username..." value="<?=htmlspecialchars($audit_actor)?>" style="width:150px;">
-          <button type="submit" class="btn-sm btn-primary">Apply</button>
-          <a href="?page=audit_logs" class="btn-sm">Reset</a>
+          <div class="filter-group">
+            <label>From:</label><input type="date" name="audit_from" class="filter-input" value="<?=htmlspecialchars($audit_date_from)?>">
+          </div>
+          <div class="filter-group">
+            <label>To:</label><input type="date" name="audit_to" class="filter-input" value="<?=htmlspecialchars($audit_date_to)?>">
+          </div>
+          <div class="filter-group">
+            <label>Action:</label>
+            <select name="audit_action" class="filter-select" style="min-width:160px;"><option value="">All Actions</option>
+              <?php foreach($audit_actions_list as $act):?><option value="<?=htmlspecialchars($act)?>" <?=$audit_action===$act?'selected':''?>><?=htmlspecialchars($act)?></option><?php endforeach;?>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Actor:</label><input type="text" name="audit_actor" class="filter-input" placeholder="Search username..." value="<?=htmlspecialchars($audit_actor)?>">
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="btn-sm btn-primary">Apply</button>
+            <a href="?page=audit_logs" class="btn-sm">Reset</a>
+          </div>
         </div>
       </form>
 
@@ -2236,4 +2271,4 @@ function updatePlanCard(selected){
 </div>
 
 </body>
-</html> 
+</html>
