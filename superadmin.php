@@ -522,7 +522,8 @@ try {
             (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id AND u.status='pending') AS pending_users,
             (SELECT u.fullname FROM users u WHERE u.tenant_id=t.id AND u.role='admin' AND u.status='approved' LIMIT 1) AS admin_name,
             (SELECT u.id FROM users u WHERE u.tenant_id=t.id AND u.role='admin' LIMIT 1) AS admin_uid,
-            (SELECT status FROM tenant_invitations ti WHERE ti.tenant_id=t.id ORDER BY ti.created_at DESC LIMIT 1) AS invite_status
+            (SELECT status FROM tenant_invitations ti WHERE ti.tenant_id=t.id ORDER BY ti.created_at DESC LIMIT 1) AS invite_status,
+            DATEDIFF(t.subscription_end, CURDATE()) AS days_left
         FROM tenants t ORDER BY t.created_at DESC
     ")->fetchAll();
 } catch (PDOException $e) {
@@ -1091,8 +1092,45 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
         <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
-        <?php else:?><table><thead><tr><th>ID</th><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Users</th><th>Registered</th><th>Actions</th></tr></thead><tbody>
-        <?php foreach($tenants as $t):?>
+        <?php else:?><table><thead><tr><th>ID</th><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Subscription</th><th>Expiry</th><th>Users</th><th>Registered</th><th>Actions</th></tr></thead><tbody>
+        <?php foreach($tenants as $t):
+          // Subscription expiry display logic
+          $sub_end   = $t['subscription_end'] ?? null;
+          $days_left = isset($t['days_left']) ? (int)$t['days_left'] : null;
+          $sub_stat  = $t['subscription_status'] ?? null;
+
+          if (!$sub_end || $t['status'] === 'pending') {
+            $sub_badge   = '<span class="badge b-gray" style="font-size:.67rem;">—</span>';
+            $expiry_cell = '<span style="font-size:.73rem;color:var(--text-dim);">—</span>';
+          } elseif ($sub_stat === 'expired' || $days_left < 0) {
+            $expired_days    = abs($days_left ?? 0);
+            $auto_deact_days = max(0, 7 - $expired_days);
+            $sub_badge = '<span class="badge b-red" style="font-size:.67rem;">❌ Expired</span>';
+            if ($auto_deact_days > 0) {
+              $expiry_cell = '<div style="font-size:.72rem;color:#dc2626;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                           . '<div style="font-size:.67rem;color:#ef4444;">Auto-deactivate in ' . $auto_deact_days . 'd</div>';
+            } else {
+              $expiry_cell = '<div style="font-size:.72rem;color:#dc2626;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                           . '<div style="font-size:.67rem;color:#ef4444;">Overdue ' . $expired_days . 'd</div>';
+            }
+          } elseif ($days_left <= 3) {
+            $sub_badge   = '<span class="badge b-red" style="font-size:.67rem;">🚨 Critical</span>';
+            $expiry_cell = '<div style="font-size:.72rem;color:#dc2626;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.67rem;color:#ef4444;">' . $days_left . ' day(s) left</div>';
+          } elseif ($days_left <= 7) {
+            $sub_badge   = '<span class="badge b-orange" style="font-size:.67rem;">⚠️ Expiring</span>';
+            $expiry_cell = '<div style="font-size:.72rem;color:#c2410c;font-weight:700;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.67rem;color:#ea580c;">' . $days_left . ' days left</div>';
+          } elseif ($days_left <= 14) {
+            $sub_badge   = '<span class="badge b-yellow" style="font-size:.67rem;">⏰ Soon</span>';
+            $expiry_cell = '<div style="font-size:.72rem;color:#b45309;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.67rem;color:#d97706;">' . $days_left . ' days left</div>';
+          } else {
+            $sub_badge   = '<span class="badge b-green" style="font-size:.67rem;">✅ Active</span>';
+            $expiry_cell = '<div style="font-size:.72rem;color:var(--text-dim);">' . date('M d, Y', strtotime($sub_end)) . '</div>'
+                         . '<div style="font-size:.67rem;color:#16a34a;">' . $days_left . ' days left</div>';
+          }
+        ?>
         <tr>
           <td style="color:var(--text-dim);font-size:.74rem;">#<?=$t['id']?></td>
           <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
@@ -1100,6 +1138,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
           <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td>
           <td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':($t['status']==='inactive'?'b-red':'b-gray'))?>"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td>
+          <td><?= $sub_badge ?></td>
+          <td><?= $expiry_cell ?></td>
           <td><?=$t['user_count']?></td>
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
           <td>
