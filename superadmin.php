@@ -877,9 +877,21 @@ try { $audit_actions_list = $pdo->query("SELECT DISTINCT action FROM audit_logs 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-:root{--sw:252px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;--text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;}
+:root{--sw:252px;--sw-col:62px;--navy:#0f172a;--blue-acc:#2563eb;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--text-m:#475569;--text-dim:#94a3b8;--success:#16a34a;--danger:#dc2626;--warning:#d97706;}
 body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;}
-.sidebar{width:var(--sw);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;}
+.sidebar{width:var(--sw);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;overflow-x:hidden;transition:width .25s cubic-bezier(.4,0,.2,1);}
+.sidebar.collapsed{width:var(--sw-col);}
+.sidebar.collapsed .sb-name,.sidebar.collapsed .sb-badge,.sidebar.collapsed .sb-uname,.sidebar.collapsed .sb-urole,.sidebar.collapsed .sb-section,.sidebar.collapsed .sb-item-text,.sidebar.collapsed .sb-pill{display:none;}
+.sidebar.collapsed .sb-brand{justify-content:center;padding:18px 0;}
+.sidebar.collapsed .sb-user{justify-content:center;padding:10px 0;}
+.sidebar.collapsed .sb-item{justify-content:center;padding:10px 0;margin:2px 6px;}
+.sidebar.collapsed .sb-item svg{width:18px;height:18px;flex-shrink:0;}
+.sidebar.collapsed .sb-logout{justify-content:center;}
+.sb-toggle{position:absolute;top:22px;right:-13px;width:26px;height:26px;background:var(--blue-acc);border-radius:50%;border:2.5px solid var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.25);}
+.sb-toggle svg{width:11px;height:11px;stroke:#fff;stroke-width:2.5;transition:transform .25s;}
+.sidebar.collapsed .sb-toggle svg{transform:rotate(180deg);}
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1);}
+.main.sb-collapsed{margin-left:var(--sw-col);}
 .sb-brand{padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;}
 .sb-logo{width:36px;height:36px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .sb-logo svg{width:18px;height:18px;}
@@ -890,23 +902,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .sb-uname{font-size:.78rem;font-weight:600;color:#fff;} .sb-urole{font-size:.62rem;color:rgba(255,255,255,.35);}
 .sb-nav{flex:1;padding:10px 0;}
 .sb-section{font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25);padding:10px 16px 4px;}
-@keyframes sbPeek{
-  0%,60%,100%{transform:translateX(0);}
-  75%{transform:translateX(-7px);}
-  88%{transform:translateX(-3px);}
-}
-.sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:background .15s,color .15s;animation:sbPeek 3.5s ease-in-out infinite;}
-.sb-item:nth-child(1){animation-delay:0s;}
-.sb-item:nth-child(2){animation-delay:.4s;}
-.sb-item:nth-child(3){animation-delay:.8s;}
-.sb-item:nth-child(4){animation-delay:1.2s;}
-.sb-item:nth-child(5){animation-delay:1.6s;}
-.sb-item:nth-child(6){animation-delay:2s;}
-.sb-item:nth-child(7){animation-delay:2.4s;}
-.sb-item:nth-child(8){animation-delay:2.8s;}
-.sb-item:hover,.sb-item.active{background:rgba(255,255,255,.08);color:#fff;animation:none;transform:translateX(0);}
-.sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;}
-.sb-item svg{width:15px;height:15px;flex-shrink:0;}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 16px;margin:1px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .15s;}
+.sb-item:hover{background:rgba(255,255,255,.08);color:#fff;} .sb-item.active{background:rgba(37,99,235,.25);color:#60a5fa;font-weight:600;} .sb-item svg{width:15px;height:15px;flex-shrink:0;} .sb-item-text{transition:opacity .2s;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:100px;}
 .sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);}
 .sb-logout{display:flex;align-items:center;gap:8px;font-size:.8rem;color:rgba(255,255,255,.35);text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
@@ -982,7 +979,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 <body>
 
 <!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
+  <button class="sb-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
   <div class="sb-brand">
     <div class="sb-logo"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg></div>
     <div><div class="sb-name">PawnHub</div><div class="sb-badge">Super Admin</div></div>
@@ -994,39 +994,39 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <nav class="sb-nav">
     <div class="sb-section">Overview</div>
     <a href="?page=dashboard" class="sb-item <?= $active_page==='dashboard'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="sb-item-text">Dashboard</span>
     </a>
     <div class="sb-section">Management</div>
     <a href="?page=tenants" class="sb-item <?= $active_page==='tenants'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>Tenant Management
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><span class="sb-item-text">Tenant Management</span>
       <?php if($pending_tenants>0):?><span class="sb-pill"><?=$pending_tenants?></span><?php endif;?>
     </a>
     <a href="?page=invitations" class="sb-item <?= $active_page==='invitations'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email Invitations
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="sb-item-text">Email Invitations</span>
       <?php if($pending_inv>0):?><span class="sb-pill"><?=$pending_inv?></span><?php endif;?>
     </a>
     <a href="?page=subscriptions" class="sb-item <?= $active_page==='subscriptions'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Subscriptions
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg><span class="sb-item-text">Subscriptions</span>
       <?php if($pending_sub_count>0):?><span class="sb-pill"><?=$pending_sub_count?></span><?php endif;?>
     </a>
     <div class="sb-section">Analytics</div>
     <a href="?page=reports" class="sb-item <?= $active_page==='reports'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span class="sb-item-text">Reports</span>
     </a>
     <a href="?page=sales_report" class="sb-item <?= $active_page==='sales_report'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Sales Report
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span class="sb-item-text">Sales Report</span>
     </a>
     <div class="sb-section">System</div>
     <a href="?page=audit_logs" class="sb-item <?= $active_page==='audit_logs'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Audit Logs
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span class="sb-item-text">Audit Logs</span>
     </a>
     <a href="?page=settings" class="sb-item <?= $active_page==='settings'?'active':'' ?>">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="sb-item-text">Settings</span>
     </a>
   </nav>
   <div class="sb-footer">
     <a href="logout.php?role=super_admin" class="sb-logout">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="sb-item-text">Sign Out</span>
     </a>
   </div>
 </aside>
@@ -2250,5 +2250,22 @@ function updatePlanCard(selected){
   </div>
 </div>
 
+<script>
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const main = document.querySelector('.main');
+  sb.classList.toggle('collapsed');
+  main.classList.toggle('sb-collapsed');
+  localStorage.setItem('sb_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
+}
+// Restore state on load
+(function(){
+  if(localStorage.getItem('sb_collapsed')==='1'){
+    document.getElementById('sidebar').classList.add('collapsed');
+    const m=document.querySelector('.main');
+    if(m) m.classList.add('sb-collapsed');
+  }
+})();
+</script>
 </body>
 </html>
