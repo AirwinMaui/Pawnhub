@@ -712,6 +712,63 @@ tr:hover td{background:rgba(255,255,255,.03);}
     </div>
   </header>
 
+  <?php
+  // ── Subscription expiry banner ──────────────────────────────
+  $sub_end_ts  = !empty($tenant['subscription_end']) ? strtotime($tenant['subscription_end']) : null;
+  $sub_status  = $tenant['subscription_status'] ?? null;
+  if ($sub_end_ts && $tenant['plan'] !== 'Starter') {
+      $days_left_banner = (int)ceil(($sub_end_ts - time()) / 86400);
+      $is_expired_banner = ($days_left_banner < 0 || $sub_status === 'expired');
+
+      if ($is_expired_banner) {
+          $expired_days_ago = abs($days_left_banner);
+          $auto_deact_in    = max(0, 7 - $expired_days_ago);
+          echo '<div style="background:linear-gradient(135deg,rgba(185,28,28,.55),rgba(127,29,29,.6));border-bottom:2px solid rgba(239,68,68,.6);padding:11px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1.3rem;flex-shrink:0;">🔔</span>'
+             . '<div>'
+             . '<div style="font-size:.84rem;font-weight:800;color:#fca5a5;">Subscription Expired</div>'
+             . '<div style="font-size:.75rem;color:rgba(255,200,200,.75);margin-top:1px;">'
+             . 'Your <strong style="color:#fff;">' . htmlspecialchars($tenant['plan']) . '</strong> plan expired '
+             . ($expired_days_ago > 0 ? $expired_days_ago . ' day(s) ago' : 'today')
+             . ' (' . date('M d, Y', $sub_end_ts) . ').'
+             . ($auto_deact_in > 0
+                 ? ' Account will be <strong style="color:#fca5a5;">auto-deactivated in ' . $auto_deact_in . ' day(s)</strong>.'
+                 : ' <strong style="color:#fca5a5;">Auto-deactivation is imminent.</strong>')
+             . '</div>'
+             . '</div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.9);color:#fff;text-decoration:none;padding:8px 18px;border-radius:9px;font-size:.78rem;font-weight:800;white-space:nowrap;flex-shrink:0;border:1px solid rgba(255,100,100,.4);box-shadow:0 2px 12px rgba(239,68,68,.3);">'
+             . '🔄 Renew Now</a>'
+             . '</div>';
+      } elseif ($days_left_banner <= 3) {
+          echo '<div style="background:linear-gradient(135deg,rgba(153,27,27,.5),rgba(127,29,29,.5));border-bottom:2px solid rgba(239,68,68,.5);padding:10px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1.2rem;flex-shrink:0;">🚨</span>'
+             . '<div style="font-size:.81rem;color:#fca5a5;font-weight:700;">URGENT: Subscription expires in <strong style="color:#fff;">' . $days_left_banner . ' day(s)</strong> (' . date('M d, Y', $sub_end_ts) . '). Renew now to avoid losing access!</div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.85);color:#fff;text-decoration:none;padding:7px 16px;border-radius:9px;font-size:.77rem;font-weight:800;white-space:nowrap;flex-shrink:0;">🔄 Renew Now</a>'
+             . '</div>';
+      } elseif ($days_left_banner <= 7) {
+          echo '<div style="background:rgba(120,53,15,.55);border-bottom:2px solid rgba(217,119,6,.5);padding:10px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1.1rem;flex-shrink:0;">⚠️</span>'
+             . '<div style="font-size:.8rem;color:#fcd34d;font-weight:600;">Subscription expires in <strong style="color:#fff;">' . $days_left_banner . ' days</strong> (' . date('M d, Y', $sub_end_ts) . ') — please renew soon.</div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:6px;background:rgba(217,119,6,.85);color:#fff;text-decoration:none;padding:7px 16px;border-radius:9px;font-size:.77rem;font-weight:700;white-space:nowrap;flex-shrink:0;">🔄 Renew</a>'
+             . '</div>';
+      } elseif ($days_left_banner <= 14) {
+          echo '<div style="background:rgba(30,58,95,.5);border-bottom:1px solid rgba(37,99,235,.35);padding:9px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1rem;flex-shrink:0;">📅</span>'
+             . '<div style="font-size:.79rem;color:rgba(147,197,253,.85);font-weight:500;">Your subscription expires on <strong style="color:#fff;">' . date('M d, Y', $sub_end_ts) . '</strong> (' . $days_left_banner . ' days left).</div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:5px;background:rgba(37,99,235,.7);color:#fff;text-decoration:none;padding:6px 14px;border-radius:9px;font-size:.76rem;font-weight:700;white-space:nowrap;flex-shrink:0;">Renew</a>'
+             . '</div>';
+      }
+  }
+  ?>
+
   <div class="content">
   <?php if($success_msg):?><div class="alert alert-success"><span class="material-symbols-outlined" style="font-size:18px;">check_circle</span><?=htmlspecialchars($success_msg)?></div><?php endif;?>
   <?php if($error_msg):?><div class="alert alert-error"><span class="material-symbols-outlined" style="font-size:18px;">warning</span><?=htmlspecialchars($error_msg)?></div><?php endif;?>
