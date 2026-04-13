@@ -25,9 +25,16 @@ if (!$tenant) {
     exit;
 }
 
-// Block login if tenant is deactivated
-if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
-    $error = 'This branch has been deactivated. Please contact PawnHub support.';
+// Block login if tenant is deactivated — load SA contact info for the screen
+$is_deactivated = (isset($tenant['status']) && $tenant['status'] === 'inactive');
+$sa_contact_email = '';
+$sa_contact_name  = '';
+if ($is_deactivated) {
+    try {
+        $sa_row = $pdo->query("SELECT fullname, email FROM users WHERE role='super_admin' AND status='approved' ORDER BY id ASC LIMIT 1")->fetch();
+        $sa_contact_email = $sa_row['email']    ?? '';
+        $sa_contact_name  = $sa_row['fullname'] ?? 'PawnHub Support';
+    } catch (Throwable $e) {}
 }
 
 // ── Check if token is present → registration mode ─────────────
@@ -129,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
 
 // ── Handle LOGIN POST ─────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login'
-    && (!isset($tenant['status']) || $tenant['status'] !== 'inactive')) {
+    && !$is_deactivated) {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -401,6 +408,62 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 
       <?php else: ?>
 
+        <?php if ($is_deactivated): ?>
+        <!-- ══ DEACTIVATED SCREEN ══════════════════════════════ -->
+        <div style="text-align:center;margin-bottom:18px;">
+          <div style="width:64px;height:64px;border-radius:50%;background:#fef2f2;border:2px solid #fecaca;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+            <span class="material-symbols-outlined" style="font-size:32px;color:#dc2626;">lock</span>
+          </div>
+          <h1 class="card-title" style="font-size:1.35rem;color:#111827;">Account Deactivated</h1>
+          <p class="card-sub" style="margin-bottom:0;">Access to <strong><?= $bizName ?></strong> has been suspended due to an expired or inactive subscription.</p>
+        </div>
+
+        <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:14px;padding:18px 18px 14px;margin-bottom:16px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#dc2626;margin-bottom:10px;">What happened?</div>
+          <ul style="font-size:.81rem;color:#7f1d1d;line-height:1.8;padding-left:18px;margin:0;">
+            <li>Your subscription has expired</li>
+            <li>Your account was automatically deactivated</li>
+            <li>All staff access has been temporarily suspended</li>
+          </ul>
+        </div>
+
+        <div style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1.5px solid #bfdbfe;border-radius:14px;padding:18px;margin-bottom:16px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#1d4ed8;margin-bottom:12px;">🔄 How to Restore Access</div>
+          <ol style="font-size:.81rem;color:#1e3a5f;line-height:2;padding-left:18px;margin:0 0 14px;">
+            <li>Contact PawnHub Admin to renew your subscription</li>
+            <li>Admin will extend your subscription (1 month or more)</li>
+            <li>Your account will be automatically re-activated</li>
+            <li>All your staff can log in again immediately</li>
+          </ol>
+
+          <?php if ($sa_contact_email): ?>
+          <div style="border-top:1px solid #bfdbfe;padding-top:12px;display:flex;flex-direction:column;gap:9px;">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#1d4ed8;margin-bottom:2px;">📬 Contact Admin</div>
+            <a href="mailto:<?= htmlspecialchars($sa_contact_email) ?>?subject=Subscription%20Renewal%20Request%20—%20<?= urlencode($bizName) ?>&body=Hi%20<?= urlencode($sa_contact_name) ?>%2C%0A%0AI%20would%20like%20to%20renew%20the%20subscription%20for%20<?= urlencode($bizName) ?>.%0A%0APlease%20assist%20us%20with%20reactivating%20our%20account.%0A%0AThank%20you."
+              style="display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid #bfdbfe;border-radius:10px;padding:11px 14px;text-decoration:none;transition:all .18s;"
+              onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'">
+              <div style="width:36px;height:36px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <span class="material-symbols-outlined" style="font-size:18px;color:#fff;">mail</span>
+              </div>
+              <div>
+                <div style="font-size:.82rem;font-weight:700;color:#1d4ed8;"><?= htmlspecialchars($sa_contact_email) ?></div>
+                <div style="font-size:.7rem;color:#64748b;">Tap to send a renewal request email</div>
+              </div>
+              <span class="material-symbols-outlined" style="font-size:16px;color:#93c5fd;margin-left:auto;">open_in_new</span>
+            </a>
+          </div>
+          <?php else: ?>
+          <div style="border-top:1px solid #bfdbfe;padding-top:12px;font-size:.8rem;color:#1d4ed8;font-weight:600;">
+            📞 Please contact PawnHub support to renew your subscription.
+          </div>
+          <?php endif; ?>
+        </div>
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 14px;font-size:.77rem;color:#92400e;line-height:1.6;">
+          ⏱️ <strong>Once renewed</strong>, your account will be restored within minutes and all staff can log in again without any further action.
+        </div>
+
+        <?php else: ?>
         <!-- ══ LOGIN FORM ═════════════════════════════════════ -->
         <div class="tenant-badge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
@@ -473,6 +536,8 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
             </p>
           </div>
         </div>
+
+        <?php endif; // end $is_deactivated check ?>
 
       <?php endif; ?>
 
