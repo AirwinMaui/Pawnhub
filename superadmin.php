@@ -367,25 +367,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $ren = $ren->fetch();
 
         if ($ren && $ren['status'] === 'pending') {
-            $months = $billing_months[$ren['billing_cycle']] ?? 1;
+            $months   = $billing_months[$ren['billing_cycle']] ?? 1;
             $base_date = (!empty($ren['subscription_end']) && strtotime($ren['subscription_end']) > time())
                 ? $ren['subscription_end']
                 : date('Y-m-d');
             $new_end = date('Y-m-d', strtotime($base_date . " +{$months} months"));
 
+            // ── Detect if this is an upgrade request ─────────────
+            $is_upgrade   = !empty($ren['is_upgrade']) && !empty($ren['upgrade_to']);
+            $upgrade_to   = $is_upgrade ? trim($ren['upgrade_to']) : null;
+            $plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
+            // Safety check: upgrade_to must be a valid plan higher than current
+            if ($is_upgrade && (
+                !isset($plan_hierarchy[$upgrade_to]) ||
+                !isset($plan_hierarchy[$ren['plan']]) ||
+                $plan_hierarchy[$upgrade_to] <= $plan_hierarchy[$ren['plan']]
+            )) {
+                $is_upgrade = false;
+                $upgrade_to = null;
+            }
+            // The plan that ends up active (for email + audit log)
+            $final_plan = $is_upgrade ? $upgrade_to : $ren['plan'];
+
+            // ── Mark renewal as approved ──────────────────────────
             $pdo->prepare("UPDATE subscription_renewals SET status='approved', reviewed_by=?, reviewed_at=NOW(), new_subscription_end=? WHERE id=?")
                 ->execute([$u['id'], $new_end, $rid]);
-            $pdo->prepare("UPDATE tenants SET subscription_start=CURDATE(), subscription_end=?, subscription_status='active', renewal_reminded_7d=0, renewal_reminded_3d=0, renewal_reminded_1d=0 WHERE id=?")
-                ->execute([$new_end, $ren['tenant_id']]);
 
+            // ── Update tenant: always extend dates; upgrade also changes plan ──
+            if ($is_upgrade) {
+                $pdo->prepare("
+                    UPDATE tenants SET
+                        plan                = ?,
+                        subscription_start  = CURDATE(),
+                        subscription_end    = ?,
+                        subscription_status = 'active',
+                        renewal_reminded_7d = 0,
+                        renewal_reminded_3d = 0,
+                        renewal_reminded_1d = 0
+                    WHERE id = ?
+                ")->execute([$upgrade_to, $new_end, $ren['tenant_id']]);
+            } else {
+                $pdo->prepare("
+                    UPDATE tenants SET
+                        subscription_start  = CURDATE(),
+                        subscription_end    = ?,
+                        subscription_status = 'active',
+                        renewal_reminded_7d = 0,
+                        renewal_reminded_3d = 0,
+                        renewal_reminded_1d = 0
+                    WHERE id = ?
+                ")->execute([$new_end, $ren['tenant_id']]);
+            }
+
+            // ── Also unsuspend users if tenant was suspended ──────
+            $pdo->prepare("
+                UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL
+                WHERE tenant_id=? AND is_suspended=1
+                  AND suspension_reason IN (
+                      'Plan downgraded — staff limit exceeded.',
+                      'Subscription expired and auto-deactivated after 7 days.',
+                      'Tenant deactivated by Super Admin.'
+                  )
+            ")->execute([$ren['tenant_id']]);
+
+            // ── Send confirmation email ───────────────────────────
             if (function_exists('sendSubscriptionRenewed')) {
-                sendSubscriptionRenewed($ren['email'], $ren['owner_name'], $ren['business_name'], $ren['plan'], $new_end, $ren['slug']);
+                sendSubscriptionRenewed($ren['email'], $ren['owner_name'], $ren['business_name'], $final_plan, $new_end, $ren['slug']);
             }
 
             try { $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, 'renewed')")->execute([$ren['tenant_id']]); } catch(PDOException $e){}
-            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'SUB_RENEWAL_APPROVED','subscription',?,?,?,NOW())")->execute([$ren['tenant_id'],$u['id'],$u['username'],'super_admin',$rid,"Approved renewal for {$ren['business_name']}. New expiry: {$new_end}.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
 
-            $success_msg = "✅ Renewal approved for <strong>{$ren['business_name']}</strong>! New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+            // ── Audit log ─────────────────────────────────────────
+            $audit_msg = $is_upgrade
+                ? "Approved UPGRADE for {$ren['business_name']}: {$ren['plan']} → {$upgrade_to}. New expiry: {$new_end}."
+                : "Approved renewal for {$ren['business_name']} ({$final_plan}). New expiry: {$new_end}.";
+            $audit_action = $is_upgrade ? 'PLAN_UPGRADE_APPROVED' : 'SUB_RENEWAL_APPROVED';
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,  'subscription',?,?,?,NOW())")->execute([$ren['tenant_id'],$u['id'],$u['username'],'super_admin',$audit_action,$rid,$audit_msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+
+            // ── Success message ───────────────────────────────────
+            if ($is_upgrade) {
+                $success_msg = "✅ Upgrade approved! <strong>{$ren['business_name']}</strong> is now on the <strong>{$upgrade_to}</strong> plan. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+            } else {
+                $success_msg = "✅ Renewal approved for <strong>{$ren['business_name']}</strong>! New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+            }
         } else {
             $error_msg = 'Renewal request not found or already processed.';
         }
@@ -1293,34 +1357,77 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <?php if (!empty($pending_sub_renewals)): ?>
       <div class="card" style="border-color:#fde68a;margin-bottom:24px;">
         <div class="card-hdr">
-          <span class="card-title" style="color:#b45309;">🔔 Pending Renewal Requests (<?= count($pending_sub_renewals) ?>)</span>
+          <span class="card-title" style="color:#b45309;">🔔 Pending Requests (<?= count($pending_sub_renewals) ?>)</span>
         </div>
-        <?php foreach ($pending_sub_renewals as $pr): ?>
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;margin-bottom:10px;">
+        <?php foreach ($pending_sub_renewals as $pr):
+          $pr_is_upgrade = !empty($pr['is_upgrade']) && !empty($pr['upgrade_to']);
+          $pr_from       = $pr_is_upgrade ? htmlspecialchars($pr['upgrade_from'] ?? $pr['plan']) : htmlspecialchars($pr['plan']);
+          $pr_to         = $pr_is_upgrade ? htmlspecialchars($pr['upgrade_to']) : htmlspecialchars($pr['plan']);
+          $pr_proration  = (float)($pr['proration_credit'] ?? 0);
+          $pr_card_bg    = $pr_is_upgrade ? '#f3e8ff' : '#fffbeb';
+          $pr_card_border= $pr_is_upgrade ? '#ddd6fe' : '#fde68a';
+          $pr_type_label = $pr_is_upgrade ? 'UPGRADE' : 'RENEWAL';
+          $pr_type_color = $pr_is_upgrade ? '#7c3aed' : '#b45309';
+          $pr_type_bg    = $pr_is_upgrade ? '#f3e8ff' : '#fef3c7';
+          $pr_confirm_msg = $pr_is_upgrade
+              ? "Approve UPGRADE for {$pr['business_name']}?\\n\\n{$pr_from} → {$pr_to}\\n\\nThis will change their plan to {$pr_to} and extend their subscription."
+              : "Approve RENEWAL for {$pr['business_name']}? ({$pr_to}, " . ucfirst($pr['billing_cycle']) . ")";
+        ?>
+        <div style="background:<?= $pr_card_bg ?>;border:1px solid <?= $pr_card_border ?>;border-radius:10px;padding:16px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
-            <div>
-              <p style="font-weight:700;color:var(--text);font-size:.92rem;margin:0 0 4px;"><?= htmlspecialchars($pr['business_name']) ?></p>
-              <p style="color:var(--text-dim);font-size:.78rem;margin:0 0 8px;"><?= htmlspecialchars($pr['email']) ?></p>
-              <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                <span style="font-size:.78rem;color:var(--text-m);">📋 <strong><?= htmlspecialchars($pr['plan']) ?></strong> · <?= ucfirst($pr['billing_cycle']) ?></span>
+            <div style="flex:1;min-width:0;">
+
+              <!-- Header row: name + type badge -->
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                <span style="font-weight:700;color:var(--text);font-size:.92rem;"><?= htmlspecialchars($pr['business_name']) ?></span>
+                <span style="font-size:.67rem;font-weight:800;padding:2px 9px;border-radius:100px;background:<?= $pr_type_bg ?>;color:<?= $pr_type_color ?>;letter-spacing:.04em;"><?= $pr_type_label ?></span>
+              </div>
+              <p style="color:var(--text-dim);font-size:.76rem;margin:0 0 10px;"><?= htmlspecialchars($pr['email']) ?></p>
+
+              <!-- Plan info -->
+              <?php if ($pr_is_upgrade): ?>
+              <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.18);border-radius:8px;padding:6px 12px;margin-bottom:10px;">
+                <span style="font-size:.8rem;font-weight:700;color:#6d28d9;"><?= $pr_from ?></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" style="width:13px;height:13px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span style="font-size:.8rem;font-weight:800;color:#7c3aed;"><?= $pr_to ?></span>
+                <span style="font-size:.72rem;color:rgba(124,58,237,.6);">· <?= ucfirst($pr['billing_cycle']) ?></span>
+              </div>
+              <?php else: ?>
+              <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.15);border-radius:8px;padding:6px 12px;margin-bottom:10px;">
+                <span style="font-size:.8rem;font-weight:700;color:#92400e;">🔄 <?= $pr_to ?> · <?= ucfirst($pr['billing_cycle']) ?></span>
+              </div>
+              <?php endif; ?>
+
+              <!-- Amount + proration row -->
+              <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;">
+                <span style="font-size:.8rem;color:var(--text-m);">💰 <strong>₱<?= number_format((float)$pr['amount'], 2) ?></strong></span>
+                <?php if ($pr_proration > 0): ?>
+                <span style="font-size:.78rem;color:#16a34a;">✓ Proration credit: ₱<?= number_format($pr_proration, 2) ?> applied</span>
+                <?php endif; ?>
                 <span style="font-size:.78rem;color:var(--text-m);">💳 <?= htmlspecialchars($pr['payment_method'] ?: '—') ?></span>
                 <?php if ($pr['payment_reference']): ?>
-                <span style="font-size:.78rem;color:var(--text-m);">🔖 Ref: <?= htmlspecialchars($pr['payment_reference']) ?></span>
+                <span style="font-size:.78rem;color:var(--text-m);">🔖 <?= htmlspecialchars($pr['payment_reference']) ?></span>
                 <?php endif; ?>
-                <span style="font-size:.78rem;color:var(--text-dim);">🕐 <?= date('M d, Y h:i A', strtotime($pr['requested_at'])) ?></span>
+              </div>
+
+              <!-- Date + notes -->
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <span style="font-size:.74rem;color:var(--text-dim);">🕐 <?= date('M d, Y h:i A', strtotime($pr['requested_at'])) ?></span>
+                <span style="font-size:.74rem;color:var(--text-dim);">📅 Current expiry: <?= $pr['subscription_end'] ? date('M d, Y', strtotime($pr['subscription_end'])) : 'None' ?></span>
               </div>
               <?php if ($pr['notes']): ?>
-              <p style="font-size:.78rem;color:var(--text-dim);margin:6px 0 0;font-style:italic;"><?= htmlspecialchars($pr['notes']) ?></p>
+              <p style="font-size:.76rem;color:var(--text-dim);margin:6px 0 0;font-style:italic;border-left:2px solid <?= $pr_card_border ?>;padding-left:8px;"><?= htmlspecialchars($pr['notes']) ?></p>
               <?php endif; ?>
-              <p style="font-size:.74rem;color:var(--text-dim);margin:5px 0 0;">
-                Current expiry: <?= $pr['subscription_end'] ? date('M d, Y', strtotime($pr['subscription_end'])) : 'None' ?>
-              </p>
+
             </div>
-            <div style="display:flex;gap:8px;flex-shrink:0;">
+            <div style="display:flex;gap:8px;flex-shrink:0;align-items:flex-start;">
               <form method="POST" action="" style="margin:0;">
                 <input type="hidden" name="action" value="approve_sub_renewal"/>
                 <input type="hidden" name="renewal_id" value="<?= $pr['id'] ?>"/>
-                <button type="submit" class="btn-sm btn-success" onclick="return confirm('Approve this renewal?')">✓ Approve</button>
+                <button type="submit" class="btn-sm btn-success"
+                  onclick="return confirm('<?= addslashes($pr_confirm_msg) ?>')">
+                  <?= $pr_is_upgrade ? '🚀 Approve Upgrade' : '✓ Approve' ?>
+                </button>
               </form>
               <button type="button" class="btn-sm btn-danger"
                 onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.add('open')">
@@ -1334,7 +1441,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div id="reject-modal-<?= $pr['id'] ?>" class="modal-overlay">
           <div class="modal" style="width:420px;">
             <div class="mhdr">
-              <div><div class="mtitle">✗ Reject Renewal Request</div><div class="msub"><?= htmlspecialchars($pr['business_name']) ?></div></div>
+              <div>
+                <div class="mtitle">✗ Reject <?= $pr_is_upgrade ? 'Upgrade' : 'Renewal' ?> Request</div>
+                <div class="msub"><?= htmlspecialchars($pr['business_name']) ?><?= $pr_is_upgrade ? " — {$pr_from} → {$pr_to}" : '' ?></div>
+              </div>
               <button class="mclose" onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div class="mbody">
