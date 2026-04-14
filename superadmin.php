@@ -362,94 +362,98 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $rid = intval($_POST['renewal_id']);
         $billing_months = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
 
-        $ren = $pdo->prepare("SELECT sr.*, t.email, t.owner_name, t.business_name, t.slug, t.plan, t.subscription_end FROM subscription_renewals sr JOIN tenants t ON sr.tenant_id = t.id WHERE sr.id = ? LIMIT 1");
+        // ── Fetch renewal + tenant info ───────────────────────────
+        // NOTE: alias t.plan as current_tenant_plan to avoid collision with sr.plan
+        $ren = $pdo->prepare("
+            SELECT sr.*,
+                   t.email, t.owner_name, t.business_name, t.slug,
+                   t.plan          AS current_tenant_plan,
+                   t.status        AS tenant_status,
+                   t.subscription_end AS tenant_sub_end
+            FROM subscription_renewals sr
+            JOIN tenants t ON sr.tenant_id = t.id
+            WHERE sr.id = ? LIMIT 1
+        ");
         $ren->execute([$rid]);
         $ren = $ren->fetch();
 
         if ($ren && $ren['status'] === 'pending') {
-            $months   = $billing_months[$ren['billing_cycle']] ?? 1;
-            $base_date = (!empty($ren['subscription_end']) && strtotime($ren['subscription_end']) > time())
-                ? $ren['subscription_end']
-                : date('Y-m-d');
+            $months = $billing_months[$ren['billing_cycle']] ?? 1;
+
+            // ── New expiry: always start from TODAY if expired ────
+            // (not from old expiry — tenant already missed days)
+            $base_date = (!empty($ren['tenant_sub_end']) && strtotime($ren['tenant_sub_end']) > time())
+                ? $ren['tenant_sub_end']   // still active — extend from current end
+                : date('Y-m-d');           // expired — fresh start from today
             $new_end = date('Y-m-d', strtotime($base_date . " +{$months} months"));
 
-            // ── Detect if this is an upgrade request ─────────────
-            $is_upgrade   = !empty($ren['is_upgrade']) && !empty($ren['upgrade_to']);
-            $upgrade_to   = $is_upgrade ? trim($ren['upgrade_to']) : null;
+            // ── Detect upgrade ────────────────────────────────────
+            // is_upgrade=1 means: sr.upgrade_from → sr.upgrade_to
+            // We compare against current_tenant_plan (what's in tenants table NOW)
+            $is_upgrade     = !empty($ren['is_upgrade']);
+            $upgrade_to     = trim($ren['upgrade_to'] ?? '');
+            $upgrade_from   = trim($ren['upgrade_from'] ?? $ren['current_tenant_plan']);
             $plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
-            // Safety check: upgrade_to must be a valid plan higher than current
-            if ($is_upgrade && (
-                !isset($plan_hierarchy[$upgrade_to]) ||
-                !isset($plan_hierarchy[$ren['plan']]) ||
-                $plan_hierarchy[$upgrade_to] <= $plan_hierarchy[$ren['plan']]
-            )) {
-                $is_upgrade = false;
-                $upgrade_to = null;
-            }
-            // The plan that ends up active (for email + audit log)
-            $final_plan = $is_upgrade ? $upgrade_to : $ren['plan'];
 
-            // ── Mark renewal as approved ──────────────────────────
-            $pdo->prepare("UPDATE subscription_renewals SET status='approved', reviewed_by=?, reviewed_at=NOW(), new_subscription_end=? WHERE id=?")
-                ->execute([$u['id'], $new_end, $rid]);
+            // Validate: upgrade_to must exist and be a higher tier
+            $valid_upgrade = $is_upgrade
+                && isset($plan_hierarchy[$upgrade_to])
+                && isset($plan_hierarchy[$upgrade_from])
+                && $plan_hierarchy[$upgrade_to] > $plan_hierarchy[$upgrade_from];
 
-            // ── Update tenant: always extend dates; upgrade also changes plan ──
-            if ($is_upgrade) {
-                $pdo->prepare("
-                    UPDATE tenants SET
-                        plan                = ?,
-                        subscription_start  = CURDATE(),
-                        subscription_end    = ?,
-                        subscription_status = 'active',
-                        renewal_reminded_7d = 0,
-                        renewal_reminded_3d = 0,
-                        renewal_reminded_1d = 0
-                    WHERE id = ?
-                ")->execute([$upgrade_to, $new_end, $ren['tenant_id']]);
-            } else {
-                $pdo->prepare("
-                    UPDATE tenants SET
-                        subscription_start  = CURDATE(),
-                        subscription_end    = ?,
-                        subscription_status = 'active',
-                        renewal_reminded_7d = 0,
-                        renewal_reminded_3d = 0,
-                        renewal_reminded_1d = 0
-                    WHERE id = ?
-                ")->execute([$new_end, $ren['tenant_id']]);
-            }
+            // Final plan to apply
+            $final_plan = ($is_upgrade && $valid_upgrade) ? $upgrade_to : $ren['current_tenant_plan'];
 
-            // ── Also unsuspend users if tenant was suspended ──────
+            // ── Mark renewal approved ─────────────────────────────
             $pdo->prepare("
-                UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL
+                UPDATE subscription_renewals
+                SET status='approved', reviewed_by=?, reviewed_at=NOW(), new_subscription_end=?
+                WHERE id=?
+            ")->execute([$u['id'], $new_end, $rid]);
+
+            // ── Update tenant ─────────────────────────────────────
+            $pdo->prepare("
+                UPDATE tenants SET
+                    plan                = ?,
+                    status              = 'active',
+                    subscription_start  = CURDATE(),
+                    subscription_end    = ?,
+                    subscription_status = 'active',
+                    renewal_reminded_7d = 0,
+                    renewal_reminded_3d = 0,
+                    renewal_reminded_1d = 0
+                WHERE id = ?
+            ")->execute([$final_plan, $new_end, $ren['tenant_id']]);
+
+            // ── Unsuspend all users ───────────────────────────────
+            $pdo->prepare("
+                UPDATE users
+                SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL
                 WHERE tenant_id=? AND is_suspended=1
-                  AND suspension_reason IN (
-                      'Plan downgraded — staff limit exceeded.',
-                      'Subscription expired and auto-deactivated after 7 days.',
-                      'Tenant deactivated by Super Admin.'
-                  )
             ")->execute([$ren['tenant_id']]);
 
             // ── Send confirmation email ───────────────────────────
             if (function_exists('sendSubscriptionRenewed')) {
-                sendSubscriptionRenewed($ren['email'], $ren['owner_name'], $ren['business_name'], $final_plan, $new_end, $ren['slug']);
+                sendSubscriptionRenewed(
+                    $ren['email'], $ren['owner_name'], $ren['business_name'],
+                    $final_plan, $new_end, $ren['slug']
+                );
             }
 
             try { $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, 'renewed')")->execute([$ren['tenant_id']]); } catch(PDOException $e){}
 
             // ── Audit log ─────────────────────────────────────────
-            $audit_msg = $is_upgrade
-                ? "Approved UPGRADE for {$ren['business_name']}: {$ren['plan']} → {$upgrade_to}. New expiry: {$new_end}."
-                : "Approved renewal for {$ren['business_name']} ({$final_plan}). New expiry: {$new_end}.";
-            $audit_action = $is_upgrade ? 'PLAN_UPGRADE_APPROVED' : 'SUB_RENEWAL_APPROVED';
-            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,  'subscription',?,?,?,NOW())")->execute([$ren['tenant_id'],$u['id'],$u['username'],'super_admin',$audit_action,$rid,$audit_msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-
-            // ── Success message ───────────────────────────────────
-            if ($is_upgrade) {
-                $success_msg = "✅ Upgrade approved! <strong>{$ren['business_name']}</strong> is now on the <strong>{$upgrade_to}</strong> plan. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+            if ($is_upgrade && $valid_upgrade) {
+                $audit_action = 'PLAN_UPGRADE_APPROVED';
+                $audit_msg    = "Approved UPGRADE for {$ren['business_name']}: {$upgrade_from} → {$upgrade_to}. New expiry: {$new_end}.";
+                $success_msg  = "✅ Upgrade approved! <strong>{$ren['business_name']}</strong> is now on the <strong>{$upgrade_to}</strong> plan. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
             } else {
-                $success_msg = "✅ Renewal approved for <strong>{$ren['business_name']}</strong>! New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+                $audit_action = 'SUB_RENEWAL_APPROVED';
+                $audit_msg    = "Approved renewal for {$ren['business_name']} ({$final_plan}). New expiry: {$new_end}.";
+                $success_msg  = "✅ Renewal approved for <strong>{$ren['business_name']}</strong>! New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
             }
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,?,'subscription',?,?,?,NOW())")->execute([$ren['tenant_id'],$u['id'],$u['username'],'super_admin',$audit_action,$rid,$audit_msg,$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+
         } else {
             $error_msg = 'Renewal request not found or already processed.';
         }
