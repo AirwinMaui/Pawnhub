@@ -1128,31 +1128,58 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
       <?php if(!($my_plan_request && $my_plan_request['status'] === 'pending')): ?>
       <form method="POST">
         <input type="hidden" name="action" value="submit_plan_request">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
-        <?php foreach([
-          'Starter'    => ['Free',      '#64748b', '1 Branch · 3 Staff'],
-          'Pro'        => ['₱999/mo',   '#2563eb', '3 Branches · Unlimited'],
-          'Enterprise' => ['₱2,499/mo', '#7c3aed', '10 Branches · Unlimited'],
-        ] as $pname => [$pprice, $pcolor, $pdesc]):
+        <?php
+        $plan_cards_data = [
+          'Starter' => [
+            'price'  => 'Free',
+            'color'  => '#64748b',
+            'perks'  => ['1 Branch Manager', 'Up to 3 Staff & Cashiers', 'Pawn Tickets & Customers', 'Inventory Management', 'Basic Reports', 'Email Support'],
+          ],
+          'Pro' => [
+            'price'  => '₱999/mo',
+            'color'  => '#2563eb',
+            'perks'  => ['Everything in Starter', 'Unlimited Staff & Cashiers', 'Advanced Reports & Analytics', 'Custom Branding & Theme', 'Renewal & Void Management', 'Priority Email Support'],
+          ],
+          'Enterprise' => [
+            'price'  => '₱2,499/mo',
+            'color'  => '#7c3aed',
+            'perks'  => ['Everything in Pro', 'White-Label System Name', 'Data Export (CSV/PDF)', 'Dedicated Account Manager', '24/7 Priority Support'],
+          ],
+        ];
+        ?>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;">
+        <?php foreach($plan_cards_data as $pname => $pdata):
+          $pprice      = $pdata['price'];
+          $pcolor      = $pdata['color'];
+          $pperks      = $pdata['perks'];
           $is_current  = (strtolower($pname) === strtolower($current_plan_ui));
           $prank       = $plan_rank_ui[$pname] ?? 1;
           $would_down  = $prank < $cur_rank_ui;
           $is_disabled = $is_current || ($would_down && $sub_active_ui);
-          $disabled_reason = $is_current ? 'Current plan' : ($would_down && $sub_active_ui ? 'Available after ' . date('M d, Y', strtotime($sub_end_ui)) : '');
         ?>
         <label style="cursor:<?= $is_disabled ? 'not-allowed' : 'pointer' ?>;">
           <input type="radio" name="requested_plan" value="<?= $pname ?>"
                  <?= $is_disabled ? 'disabled' : '' ?>
                  style="display:none;"
                  onchange="document.querySelectorAll('.plan-card').forEach(c=>c.classList.remove('selected')); this.closest('label').querySelector('.plan-card').classList.add('selected')">
-          <div class="plan-card" style="border:2px solid <?= $is_current ? $pcolor : 'rgba(255,255,255,.1)' ?>;border-radius:12px;padding:14px;text-align:center;transition:all .15s;opacity:<?= $is_disabled ? '.5' : '1' ?>;">
-            <div style="font-size:.82rem;font-weight:800;color:<?= $pcolor ?>;margin-bottom:2px;"><?= $pname ?></div>
-            <div style="font-size:.78rem;font-weight:700;color:<?= $pcolor ?>;margin-bottom:5px;"><?= $pprice ?></div>
-            <div style="font-size:.68rem;color:rgba(255,255,255,.45);"><?= $pdesc ?></div>
+          <div class="plan-card" style="border:2px solid <?= $is_current ? $pcolor : 'rgba(255,255,255,.1)' ?>;border-radius:14px;padding:18px;transition:all .15s;opacity:<?= $is_disabled ? '.5' : '1' ?>;height:100%;">
+            <!-- Plan name & price -->
+            <div style="font-size:.78rem;font-weight:800;color:<?= $pcolor ?>;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;"><?= $pname ?></div>
+            <div style="font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:2px;"><?= $pprice ?></div>
+            <div style="font-size:.65rem;color:rgba(255,255,255,.3);margin-bottom:12px;">1 subscription = 1 branch</div>
+            <!-- Benefits list -->
+            <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:10px;">
+              <?php foreach($pperks as $perk): ?>
+              <div style="display:flex;align-items:flex-start;gap:6px;font-size:.72rem;color:rgba(255,255,255,.6);margin-bottom:5px;line-height:1.4;">
+                <span style="color:<?= $pcolor ?>;flex-shrink:0;margin-top:1px;">✓</span>
+                <?= htmlspecialchars($perk) ?>
+              </div>
+              <?php endforeach; ?>
+            </div>
             <?php if($is_current): ?>
-            <div style="font-size:.65rem;font-weight:800;color:<?= $pcolor ?>;margin-top:6px;text-transform:uppercase;letter-spacing:.07em;">✓ Current</div>
+            <div style="font-size:.65rem;font-weight:800;color:<?= $pcolor ?>;margin-top:10px;text-transform:uppercase;letter-spacing:.07em;text-align:center;">✓ Current Plan</div>
             <?php elseif($would_down && $sub_active_ui): ?>
-            <div style="font-size:.63rem;color:rgba(255,255,255,.35);margin-top:6px;line-height:1.4;">After <?= date('M d', strtotime($sub_end_ui)) ?></div>
+            <div style="font-size:.63rem;color:rgba(255,255,255,.35);margin-top:10px;text-align:center;line-height:1.4;">Available after <?= date('M d, Y', strtotime($sub_end_ui)) ?></div>
             <?php endif; ?>
           </div>
         </label>
