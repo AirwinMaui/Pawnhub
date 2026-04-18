@@ -223,6 +223,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
     }
 }
 
+// ── POST: Submit DOWNGRADE request ───────────────────────────
+// Rule: tenant can only downgrade AFTER their current subscription has expired.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_downgrade') {
+    if ($pending_renewal) {
+        $error_msg = 'You already have a pending renewal/downgrade request. Please wait for admin approval.';
+    } else {
+        $downgrade_to   = trim($_POST['downgrade_to']    ?? '');
+        $billing_cycle  = in_array($_POST['billing_cycle'] ?? '', ['monthly','quarterly','annually'])
+                          ? $_POST['billing_cycle'] : 'monthly';
+        $payment_method = trim($_POST['payment_method']   ?? '');
+        $payment_ref    = trim($_POST['payment_reference'] ?? '');
+        $notes          = trim($_POST['notes']             ?? '');
+
+        $plan_hierarchy_dg = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
+        $current_rank_dg   = $plan_hierarchy_dg[$plan] ?? 0;
+        $target_rank_dg    = $plan_hierarchy_dg[$downgrade_to] ?? 99;
+
+        $is_valid_downgrade = isset($plan_hierarchy_dg[$downgrade_to])
+            && $target_rank_dg < $current_rank_dg;
+
+        // Block downgrade if subscription still active
+        $sub_still_active = $sub_end && (strtotime($sub_end) > time());
+
+        if (!$is_valid_downgrade) {
+            $error_msg = 'Invalid downgrade target. You can only downgrade to a lower plan.';
+        } elseif ($sub_still_active) {
+            $expiry_fmt_dg  = date('F d, Y', strtotime($sub_end));
+            $days_left_dg   = (int) ceil((strtotime($sub_end) - time()) / 86400);
+            $error_msg = "⚠️ You cannot downgrade while your current <strong>{$plan}</strong> subscription is still active. "
+                       . "It expires on <strong>{$expiry_fmt_dg}</strong> ({$days_left_dg} day(s) remaining). "
+                       . "You may downgrade once your current subscription period ends.";
+        } elseif ($downgrade_to === 'Starter' && !$payment_method) {
+            // Starter is free — no payment needed; just submit
+            $payment_method = 'N/A (Free Plan)';
+            goto process_downgrade;
+        } elseif (!$payment_method) {
+            $error_msg = 'Please select a payment method.';
+        } else {
+            process_downgrade:
+            $billing_amounts_dg = [
+                'Starter'    => ['monthly' => 0,   'quarterly' => 0,    'annually' => 0],
+                'Pro'        => ['monthly' => 999,  'quarterly' => 2697, 'annually' => 9588],
+                'Enterprise' => ['monthly' => 2499, 'quarterly' => 6747, 'annually' => 23988],
+            ];
+            $amount_dg = $billing_amounts_dg[$downgrade_to][$billing_cycle] ?? 0;
+
+            $dg_notes = "PLAN DOWNGRADE: {$plan} → {$downgrade_to} ({$billing_cycle})."
+                      . ($notes ? " Notes: {$notes}" : '');
+
+            try {
+                $pdo->prepare("
+                    INSERT INTO subscription_renewals
+                        (tenant_id, plan, billing_cycle, amount, payment_method, payment_reference,
+                         notes, status, requested_at, is_upgrade, upgrade_from, upgrade_to, proration_credit)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), 0, ?, ?, 0)
+                ")->execute([
+                    $tid, $downgrade_to, $billing_cycle, $amount_dg,
+                    $payment_method, $payment_ref, $dg_notes,
+                    $plan, $downgrade_to
+                ]);
+
+                try {
+                    $pdo->prepare("
+                        INSERT INTO audit_logs
+                            (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                        VALUES (?,?,?,?,'PLAN_DOWNGRADE_REQUEST','subscription',?,?,?,NOW())
+                    ")->execute([
+                        $tid, $u['id'], $u['username'], $u['role'], $tid,
+                        "Downgrade request submitted: {$plan} → {$downgrade_to} ({$billing_cycle}).",
+                        $_SERVER['REMOTE_ADDR'] ?? '::1'
+                    ]);
+                } catch (Throwable $e) {}
+
+                $success_msg = "✅ Downgrade request submitted! Admin will review and switch you to the <strong>{$downgrade_to}</strong> plan within 24 hours.";
+
+                $pending_renewal_stmt->execute([$tid]);
+                $pending_renewal = $pending_renewal_stmt->fetch();
+
+            } catch (PDOException $e) {
+                // Fallback without new columns
+                try {
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, amount, payment_method, payment_reference, notes, status, requested_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+                    ")->execute([
+                        $tid, $downgrade_to, $billing_cycle, $amount_dg,
+                        $payment_method, $payment_ref, $dg_notes
+                    ]);
+                    $success_msg = "✅ Downgrade request submitted! Admin will review and switch you to the <strong>{$downgrade_to}</strong> plan within 24 hours.";
+                    $pending_renewal_stmt->execute([$tid]);
+                    $pending_renewal = $pending_renewal_stmt->fetch();
+                } catch (PDOException $e2) {
+                    $error_msg = 'Database error: ' . $e2->getMessage();
+                }
+            }
+        }
+    }
+}
+
 // ── Status badge ──────────────────────────────────────────────
 $status_map = [
     'active'        => ['Active',        '#15803d', '#f0fdf4', '#bbf7d0'],
@@ -243,7 +343,11 @@ $is_paid_plan = in_array($plan, ['Pro', 'Enterprise']);
 // ── Upgrade options — plans higher than current ───────────────
 $plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
 $current_rank   = $plan_hierarchy[$plan] ?? 0;
-$upgrade_targets = array_filter(['Pro', 'Enterprise'], fn($p) => ($plan_hierarchy[$p] ?? 0) > $current_rank);
+$upgrade_targets   = array_filter(['Pro', 'Enterprise'], fn($p) => ($plan_hierarchy[$p] ?? 0) > $current_rank);
+$downgrade_targets = array_filter(['Starter', 'Pro'],    fn($p) => ($plan_hierarchy[$p] ?? 0) < $current_rank);
+
+// Can tenant downgrade right now? Only allowed after subscription expires.
+$sub_expired_for_downgrade = empty($sub_end) || (strtotime($sub_end) <= time());
 
 // Proration preview: credit for unused days on current paid billing
 $proration_preview = 0;
@@ -730,6 +834,169 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
     </div>
     <?php endif; ?>
 
+    <!-- ── Downgrade Plan ──────────────────────────────────────── -->
+    <?php if (!empty($downgrade_targets) && !$pending_renewal): ?>
+    <div class="card" style="border-color:rgba(100,116,139,.25);background:rgba(100,116,139,.05);">
+      <div class="card-label" style="color:rgba(148,163,184,.8);">
+        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">arrow_downward</span>
+        Downgrade Plan
+      </div>
+
+      <?php if (!$sub_expired_for_downgrade): ?>
+      <!-- Blocked: subscription still active -->
+      <div class="alert alert-warn" style="margin-bottom:0;">
+        🔒 <strong>Downgrade is currently locked.</strong><br>
+        You can only downgrade after your current <strong><?= htmlspecialchars($plan) ?></strong> subscription expires on
+        <strong><?= date('F d, Y', strtotime($sub_end)) ?></strong>
+        (<?= $days_left ?> day(s) remaining).<br>
+        <span style="font-size:.78rem;color:rgba(255,255,255,.45);margin-top:4px;display:block;">
+          Your subscription period is already paid for — downgrade will take effect on renewal.
+          Come back after it expires to switch to a lower plan.
+        </span>
+      </div>
+
+      <?php else: ?>
+      <!-- Allowed: subscription expired, tenant can now downgrade -->
+      <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.25);color:rgba(148,163,184,.9);margin-bottom:16px;">
+        📉 Your subscription has expired. You may now switch to a lower plan.
+        <strong>Note:</strong> Downgrading will reduce your available features.
+      </div>
+
+      <?php
+      $downgrade_plan_details = [
+        'Starter' => [
+          'price_monthly' => 0,
+          'color'  => '#64748b',
+          'icon'   => 'inventory_2',
+          'perks'  => ['Basic pawn ticket management', 'Customer records', 'Staff accounts', 'Shop page'],
+          'loses'  => ['Theme & Branding', 'Manager Invitations', 'Audit Logs', 'Advanced Reports'],
+        ],
+        'Pro' => [
+          'price_monthly' => 999,
+          'color'  => '#3b82f6',
+          'icon'   => 'workspace_premium',
+          'perks'  => ['Theme & Branding', 'Manager Invitations', 'Audit Logs', 'Advanced Reports'],
+          'loses'  => ['Data Export (PDF/Excel)', 'White Label Branding', 'Dedicated Account Manager'],
+        ],
+      ];
+      ?>
+
+      <!-- Downgrade target cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
+        <?php foreach ($downgrade_targets as $dtarget):
+          $dpd = $downgrade_plan_details[$dtarget] ?? null;
+          if (!$dpd) continue;
+        ?>
+        <div style="background:rgba(255,255,255,.03);border:1.5px solid color-mix(in srgb,<?= $dpd['color'] ?> 25%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;opacity:.05;">
+            <span class="material-symbols-outlined" style="font-size:100px;color:<?= $dpd['color'] ?>"><?= $dpd['icon'] ?></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $dpd['icon'] ?></span>
+            <span style="font-size:.9rem;font-weight:800;color:#fff;"><?= $dtarget ?></span>
+            <?php if ($dpd['price_monthly'] === 0): ?>
+            <span style="font-size:.65rem;font-weight:700;background:rgba(100,116,139,.2);color:#94a3b8;padding:2px 8px;border-radius:100px;">Free</span>
+            <?php else: ?>
+            <span style="font-size:.65rem;font-weight:700;background:rgba(59,130,246,.15);color:#93c5fd;padding:2px 8px;border-radius:100px;">₱<?= number_format($dpd['price_monthly']) ?>/mo</span>
+            <?php endif; ?>
+          </div>
+          <div style="margin-bottom:8px;">
+            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.3);margin-bottom:4px;">Keeps</div>
+            <?php foreach ($dpd['perks'] as $perk): ?>
+            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.55);margin-bottom:3px;">
+              <span class="material-symbols-outlined" style="font-size:13px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">check_circle</span>
+              <?= htmlspecialchars($perk) ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <div>
+            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(239,68,68,.4);margin-bottom:4px;">Loses</div>
+            <?php foreach ($dpd['loses'] as $lose): ?>
+            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.3);margin-bottom:3px;text-decoration:line-through;">
+              <span class="material-symbols-outlined" style="font-size:13px;color:rgba(239,68,68,.4);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">cancel</span>
+              <?= htmlspecialchars($lose) ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <form method="POST" id="downgradeForm">
+        <input type="hidden" name="action" value="request_downgrade"/>
+
+        <div class="form-grid" style="margin-bottom:14px;">
+          <div>
+            <label class="flabel">Downgrade To</label>
+            <select name="downgrade_to" id="downgrade_to" class="fselect" onchange="updateDowngradeAmount()" required>
+              <option value="">— Select Plan —</option>
+              <?php foreach ($downgrade_targets as $dtarget): ?>
+              <option value="<?= htmlspecialchars($dtarget) ?>"><?= htmlspecialchars($dtarget) ?>
+                <?= $dtarget === 'Starter' ? '(Free)' : '(₱999/mo)' ?>
+              </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div id="dg-billing-wrap">
+            <label class="flabel">Billing Cycle</label>
+            <select name="billing_cycle" id="dg_billing_cycle" class="fselect" onchange="updateDowngradeAmount()">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="annually">Annually</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Amount due preview -->
+        <div id="dg-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
+            <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
+            <div style="color:#fff;font-weight:700;text-align:right;" id="dg-new-price">—</div>
+            <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
+            <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
+          </div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:10px;line-height:1.5;">
+            * Admin will verify and apply the plan change within 24 hours. Free (Starter) downgrades require no payment.
+          </div>
+        </div>
+
+        <!-- Payment fields (hidden for Starter/free) -->
+        <div id="dg-payment-fields">
+          <div class="form-group">
+            <label class="flabel">Payment Method</label>
+            <select name="payment_method" id="dg_payment_method" class="fselect">
+              <option value="">— Select Payment Method —</option>
+              <option value="GCash">GCash</option>
+              <option value="Maya">Maya (PayMaya)</option>
+              <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
+              <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
+              <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
+              <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
+              <option value="Cash">Cash (walk-in)</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="flabel">Payment Reference <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+          <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+        </div>
+
+        <button type="submit" class="btn" id="dg-submit-btn" style="background:rgba(100,116,139,.3);border:1px solid rgba(100,116,139,.4);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;" onclick="return confirmDowngrade()">
+          <span class="material-symbols-outlined" style="font-size:17px;">arrow_downward</span>
+          Submit Downgrade Request
+        </button>
+      </form>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <!-- ── Renewal History ─────────────────────────────────── -->
     <?php if (!empty($renewal_history)): ?>
     <div class="card">
@@ -745,12 +1012,15 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
               $rc_bg    = match($r['status']) { 'approved' => '#f0fdf4', 'rejected' => '#fef2f2', default => '#fffbeb' };
               $is_pm    = str_starts_with($r['payment_method'] ?? '', 'PayMongo');
               $is_upg   = !empty($r['is_upgrade']);
+              $is_dg    = !$is_upg && str_contains($r['notes'] ?? '', 'PLAN DOWNGRADE');
             ?>
             <tr>
               <td style="font-size:.76rem;color:rgba(255,255,255,.4);"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
               <td>
                 <?php if ($is_upg): ?>
                 <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(139,92,246,.2);color:#c4b5fd;">Upgrade</span>
+                <?php elseif ($is_dg): ?>
+                <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(100,116,139,.2);color:#94a3b8;">Downgrade</span>
                 <?php else: ?>
                 <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(59,130,246,.15);color:#93c5fd;">Renewal</span>
                 <?php endif; ?>
@@ -846,9 +1116,51 @@ function updateUpgradeAmount() {
   box.style.display = targetPlan ? 'block' : 'none';
 }
 
+// ── Downgrade amount calculator ───────────────────────────────
+function updateDowngradeAmount() {
+  const targetPlan = document.getElementById('downgrade_to')?.value;
+  const cycle      = document.getElementById('dg_billing_cycle')?.value || 'monthly';
+  const box        = document.getElementById('dg-amount-box');
+  const newPriceEl = document.getElementById('dg-new-price');
+  const totalEl    = document.getElementById('dg-total');
+  const payFields  = document.getElementById('dg-payment-fields');
+  const billingWrap= document.getElementById('dg-billing-wrap');
+
+  if (!targetPlan || !box) return;
+
+  const newPrice = prices[targetPlan]?.[cycle] ?? 0;
+  const isFree   = newPrice === 0;
+
+  if (newPriceEl) newPriceEl.textContent = isFree ? 'Free' : fmt(newPrice);
+  if (totalEl)   totalEl.textContent    = isFree ? 'Free' : fmt(newPrice);
+
+  box.style.display = 'block';
+
+  // Hide payment fields and billing cycle for free/Starter plan
+  if (payFields)   payFields.style.display   = isFree ? 'none' : 'block';
+  if (billingWrap) billingWrap.style.display  = isFree ? 'none' : 'block';
+
+  // Update submit button color
+  const btn = document.getElementById('dg-submit-btn');
+  if (btn) {
+    btn.style.background = isFree ? 'rgba(100,116,139,.4)' : 'rgba(100,116,139,.5)';
+  }
+}
+
+function confirmDowngrade() {
+  const targetPlan = document.getElementById('downgrade_to')?.value;
+  if (!targetPlan) { alert('Please select a plan to downgrade to.'); return false; }
+  return confirm(
+    `Are you sure you want to downgrade to the ${targetPlan} plan?\n\n` +
+    `You will lose access to features not included in ${targetPlan}. ` +
+    `This will take effect after admin approval.`
+  );
+}
+
 // Init
 updateAmount('monthly');
 updateUpgradeAmount();
+updateDowngradeAmount();
 </script>
 </body>
 </html>

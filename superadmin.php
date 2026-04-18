@@ -119,6 +119,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'tenants';
     }
 
+    // ── APPROVE PLAN CHANGE REQUEST (downgrade/upgrade submitted by tenant) ──
+    if ($_POST['action'] === 'approve_plan_request') {
+        $req_id = intval($_POST['request_id']);
+        $req = $pdo->prepare("SELECT * FROM plan_change_requests WHERE id = ? AND status = 'pending' LIMIT 1");
+        $req->execute([$req_id]); $req = $req->fetch();
+        if ($req) {
+            $tid_r = $req['tenant_id']; $new_plan = $req['requested_plan'];
+            $plan_limits = ['Starter'=>3,'Pro'=>999,'Enterprise'=>999];
+            $new_limit = $plan_limits[$new_plan] ?? 3;
+            $pdo->prepare("UPDATE tenants SET plan=? WHERE id=?")->execute([$new_plan,$tid_r]);
+            if ($new_limit < 999) {
+                $sl = $pdo->prepare("SELECT id FROM users WHERE tenant_id=? AND role IN ('staff','cashier') AND is_suspended=0 ORDER BY created_at ASC");
+                $sl->execute([$tid_r]); $sl = $sl->fetchAll();
+                if (count($sl) > $new_limit) { $excess = array_slice($sl,$new_limit); foreach ($excess as $ex) { $pdo->prepare("UPDATE users SET is_suspended=1,suspended_at=NOW(),suspension_reason='Plan downgraded — staff limit exceeded.' WHERE id=?")->execute([$ex['id']]); } }
+            } else {
+                $pdo->prepare("UPDATE users SET is_suspended=0,suspended_at=NULL,suspension_reason=NULL WHERE tenant_id=? AND suspension_reason='Plan downgraded — staff limit exceeded.'")->execute([$tid_r]);
+            }
+            $pdo->prepare("UPDATE plan_change_requests SET status='approved',reviewed_by=?,reviewed_at=NOW(),admin_notes=? WHERE id=?")->execute([$u['id'],trim($_POST['admin_notes']??''),$req_id]);
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PLAN_REQUEST_APPROVED','tenant',?,?,?,NOW())")->execute([$tid_r,$u['id'],$u['username'],'super_admin',$tid_r,"Plan change approved: {$req['current_plan']} → {$new_plan}.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = "✅ Plan change approved! Tenant is now on <strong>{$new_plan}</strong>.";
+        } else { $error_msg = 'Request not found or already processed.'; }
+        $active_page = 'plan_requests';
+    }
+
+    // ── REJECT PLAN CHANGE REQUEST ─────────────────────────────────
+    if ($_POST['action'] === 'reject_plan_request') {
+        $req_id = intval($_POST['request_id']); $notes = trim($_POST['admin_notes']??'');
+        $req = $pdo->prepare("SELECT * FROM plan_change_requests WHERE id=? AND status='pending' LIMIT 1");
+        $req->execute([$req_id]); $req = $req->fetch();
+        if ($req) {
+            $pdo->prepare("UPDATE plan_change_requests SET status='rejected',reviewed_by=?,reviewed_at=NOW(),admin_notes=? WHERE id=?")->execute([$u['id'],$notes,$req_id]);
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PLAN_REQUEST_REJECTED','tenant',?,?,?,NOW())")->execute([$req['tenant_id'],$u['id'],$u['username'],'super_admin',$req['tenant_id'],"Plan change request rejected. Reason: {$notes}",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = '❌ Plan change request rejected.';
+        } else { $error_msg = 'Request not found or already processed.'; }
+        $active_page = 'plan_requests';
+    }
+
     if ($_POST['action'] === 'save_system_settings') {
         $sys_name    = trim($_POST['system_name']    ?? 'PawnHub');
         $sys_tagline = trim($_POST['system_tagline'] ?? 'Multi-Tenant Pawnshop Management');
@@ -746,6 +783,19 @@ try {
 
 $pending_sub_renewals = array_filter($sub_renewals, fn($r) => $r['status'] === 'pending');
 $pending_sub_count    = count($pending_sub_renewals);
+// ── PLAN CHANGE REQUESTS ──────────────────────────────────
+try {
+    $plan_change_requests = $pdo->query("
+        SELECT pcr.*, t.business_name, t.email, t.owner_name, t.plan AS current_plan_live,
+               u.fullname AS reviewed_by_name
+        FROM plan_change_requests pcr
+        JOIN tenants t ON pcr.tenant_id = t.id
+        LEFT JOIN users u ON pcr.reviewed_by = u.id
+        ORDER BY FIELD(pcr.status,'pending','approved','rejected'), pcr.created_at DESC
+        LIMIT 100
+    ")->fetchAll();
+} catch (PDOException $e) { $plan_change_requests = []; }
+$pending_plan_requests = count(array_filter($plan_change_requests, fn($r) => $r['status'] === 'pending'));
 
 try {
     $all_tenants_sub = $pdo->query("
@@ -1068,6 +1118,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Subscriptions
       <?php if($pending_sub_count>0):?><span class="sb-pill"><?=$pending_sub_count?></span><?php endif;?>
     </a>
+    <a href="?page=plan_requests" class="sb-item <?= $active_page==='plan_requests'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Plan Requests
+      <?php if($pending_plan_requests>0):?><span class="sb-pill"><?=$pending_plan_requests?></span><?php endif;?>
+    </a>
     <div class="sb-section">Analytics</div>
     <a href="?page=reports" class="sb-item <?= $active_page==='reports'?'active':'' ?>">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reports
@@ -1095,7 +1149,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <span class="topbar-title">
-        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','subscriptions'=>'Subscription Management','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs','settings'=>'System Settings'];
+        <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','subscriptions'=>'Subscription Management','plan_requests'=>'Plan Change Requests','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs','settings'=>'System Settings'];
         echo $titles[$active_page]??'Dashboard'; ?>
       </span>
       <span class="super-chip">SUPER ADMIN</span>
@@ -1643,6 +1697,157 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         document.querySelectorAll('.sub-row').forEach(r => {
             r.style.display = r.dataset.name.includes(q) ? '' : 'none';
         });
+    }
+    </script>
+
+
+    <!-- ══ PLAN CHANGE REQUESTS ══════════════════════════════════ -->
+    <?php elseif($active_page==='plan_requests'): ?>
+    <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:1rem;font-weight:700;color:var(--text);">Plan Change Requests</div>
+        <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">Tenant-submitted requests to upgrade or downgrade their plan</div>
+      </div>
+      <?php if($pending_plan_requests > 0): ?>
+      <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:7px 14px;font-size:.78rem;font-weight:700;color:#92400e;">
+        ⏳ <?= $pending_plan_requests ?> pending request<?= $pending_plan_requests > 1 ? 's' : '' ?>
+      </div>
+      <?php endif; ?>
+    </div>
+
+    <?php if(empty($plan_change_requests)): ?>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text-dim);">
+      <div style="font-size:2rem;margin-bottom:8px;">📋</div>
+      <div style="font-size:.88rem;">No plan change requests yet.</div>
+    </div>
+    <?php else: ?>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+    <?php foreach($plan_change_requests as $pcr):
+      $is_pending  = $pcr['status'] === 'pending';
+      $is_approved = $pcr['status'] === 'approved';
+      $plan_rank   = ['Starter'=>1,'Pro'=>2,'Enterprise'=>3];
+      $cur_r = $plan_rank[$pcr['current_plan']] ?? 1;
+      $req_r = $plan_rank[$pcr['requested_plan']] ?? 1;
+      $is_down = $req_r < $cur_r;
+      $direction = $is_down ? '⬇️ Downgrade' : '⬆️ Upgrade';
+      $dir_color = $is_down ? '#dc2626' : '#16a34a';
+      $dir_bg    = $is_down ? '#fef2f2' : '#f0fdf4';
+      $dir_border= $is_down ? '#fca5a5' : '#86efac';
+      $status_map = ['pending'=>['⏳ Pending','#92400e','#fef3c7','#fcd34d'],'approved'=>['✅ Approved','#14532d','#f0fdf4','#86efac'],'rejected'=>['❌ Rejected','#7f1d1d','#fef2f2','#fca5a5']];
+      [$slabel,$stc,$stbg,$stborder] = $status_map[$pcr['status']] ?? ['—','#64748b','#f8fafc','#e2e8f0'];
+    ?>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;<?= $is_pending ? 'border-left:4px solid #f59e0b;' : '' ?>">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:4px;"><?= htmlspecialchars($pcr['business_name']) ?></div>
+          <div style="font-size:.75rem;color:var(--text-dim);margin-bottom:10px;"><?= htmlspecialchars($pcr['email']) ?> · <?= htmlspecialchars($pcr['owner_name']) ?></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <span style="font-size:.78rem;font-weight:700;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:3px 10px;border-radius:6px;"><?= htmlspecialchars($pcr['current_plan']) ?></span>
+            <span style="font-size:.8rem;color:var(--text-dim);">→</span>
+            <span style="font-size:.78rem;font-weight:700;background:<?=$dir_bg?>;border:1px solid <?=$dir_border?>;color:<?=$dir_color?>;padding:3px 10px;border-radius:6px;"><?= htmlspecialchars($pcr['requested_plan']) ?></span>
+            <span style="font-size:.72rem;font-weight:800;background:<?=$dir_bg?>;border:1px solid <?=$dir_border?>;color:<?=$dir_color?>;padding:3px 9px;border-radius:100px;"><?= $direction ?></span>
+          </div>
+          <?php if(!empty($pcr['reason'])): ?>
+          <div style="font-size:.77rem;color:var(--text-dim);background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px 11px;margin-bottom:6px;line-height:1.6;">
+            <strong style="color:var(--text-m);">Reason:</strong> <?= htmlspecialchars($pcr['reason']) ?>
+          </div>
+          <?php endif; ?>
+          <?php if(!empty($pcr['admin_notes']) && !$is_pending): ?>
+          <div style="font-size:.77rem;color:var(--text-dim);background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px 11px;line-height:1.6;">
+            <strong style="color:var(--text-m);">Admin Notes:</strong> <?= htmlspecialchars($pcr['admin_notes']) ?>
+          </div>
+          <?php endif; ?>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
+          <span style="font-size:.72rem;font-weight:700;background:<?=$stbg?>;border:1px solid <?=$stborder?>;color:<?=$stc?>;padding:4px 11px;border-radius:100px;"><?= $slabel ?></span>
+          <div style="font-size:.7rem;color:var(--text-dim);text-align:right;">
+            Requested: <?= date('M d, Y g:i A', strtotime($pcr['created_at'])) ?>
+            <?php if(!$is_pending && !empty($pcr['reviewed_at'])): ?>
+            <br>Reviewed: <?= date('M d, Y g:i A', strtotime($pcr['reviewed_at'])) ?>
+            <?php if(!empty($pcr['reviewed_by_name'])): ?> by <strong style="color:var(--text-m);"><?= htmlspecialchars($pcr['reviewed_by_name']) ?></strong><?php endif; ?>
+            <?php endif; ?>
+          </div>
+          <?php if($is_pending): ?>
+          <div style="display:flex;gap:7px;margin-top:4px;">
+            <button onclick="openApprovePlanReq(<?= $pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>', '<?= htmlspecialchars($pcr['current_plan']) ?>', '<?= htmlspecialchars($pcr['requested_plan']) ?>')"
+              class="btn-sm btn-primary" style="font-size:.75rem;padding:6px 13px;background:#16a34a;border-color:#16a34a;">
+              ✅ Approve
+            </button>
+            <button onclick="openRejectPlanReq(<?= $pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>')"
+              class="btn-sm" style="font-size:.75rem;padding:6px 13px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;">
+              ❌ Reject
+            </button>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Approve Plan Request Modal -->
+    <div class="modal-overlay" id="approvePlanReqModal">
+      <div class="modal" style="width:460px;max-width:97vw;">
+        <div class="mhdr">
+          <div><div class="mtitle">✅ Approve Plan Change</div><div class="msub" id="apr_sub"></div></div>
+          <button class="mclose" onclick="document.getElementById('approvePlanReqModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="mbody">
+          <form method="POST">
+            <input type="hidden" name="action" value="approve_plan_request">
+            <input type="hidden" name="request_id" id="apr_req_id">
+            <div id="apr_detail" style="background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;font-size:.8rem;color:#14532d;margin-bottom:14px;line-height:1.7;"></div>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:.77rem;font-weight:700;color:var(--text-dim);display:block;margin-bottom:5px;">Admin Notes (optional)</label>
+              <textarea name="admin_notes" rows="3" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:.82rem;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text);" placeholder="Add a note to the tenant..."></textarea>
+            </div>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 13px;font-size:.76rem;color:#1d4ed8;margin-bottom:14px;">ℹ️ This will immediately change the tenant's plan. If downgrading to Starter, excess staff will be auto-suspended.</div>
+            <div style="display:flex;justify-content:flex-end;gap:9px;">
+              <button type="button" class="btn-sm" onclick="document.getElementById('approvePlanReqModal').classList.remove('open')">Cancel</button>
+              <button type="submit" class="btn-sm btn-primary" style="background:#16a34a;border-color:#16a34a;">✅ Confirm Approve</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reject Plan Request Modal -->
+    <div class="modal-overlay" id="rejectPlanReqModal">
+      <div class="modal" style="width:420px;max-width:97vw;">
+        <div class="mhdr">
+          <div><div class="mtitle">❌ Reject Plan Change</div><div class="msub" id="rpr_sub"></div></div>
+          <button class="mclose" onclick="document.getElementById('rejectPlanReqModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="mbody">
+          <form method="POST">
+            <input type="hidden" name="action" value="reject_plan_request">
+            <input type="hidden" name="request_id" id="rpr_req_id">
+            <div style="margin-bottom:14px;">
+              <label style="font-size:.77rem;font-weight:700;color:var(--text-dim);display:block;margin-bottom:5px;">Reason for Rejection <span style="color:#dc2626;">*</span></label>
+              <textarea name="admin_notes" rows="3" required style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:.82rem;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text);" placeholder="Explain why this request is being rejected..."></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:9px;">
+              <button type="button" class="btn-sm" onclick="document.getElementById('rejectPlanReqModal').classList.remove('open')">Cancel</button>
+              <button type="submit" class="btn-sm" style="background:#dc2626;border-color:#dc2626;color:#fff;">❌ Confirm Reject</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <script>
+    function openApprovePlanReq(id, biz, curPlan, newPlan) {
+      document.getElementById('apr_req_id').value = id;
+      document.getElementById('apr_sub').textContent = biz;
+      document.getElementById('apr_detail').innerHTML =
+        '<strong>Business:</strong> ' + biz + '<br>' +
+        '<strong>Change:</strong> ' + curPlan + ' → <strong>' + newPlan + '</strong>';
+      document.getElementById('approvePlanReqModal').classList.add('open');
+    }
+    function openRejectPlanReq(id, biz) {
+      document.getElementById('rpr_req_id').value = id;
+      document.getElementById('rpr_sub').textContent = biz;
+      document.getElementById('rejectPlanReqModal').classList.add('open');
     }
     </script>
 
