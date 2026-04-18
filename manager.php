@@ -422,6 +422,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'shop_items';
     }
 
+    // ── PROMOS & ANNOUNCEMENTS: Save (add or edit) ────────────
+    if ($_POST['action'] === 'save_promo') {
+        $promo_id   = intval($_POST['promo_id'] ?? 0);
+        $title      = trim($_POST['promo_title'] ?? '');
+        $body       = trim($_POST['promo_body']  ?? '');
+        $type       = in_array($_POST['promo_type'] ?? '', ['announcement','promo','sale','warning'])
+                        ? $_POST['promo_type'] : 'announcement';
+        $is_pinned  = intval($_POST['is_pinned']  ?? 0);
+        $is_active  = intval($_POST['is_active']  ?? 1);
+        $start_date = trim($_POST['start_date'] ?? '') ?: null;
+        $end_date   = trim($_POST['end_date']   ?? '') ?: null;
+        $image_url  = trim($_POST['image_url']  ?? '') ?: null;
+
+        if ($title === '') {
+            $error_msg = 'Title is required.';
+        } else {
+            if ($promo_id > 0) {
+                $pdo->prepare("UPDATE tenant_promos SET title=?,body=?,type=?,is_pinned=?,is_active=?,start_date=?,end_date=?,image_url=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
+                    ->execute([$title,$body,$type,$is_pinned,$is_active,$start_date,$end_date,$image_url,$promo_id,$tid]);
+                $success_msg = 'Promo/Announcement updated.';
+                write_audit($pdo,$u['id'],$u['username'],'manager','PROMO_UPDATE','tenant_promos',(string)$promo_id,"Updated: $title",$tid);
+            } else {
+                $pdo->prepare("INSERT INTO tenant_promos (tenant_id,title,body,type,is_pinned,is_active,start_date,end_date,image_url,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
+                    ->execute([$tid,$title,$body,$type,$is_pinned,$is_active,$start_date,$end_date,$image_url]);
+                $success_msg = 'Promo/Announcement posted!';
+                write_audit($pdo,$u['id'],$u['username'],'manager','PROMO_ADD','tenant_promos',(string)$pdo->lastInsertId(),"Added: $title",$tid);
+            }
+        }
+        $active_page = 'promos';
+    }
+
+    // ── PROMOS: Delete ────────────────────────────────────────
+    if ($_POST['action'] === 'delete_promo') {
+        $promo_id = intval($_POST['promo_id'] ?? 0);
+        $pdo->prepare("DELETE FROM tenant_promos WHERE id=? AND tenant_id=?")->execute([$promo_id,$tid]);
+        $success_msg = 'Deleted.';
+        write_audit($pdo,$u['id'],$u['username'],'manager','PROMO_DELETE','tenant_promos',(string)$promo_id,"Promo deleted",$tid);
+        $active_page = 'promos';
+    }
+
+    // ── PROMOS: Toggle active ─────────────────────────────────
+    if ($_POST['action'] === 'toggle_promo') {
+        $promo_id  = intval($_POST['promo_id'] ?? 0);
+        $new_state = intval($_POST['new_state'] ?? 0);
+        $pdo->prepare("UPDATE tenant_promos SET is_active=?,updated_at=NOW() WHERE id=? AND tenant_id=?")->execute([$new_state,$promo_id,$tid]);
+        $success_msg = $new_state ? 'Promo activated.' : 'Promo deactivated.';
+        $active_page = 'promos';
+    }
+
 }
 
 // ── Fetch data ─────────────────────────────────────────────────
@@ -454,6 +503,14 @@ $shop_categories_list->execute([$tid]); $shop_categories_list = $shop_categories
 
 $shop_visible_count  = count(array_filter($shop_items, fn($i)=>(int)$i['is_shop_visible']===1));
 $shop_featured_count = count(array_filter($shop_items, fn($i)=>(int)$i['is_featured']===1));
+
+// Promos & Announcements
+$mgr_promos = [];
+try {
+    $ps = $pdo->prepare("SELECT * FROM tenant_promos WHERE tenant_id=? ORDER BY is_pinned DESC, created_at DESC LIMIT 100");
+    $ps->execute([$tid]); $mgr_promos = $ps->fetchAll();
+} catch (Throwable $e) { $mgr_promos = []; }
+$active_promos_count = count(array_filter($mgr_promos, fn($p)=>(int)$p['is_active']===1));
 
 $business_name = $tenant['business_name'] ?? 'My Branch';
 ?>
@@ -665,6 +722,10 @@ tr:hover td{background:rgba(255,255,255,.02);}
     <a href="?page=shop_categories" class="sb-item <?=$active_page==='shop_categories'?'active':''?>">
       <span class="material-symbols-outlined">category</span>Categories
     </a>
+    <a href="?page=promos" class="sb-item <?=$active_page==='promos'?'active':''?>">
+      <span class="material-symbols-outlined">campaign</span>Promos &amp; Announcements
+      <?php if($active_promos_count>0):?><span class="sb-pill" style="background:var(--g);"><?=$active_promos_count?></span><?php endif;?>
+    </a>
 
     <div class="sb-section">Reports</div>
     <a href="?page=audit" class="sb-item <?=$active_page==='audit'?'active':''?>">
@@ -687,7 +748,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF','shop_items'=>'Shop Items','shop_categories'=>'Shop Categories','add_shop_item'=>'Add Shop Item']; ?>
+      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF','shop_items'=>'Shop Items','shop_categories'=>'Shop Categories','add_shop_item'=>'Add Shop Item','promos'=>'Promos & Announcements']; ?>
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
@@ -1477,6 +1538,149 @@ tr:hover td{background:rgba(255,255,255,.02);}
       </div>
     </div>
 
+
+  <?php elseif($active_page==='promos'): ?>
+    <div class="page-hdr">
+      <div>
+        <h2>Promos &amp; Announcements</h2>
+        <p><?=count($mgr_promos)?> total · <?=$active_promos_count?> active — visible on your public shop page</p>
+      </div>
+      <button onclick="openPromoModal()" class="btn-sm btn-primary">
+        <span class="material-symbols-outlined" style="font-size:15px;">add</span>New Promo / Announcement
+      </button>
+    </div>
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+      <?php
+        $cnt_ann  = count(array_filter($mgr_promos, fn($p)=>($p['type']??'announcement')==='announcement'));
+        $cnt_promo= count(array_filter($mgr_promos, fn($p)=>($p['type']??'')==='promo'));
+        $cnt_sale = count(array_filter($mgr_promos, fn($p)=>($p['type']??'')==='sale'));
+        $cnt_warn = count(array_filter($mgr_promos, fn($p)=>($p['type']??'')==='warning'));
+      ?>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.12);"><span class="material-symbols-outlined" style="color:#6ee7b7;font-size:18px;">campaign</span></div></div><div class="stat-value"><?=$active_promos_count?></div><div class="stat-label">Active</div></div>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(99,102,241,.12);"><span class="material-symbols-outlined" style="color:#a5b4fc;font-size:18px;">notifications</span></div></div><div class="stat-value"><?=$cnt_ann?></div><div class="stat-label">Announcements</div></div>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(59,130,246,.12);"><span class="material-symbols-outlined" style="color:#93c5fd;font-size:18px;">local_offer</span></div></div><div class="stat-value"><?=$cnt_promo?></div><div class="stat-label">Promos</div></div>
+      <div class="stat-card"><div class="stat-top"><div class="stat-icon" style="background:rgba(245,158,11,.12);"><span class="material-symbols-outlined" style="color:#fcd34d;font-size:18px;">sell</span></div></div><div class="stat-value"><?=$cnt_sale?></div><div class="stat-label">Sales</div></div>
+    </div>
+
+    <?php if(empty($mgr_promos)): ?>
+    <div class="card" style="text-align:center;padding:56px 24px;">
+      <span class="material-symbols-outlined" style="font-size:52px;color:rgba(255,255,255,.1);display:block;margin-bottom:14px;">campaign</span>
+      <div style="font-size:1rem;font-weight:700;color:rgba(255,255,255,.5);margin-bottom:8px;">No promos yet</div>
+      <p style="font-size:.82rem;color:rgba(255,255,255,.25);margin-bottom:20px;">Promos and announcements you create here will appear on your public shop page.</p>
+      <button onclick="openPromoModal()" class="btn-sm btn-primary">
+        <span class="material-symbols-outlined" style="font-size:15px;">add</span>Create First Promo
+      </button>
+    </div>
+    <?php else: ?>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:14px;">
+    <?php foreach($mgr_promos as $promo):
+      $type_color = match($promo['type']??'announcement') {
+        'promo'   => 'rgba(59,130,246,.9)',
+        'sale'    => 'rgba(245,158,11,.9)',
+        'warning' => 'rgba(239,68,68,.9)',
+        default   => 'var(--g)',
+      };
+      $type_icon = match($promo['type']??'announcement') {
+        'promo'   => 'local_offer',
+        'sale'    => 'sell',
+        'warning' => 'warning',
+        default   => 'campaign',
+      };
+      $type_label = match($promo['type']??'announcement') {
+        'promo'   => 'Promo',
+        'sale'    => 'Sale',
+        'warning' => 'Notice',
+        default   => 'Announcement',
+      };
+      $is_active = (int)($promo['is_active'] ?? 0);
+      $is_pinned = (int)($promo['is_pinned'] ?? 0);
+
+      // Check if expired
+      $is_expired = false;
+      if (!empty($promo['end_date']) && strtotime($promo['end_date']) < strtotime('today')) {
+        $is_expired = true;
+      }
+    ?>
+    <div style="background:rgba(255,255,255,.04);border:1px solid <?= $is_active && !$is_expired ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)' ?>;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;<?= $is_pinned ? 'border-color:color-mix(in srgb,'.$type_color.' 50%,transparent);' : '' ?>opacity:<?= $is_active && !$is_expired ? '1' : '.55' ?>;">
+      <?php if(!empty($promo['image_url'])): ?>
+      <div style="height:120px;overflow:hidden;flex-shrink:0;">
+        <img src="<?=htmlspecialchars($promo['image_url'])?>" alt="" style="width:100%;height:100%;object-fit:cover;">
+      </div>
+      <?php endif; ?>
+      <div style="padding:16px 18px;flex:1;display:flex;flex-direction:column;gap:9px;">
+        <!-- Badges row -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:2px 9px;border-radius:100px;background:color-mix(in srgb,<?=htmlspecialchars($type_color)?> 18%,transparent);color:<?=htmlspecialchars($type_color)?>;border:1px solid color-mix(in srgb,<?=htmlspecialchars($type_color)?> 35%,transparent);">
+            <span class="material-symbols-outlined" style="font-size:11px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?=$type_icon?></span>
+            <?=$type_label?>
+          </span>
+          <?php if($is_pinned): ?>
+          <span style="font-size:.6rem;font-weight:700;color:rgba(255,255,255,.3);display:inline-flex;align-items:center;gap:3px;">
+            <span class="material-symbols-outlined" style="font-size:11px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">push_pin</span>Pinned
+          </span>
+          <?php endif; ?>
+          <?php if($is_expired): ?>
+          <span style="font-size:.6rem;font-weight:700;color:#fca5a5;background:rgba(239,68,68,.1);padding:2px 7px;border-radius:100px;border:1px solid rgba(239,68,68,.2);">Expired</span>
+          <?php elseif(!$is_active): ?>
+          <span style="font-size:.6rem;font-weight:700;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:100px;">Inactive</span>
+          <?php else: ?>
+          <span style="font-size:.6rem;font-weight:700;color:#6ee7b7;background:rgba(16,185,129,.12);padding:2px 7px;border-radius:100px;border:1px solid rgba(16,185,129,.2);">Live</span>
+          <?php endif; ?>
+        </div>
+        <!-- Title -->
+        <div style="font-size:.95rem;font-weight:700;color:#fff;line-height:1.3;"><?=htmlspecialchars($promo['title'])?></div>
+        <!-- Body preview -->
+        <?php if(!empty($promo['body'])): ?>
+        <div style="font-size:.79rem;color:rgba(255,255,255,.45);line-height:1.55;flex:1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;"><?=htmlspecialchars($promo['body'])?></div>
+        <?php endif; ?>
+        <!-- Date range -->
+        <?php if(!empty($promo['start_date']) || !empty($promo['end_date'])): ?>
+        <div style="font-size:.7rem;color:rgba(255,255,255,.25);display:flex;align-items:center;gap:4px;">
+          <span class="material-symbols-outlined" style="font-size:13px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">event</span>
+          <?php
+            $from = !empty($promo['start_date']) ? date('M d, Y', strtotime($promo['start_date'])) : null;
+            $to   = !empty($promo['end_date'])   ? date('M d, Y', strtotime($promo['end_date'])) : null;
+            if($from && $to) echo htmlspecialchars("$from – $to");
+            elseif($from)    echo htmlspecialchars("From $from");
+            elseif($to)      echo htmlspecialchars("Until $to");
+          ?>
+        </div>
+        <?php endif; ?>
+        <!-- Action row -->
+        <div style="display:flex;align-items:center;gap:7px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);margin-top:auto;">
+          <button onclick="openPromoModal(<?=htmlspecialchars(json_encode($promo),ENT_QUOTES)?>)" class="btn-sm" style="flex:1;justify-content:center;font-size:.72rem;">
+            <span class="material-symbols-outlined" style="font-size:13px;">edit</span>Edit
+          </button>
+          <form method="POST" style="display:contents;">
+            <input type="hidden" name="action" value="toggle_promo">
+            <input type="hidden" name="promo_id" value="<?=(int)$promo['id']?>">
+            <input type="hidden" name="new_state" value="<?=$is_active?0:1?>">
+            <button type="submit" class="btn-sm" style="flex:1;justify-content:center;font-size:.72rem;<?=$is_active?'color:#fcd34d;':''?>">
+              <span class="material-symbols-outlined" style="font-size:13px;"><?=$is_active?'visibility_off':'visibility'?></span><?=$is_active?'Deactivate':'Activate'?>
+            </button>
+          </form>
+          <form method="POST" style="display:contents;" onsubmit="return confirm('Delete this promo?')">
+            <input type="hidden" name="action" value="delete_promo">
+            <input type="hidden" name="promo_id" value="<?=(int)$promo['id']?>">
+            <button type="submit" class="btn-sm btn-danger" style="padding:6px 9px;">
+              <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Info tip -->
+    <div style="margin-top:18px;background:rgba(5,150,105,.07);border:1px solid rgba(5,150,105,.15);border-radius:12px;padding:13px 16px;font-size:.78rem;color:rgba(110,231,183,.65);display:flex;align-items:flex-start;gap:10px;">
+      <span class="material-symbols-outlined" style="font-size:16px;flex-shrink:0;margin-top:1px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">info</span>
+      <span>Active promos automatically appear on your public shop page under <strong style="color:#6ee7b7;">Promos &amp; Announcements</strong>. Inactive or expired promos are hidden from customers.</span>
+    </div>
+
   <?php endif;?>
   </div>
 </div>
@@ -1732,6 +1936,113 @@ function previewPhoto(input) {
     reader.readAsDataURL(input.files[0]);
   }
 }
+</script>
+
+<!-- PROMO / ANNOUNCEMENT ADD-EDIT MODAL -->
+<div class="modal-overlay" id="promoModal">
+  <div class="modal" style="width:520px;">
+    <div class="mhdr">
+      <div class="mtitle" id="promoModalTitle">New Promo / Announcement</div>
+      <button class="mclose" onclick="closePromoModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="mbody">
+      <form method="POST" id="promoForm">
+        <input type="hidden" name="action" value="save_promo">
+        <input type="hidden" name="promo_id" id="promo_id_field" value="0">
+
+        <div class="fgroup">
+          <label class="flabel">Title *</label>
+          <input type="text" name="promo_title" id="promo_title_field" class="finput" placeholder="e.g. Special Interest Rate This Month!" required maxlength="255">
+        </div>
+
+        <div class="fgroup">
+          <label class="flabel">Type</label>
+          <select name="promo_type" id="promo_type_field" class="finput">
+            <option value="announcement">📢 Announcement</option>
+            <option value="promo">🏷️ Promo</option>
+            <option value="sale">🔖 Sale</option>
+            <option value="warning">⚠️ Notice / Warning</option>
+          </select>
+        </div>
+
+        <div class="fgroup">
+          <label class="flabel">Body / Details</label>
+          <textarea name="promo_body" id="promo_body_field" class="finput" rows="4" placeholder="Describe the promo, dates, conditions, etc." style="resize:vertical;"></textarea>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="fgroup">
+            <label class="flabel">Start Date</label>
+            <input type="date" name="start_date" id="promo_start_field" class="finput">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">End Date</label>
+            <input type="date" name="end_date" id="promo_end_field" class="finput">
+          </div>
+        </div>
+
+        <div class="fgroup">
+          <label class="flabel">Banner Image URL <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+          <input type="url" name="image_url" id="promo_img_field" class="finput" placeholder="https://...">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+          <label class="flabel" style="display:flex;align-items:center;gap:9px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:10px 13px;">
+            <input type="checkbox" name="is_active" id="promo_active_field" value="1" checked style="width:16px;height:16px;accent-color:#059669;flex-shrink:0;">
+            <span><span style="color:#fff;font-size:.82rem;font-weight:600;">Active</span><br><span style="font-size:.68rem;color:rgba(255,255,255,.3);font-weight:400;">Visible to customers</span></span>
+          </label>
+          <label class="flabel" style="display:flex;align-items:center;gap:9px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:10px 13px;">
+            <input type="checkbox" name="is_pinned" id="promo_pinned_field" value="1" style="width:16px;height:16px;accent-color:#f59e0b;flex-shrink:0;">
+            <span><span style="color:#fff;font-size:.82rem;font-weight:600;">📌 Pin to Top</span><br><span style="font-size:.68rem;color:rgba(255,255,255,.3);font-weight:400;">Show first on the page</span></span>
+          </label>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="closePromoModal()">Cancel</button>
+          <button type="submit" class="btn-sm btn-primary" id="promoSubmitBtn">
+            <span class="material-symbols-outlined" style="font-size:15px;">save</span>Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function openPromoModal(promo) {
+  const modal = document.getElementById('promoModal');
+  const title = document.getElementById('promoModalTitle');
+
+  if (promo) {
+    title.textContent = 'Edit Promo / Announcement';
+    document.getElementById('promo_id_field').value    = promo.id || 0;
+    document.getElementById('promo_title_field').value = promo.title || '';
+    document.getElementById('promo_type_field').value  = promo.type || 'announcement';
+    document.getElementById('promo_body_field').value  = promo.body || '';
+    document.getElementById('promo_start_field').value = (promo.start_date || '').substring(0,10);
+    document.getElementById('promo_end_field').value   = (promo.end_date   || '').substring(0,10);
+    document.getElementById('promo_img_field').value   = promo.image_url || '';
+    document.getElementById('promo_active_field').checked = parseInt(promo.is_active) === 1;
+    document.getElementById('promo_pinned_field').checked = parseInt(promo.is_pinned) === 1;
+  } else {
+    title.textContent = 'New Promo / Announcement';
+    document.getElementById('promoForm').reset();
+    document.getElementById('promo_id_field').value = 0;
+    document.getElementById('promo_active_field').checked = true;
+  }
+
+  modal.classList.add('open');
+}
+
+function closePromoModal() {
+  document.getElementById('promoModal').classList.remove('open');
+}
+
+document.getElementById('promoModal').addEventListener('click', function(e) {
+  if (e.target === this) closePromoModal();
+});
 </script>
 </body>
 </html>

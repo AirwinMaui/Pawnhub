@@ -728,6 +728,12 @@ footer {
     <?php if($biz_addr || $biz_phone): ?>
     <a href="#info" class="nav-link">About</a>
     <?php endif; ?>
+    <?php if(!empty($promos)): ?>
+    <a href="#promos" class="nav-link">
+      <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">campaign</span>Promos
+    </a>
+    <?php endif; ?>
+    <a href="#shop" class="nav-link">Shop</a>
     <a href="<?= htmlspecialchars($register_url) ?>" class="nav-link" style="color:color-mix(in srgb,var(--accent) 90%,#fff);">Join Us</a>
   </div>
 
