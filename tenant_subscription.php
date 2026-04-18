@@ -836,77 +836,102 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
       </div>
       <?php endif; ?>
 
-      <form method="POST" id="upgradeForm">
-        <input type="hidden" name="action" value="request_upgrade"/>
-
-        <div class="form-grid" style="margin-bottom:14px;">
-          <div>
-            <label class="flabel">Upgrade To</label>
-            <select name="upgrade_to" id="upgrade_to" class="fselect" onchange="updateUpgradeAmount()" required>
-              <option value="">— Select Target Plan —</option>
-              <?php foreach ($upgrade_targets as $target): ?>
-              <option value="<?= htmlspecialchars($target) ?>"><?= htmlspecialchars($target) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div>
-            <label class="flabel">Billing Cycle</label>
-            <select name="billing_cycle" id="upgrade_billing_cycle" class="fselect" onchange="updateUpgradeAmount()">
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly (save ~10%)</option>
-              <option value="annually">Annually (save ~20%)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Amount Due Preview -->
-        <div id="upgrade-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
-            <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
-            <div style="color:#fff;font-weight:700;text-align:right;" id="upg-new-price">—</div>
-            <?php if ($proration_preview > 0): ?>
-            <div style="color:rgba(255,255,255,.45);">Proration Credit:</div>
-            <div style="color:#6ee7b7;font-weight:700;text-align:right;" id="upg-credit">− ₱<?= number_format($proration_preview, 2) ?></div>
-            <?php endif; ?>
-            <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
-            <div style="font-size:1.05rem;font-weight:800;color:#a78bfa;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="upg-total">—</div>
-          </div>
-          <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:10px;line-height:1.5;">
-            * Admin will verify payment and switch your plan within 24 hours. Your new plan starts immediately upon approval.
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="flabel">Payment Method</label>
-          <select name="payment_method" class="fselect" required>
-            <option value="">— Select Payment Method —</option>
-            <option value="GCash">GCash</option>
-            <option value="Maya">Maya (PayMaya)</option>
-            <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-            <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-            <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-            <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-            <option value="Cash">Cash (walk-in)</option>
-            <option value="Other">Other</option>
+      <!-- Plan + Billing selectors (shared for both payment tabs) -->
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div>
+          <label class="flabel">Upgrade To</label>
+          <select id="upgrade_to_shared" class="fselect" onchange="syncUpgradePlan(this.value); updateUpgradeAmount();" required>
+            <option value="">— Select Target Plan —</option>
+            <?php foreach ($upgrade_targets as $target): ?>
+            <option value="<?= htmlspecialchars($target) ?>"><?= htmlspecialchars($target) ?></option>
+            <?php endforeach; ?>
           </select>
         </div>
-
-        <div class="form-group">
-          <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-          <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+        <div>
+          <label class="flabel">Billing Cycle</label>
+          <select id="upgrade_billing_shared" class="fselect" onchange="syncUpgradeCycle(this.value); updateUpgradeAmount();">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly (save ~10%)</option>
+            <option value="annually">Annually (save ~20%)</option>
+          </select>
         </div>
+      </div>
 
-        <div class="form-group">
-          <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-          <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+      <!-- Amount Due Preview -->
+      <div id="upgrade-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
+          <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
+          <div style="color:#fff;font-weight:700;text-align:right;" id="upg-new-price">—</div>
+          <?php if ($proration_preview > 0): ?>
+          <div style="color:rgba(255,255,255,.45);">Proration Credit:</div>
+          <div style="color:#6ee7b7;font-weight:700;text-align:right;" id="upg-credit">— ₱<?= number_format($proration_preview, 2) ?></div>
+          <?php endif; ?>
+          <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#a78bfa;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="upg-total">—</div>
         </div>
+      </div>
 
-        <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);width:100%;justify-content:center;font-size:.92rem;padding:14px;">
-          <span class="material-symbols-outlined" style="font-size:17px;">rocket_launch</span>
-          Submit Upgrade Request
-        </button>
-      </form>
+      <!-- Payment method tabs -->
+      <div class="pay-tabs" style="margin-bottom:0;">
+        <button type="button" class="pay-tab active" onclick="switchUpgradeTab('paymongo', this)">⚡ Pay via PayMongo</button>
+        <button type="button" class="pay-tab" onclick="switchUpgradeTab('manual', this)">📋 Manual Payment</button>
+      </div>
+
+      <!-- PayMongo Tab -->
+      <div id="upg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
+        <div class="alert alert-info" style="margin-bottom:16px;">
+          ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking. Your upgrade will be recorded automatically after payment.
+        </div>
+        <form method="POST" action="paymongo_renewal.php" id="upgradeFormPM">
+          <input type="hidden" name="action"        value="pay_upgrade_paymongo"/>
+          <input type="hidden" name="upgrade_to"    id="upg_pm_plan"    value=""/>
+          <input type="hidden" name="billing_cycle" id="upg_pm_cycle"   value="monthly"/>
+          <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
+            onclick="return validateUpgradeSelect()">
+            ⚡ Pay Now via PayMongo
+          </button>
+        </form>
+      </div>
+
+      <!-- Manual Tab -->
+      <div id="upg-panel-manual" class="pay-panel" style="padding-top:16px;">
+        <div class="alert alert-info" style="margin-bottom:16px;">
+          📌 <strong>Manual payment:</strong> Send payment to our GCash/bank account, then submit the reference number. Admin will verify and activate within 24 hours.
+        </div>
+        <form method="POST" id="upgradeFormManual">
+          <input type="hidden" name="action"        value="request_upgrade"/>
+          <input type="hidden" name="upgrade_to"    id="upg_mn_plan"  value=""/>
+          <input type="hidden" name="billing_cycle" id="upg_mn_cycle" value="monthly"/>
+          <div class="form-group">
+            <label class="flabel">Payment Method</label>
+            <select name="payment_method" class="fselect" required>
+              <option value="">— Select Payment Method —</option>
+              <option value="GCash">GCash</option>
+              <option value="Maya">Maya (PayMaya)</option>
+              <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
+              <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
+              <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
+              <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
+              <option value="Cash">Cash (walk-in)</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+          </div>
+          <div class="form-group">
+            <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);width:100%;justify-content:center;font-size:.92rem;padding:14px;"
+            onclick="return validateUpgradeSelect()">
+            <span class="material-symbols-outlined" style="font-size:17px;">rocket_launch</span>
+            Submit Upgrade Request
+          </button>
+        </form>
+      </div>
     </div>
     <?php elseif ($plan === 'Enterprise'): ?>
     <div class="card" style="text-align:center;padding:28px;">
@@ -926,15 +951,24 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 
       <?php if (!$sub_expired_for_downgrade): ?>
       <!-- Blocked: subscription still active -->
-      <div class="alert alert-warn" style="margin-bottom:0;">
-        🔒 <strong>Downgrade is currently locked.</strong><br>
-        You can only downgrade after your current <strong><?= htmlspecialchars($plan) ?></strong> subscription expires on
-        <strong><?= date('F d, Y', strtotime($sub_end)) ?></strong>
-        (<?= $days_left ?> day(s) remaining).<br>
-        <span style="font-size:.78rem;color:rgba(255,255,255,.45);margin-top:4px;display:block;">
-          Your subscription period is already paid for — downgrade will take effect on renewal.
-          Come back after it expires to switch to a lower plan.
-        </span>
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:22px;text-align:center;">
+        <span class="material-symbols-outlined" style="font-size:36px;color:#fcd34d;display:block;margin-bottom:10px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">lock_clock</span>
+        <div style="font-size:.95rem;font-weight:800;color:#fcd34d;margin-bottom:8px;">⛔ Downgrade Locked — Active Subscription</div>
+        <div style="font-size:.82rem;color:rgba(255,255,255,.6);line-height:1.8;margin-bottom:14px;">
+          You cannot downgrade while your <strong style="color:#fff;"><?= htmlspecialchars($plan) ?></strong> subscription is still active.<br>
+          Your subscription period is <strong style="color:#fcd34d;">already paid for</strong> and cannot be cancelled mid-period.<br>
+          You may submit a downgrade request once it expires.
+        </div>
+        <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:10px 20px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#fcd34d;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">calendar_month</span>
+          <div style="text-align:left;">
+            <div style="font-size:.7rem;color:rgba(255,255,255,.4);font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Subscription Expires</div>
+            <div style="font-size:.9rem;font-weight:800;color:#fff;"><?= date('F d, Y', strtotime($sub_end)) ?> <span style="font-size:.75rem;color:rgba(255,255,255,.4);">(<?= $days_left ?> day(s) left)</span></div>
+          </div>
+        </div>
+        <div style="font-size:.75rem;color:rgba(255,255,255,.35);margin-top:12px;">
+          Come back after your subscription expires to switch to a lower plan.
+        </div>
       </div>
 
       <?php else: ?>
@@ -1004,77 +1038,128 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         <?php endforeach; ?>
       </div>
 
-      <form method="POST" id="downgradeForm">
-        <input type="hidden" name="action" value="request_downgrade"/>
+      <!-- Plan + Billing selectors (shared) -->
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div>
+          <label class="flabel">Downgrade To</label>
+          <select id="downgrade_to_shared" class="fselect" onchange="syncDgPlan(this.value); updateDowngradeAmount();" required>
+            <option value="">— Select Plan —</option>
+            <?php foreach ($downgrade_targets as $dtarget): ?>
+            <option value="<?= htmlspecialchars($dtarget) ?>"><?= htmlspecialchars($dtarget) ?>
+              <?= $dtarget === 'Starter' ? '(Free)' : '(₱999/mo)' ?>
+            </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div id="dg-billing-wrap">
+          <label class="flabel">Billing Cycle</label>
+          <select id="dg_billing_shared" class="fselect" onchange="syncDgCycle(this.value); updateDowngradeAmount();">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="annually">Annually</option>
+          </select>
+        </div>
+      </div>
 
-        <div class="form-grid" style="margin-bottom:14px;">
-          <div>
-            <label class="flabel">Downgrade To</label>
-            <select name="downgrade_to" id="downgrade_to" class="fselect" onchange="updateDowngradeAmount()" required>
-              <option value="">— Select Plan —</option>
-              <?php foreach ($downgrade_targets as $dtarget): ?>
-              <option value="<?= htmlspecialchars($dtarget) ?>"><?= htmlspecialchars($dtarget) ?>
-                <?= $dtarget === 'Starter' ? '(Free)' : '(₱999/mo)' ?>
-              </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div id="dg-billing-wrap">
-            <label class="flabel">Billing Cycle</label>
-            <select name="billing_cycle" id="dg_billing_cycle" class="fselect" onchange="updateDowngradeAmount()">
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="annually">Annually</option>
-            </select>
-          </div>
+      <!-- Amount due preview -->
+      <div id="dg-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
+          <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
+          <div style="color:#fff;font-weight:700;text-align:right;" id="dg-new-price">—</div>
+          <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
+        </div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:8px;line-height:1.5;">
+          * Free (Starter) downgrades require no payment. Admin will apply the plan change within 24 hours.
+        </div>
+      </div>
+
+      <!-- Payment tabs (hidden for free/Starter) -->
+      <div id="dg-payment-section">
+        <div class="pay-tabs" style="margin-bottom:0;">
+          <button type="button" class="pay-tab active" onclick="switchDgTab('paymongo', this)">⚡ Pay via PayMongo</button>
+          <button type="button" class="pay-tab" onclick="switchDgTab('manual', this)">📋 Manual Payment</button>
         </div>
 
-        <!-- Amount due preview -->
-        <div id="dg-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
-            <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
-            <div style="color:#fff;font-weight:700;text-align:right;" id="dg-new-price">—</div>
-            <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
-            <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
+        <!-- PayMongo Tab -->
+        <div id="dg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
+          <div class="alert alert-info" style="margin-bottom:16px;">
+            ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking.
           </div>
-          <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:10px;line-height:1.5;">
-            * Admin will verify and apply the plan change within 24 hours. Free (Starter) downgrades require no payment.
-          </div>
+          <form method="POST" action="paymongo_renewal.php" id="downgradeFormPM">
+            <input type="hidden" name="action"        value="pay_downgrade_paymongo"/>
+            <input type="hidden" name="downgrade_to"  id="dg_pm_plan"  value=""/>
+            <input type="hidden" name="billing_cycle" id="dg_pm_cycle" value="monthly"/>
+            <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
+              onclick="return validateDgSelect()">
+              ⚡ Pay Now via PayMongo
+            </button>
+          </form>
         </div>
 
-        <!-- Payment fields (hidden for Starter/free) -->
-        <div id="dg-payment-fields">
+        <!-- Manual Tab -->
+        <div id="dg-panel-manual" class="pay-panel" style="padding-top:16px;">
+          <div class="alert alert-info" style="margin-bottom:16px;">
+            📌 <strong>Manual payment:</strong> Send payment to our GCash/bank, then submit the reference. Admin verifies within 24 hours.
+          </div>
+          <form method="POST" id="downgradeFormManual">
+            <input type="hidden" name="action"        value="request_downgrade"/>
+            <input type="hidden" name="downgrade_to"  id="dg_mn_plan"  value=""/>
+            <input type="hidden" name="billing_cycle" id="dg_mn_cycle" value="monthly"/>
+            <div class="form-group">
+              <label class="flabel">Payment Method</label>
+              <select name="payment_method" id="dg_payment_method" class="fselect">
+                <option value="">— Select Payment Method —</option>
+                <option value="GCash">GCash</option>
+                <option value="Maya">Maya (PayMaya)</option>
+                <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
+                <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
+                <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
+                <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
+                <option value="Cash">Cash (walk-in)</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="flabel">Payment Reference <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+              <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+            </div>
+            <div class="form-group">
+              <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+              <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+            </div>
+            <button type="submit" class="btn" id="dg-submit-btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
+              onclick="return validateDgSelect() && confirmDowngrade()">
+              <span class="material-symbols-outlined" style="font-size:17px;">arrow_downward</span>
+              Submit Downgrade Request
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Free/Starter downgrade — no payment needed -->
+      <div id="dg-free-section" style="display:none;">
+        <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:#94a3b8;margin-bottom:14px;">
+          ℹ️ Downgrading to <strong>Starter</strong> is free — no payment required. Admin will process your request within 24 hours.
+        </div>
+        <form method="POST" id="downgradeFormFree">
+          <input type="hidden" name="action"        value="request_downgrade"/>
+          <input type="hidden" name="downgrade_to"  id="dg_free_plan"  value="Starter"/>
+          <input type="hidden" name="billing_cycle" id="dg_free_cycle" value="monthly"/>
+          <input type="hidden" name="payment_method" value="N/A (Free Plan)"/>
           <div class="form-group">
-            <label class="flabel">Payment Method</label>
-            <select name="payment_method" id="dg_payment_method" class="fselect">
-              <option value="">— Select Payment Method —</option>
-              <option value="GCash">GCash</option>
-              <option value="Maya">Maya (PayMaya)</option>
-              <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-              <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-              <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-              <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-              <option value="Cash">Cash (walk-in)</option>
-              <option value="Other">Other</option>
-            </select>
+            <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
           </div>
-          <div class="form-group">
-            <label class="flabel">Payment Reference <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-            <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
-          </div>
-        </div>
+          <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
+            onclick="return confirmDowngrade()">
+            <span class="material-symbols-outlined" style="font-size:17px;">arrow_downward</span>
+            Submit Downgrade to Starter (Free)
+          </button>
+        </form>
+      </div>
 
-        <div class="form-group">
-          <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-          <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-        </div>
-
-        <button type="submit" class="btn" id="dg-submit-btn" style="background:rgba(100,116,139,.3);border:1px solid rgba(100,116,139,.4);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;" onclick="return confirmDowngrade()">
-          <span class="material-symbols-outlined" style="font-size:17px;">arrow_downward</span>
-          Submit Downgrade Request
-        </button>
-      </form>
       <?php endif; ?>
     </div>
     <?php endif; ?>
@@ -1297,61 +1382,98 @@ function switchTab(tab) {
   event.currentTarget.classList.add('active');
 }
 
-// ── Upgrade amount calculator ─────────────────────────────────
+// ── Upgrade helpers ───────────────────────────────────────────
+function syncUpgradePlan(val) {
+  ['upg_pm_plan','upg_mn_plan'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  });
+}
+function syncUpgradeCycle(val) {
+  ['upg_pm_cycle','upg_mn_cycle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  });
+}
+function switchUpgradeTab(tab, btn) {
+  document.querySelectorAll('#upg-panel-paymongo, #upg-panel-manual').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.card .pay-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('upg-panel-' + tab).classList.add('active');
+  btn.classList.add('active');
+}
+function validateUpgradeSelect() {
+  const plan = document.getElementById('upgrade_to_shared')?.value;
+  if (!plan) { alert('Please select a plan to upgrade to.'); return false; }
+  return true;
+}
 function updateUpgradeAmount() {
-  const targetPlan  = document.getElementById('upgrade_to')?.value;
-  const cycle       = document.getElementById('upgrade_billing_cycle')?.value || 'monthly';
-  const box         = document.getElementById('upgrade-amount-box');
-  const newPriceEl  = document.getElementById('upg-new-price');
-  const creditEl    = document.getElementById('upg-credit');
-  const totalEl     = document.getElementById('upg-total');
-
-  if (!targetPlan || !box) return;
-
+  const targetPlan = document.getElementById('upgrade_to_shared')?.value;
+  const cycle      = document.getElementById('upgrade_billing_shared')?.value || 'monthly';
+  const box        = document.getElementById('upgrade-amount-box');
+  const newPriceEl = document.getElementById('upg-new-price');
+  const creditEl   = document.getElementById('upg-credit');
+  const totalEl    = document.getElementById('upg-total');
+  if (!box) return;
+  if (!targetPlan) { box.style.display = 'none'; return; }
   const newPrice = prices[targetPlan]?.[cycle] ?? 0;
   const credit   = prorationCredit || 0;
   const amtDue   = Math.max(0, newPrice - credit);
-
   if (newPriceEl) newPriceEl.textContent = fmt(newPrice);
   if (creditEl)   creditEl.textContent   = '− ' + fmt(credit);
   if (totalEl)    totalEl.textContent    = fmt(amtDue);
-
-  box.style.display = targetPlan ? 'block' : 'none';
+  box.style.display = 'block';
+  syncUpgradePlan(targetPlan);
+  syncUpgradeCycle(cycle);
 }
 
-// ── Downgrade amount calculator ───────────────────────────────
+// ── Downgrade helpers ─────────────────────────────────────────
+function syncDgPlan(val) {
+  ['dg_pm_plan','dg_mn_plan','dg_free_plan'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  });
+}
+function syncDgCycle(val) {
+  ['dg_pm_cycle','dg_mn_cycle','dg_free_cycle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  });
+}
+function switchDgTab(tab, btn) {
+  document.querySelectorAll('#dg-panel-paymongo, #dg-panel-manual').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#dg-payment-section .pay-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('dg-panel-' + tab).classList.add('active');
+  btn.classList.add('active');
+}
+function validateDgSelect() {
+  const plan = document.getElementById('downgrade_to_shared')?.value;
+  if (!plan) { alert('Please select a plan to downgrade to.'); return false; }
+  return true;
+}
 function updateDowngradeAmount() {
-  const targetPlan = document.getElementById('downgrade_to')?.value;
-  const cycle      = document.getElementById('dg_billing_cycle')?.value || 'monthly';
-  const box        = document.getElementById('dg-amount-box');
-  const newPriceEl = document.getElementById('dg-new-price');
-  const totalEl    = document.getElementById('dg-total');
-  const payFields  = document.getElementById('dg-payment-fields');
-  const billingWrap= document.getElementById('dg-billing-wrap');
-
-  if (!targetPlan || !box) return;
-
+  const targetPlan  = document.getElementById('downgrade_to_shared')?.value;
+  const cycle       = document.getElementById('dg_billing_shared')?.value || 'monthly';
+  const box         = document.getElementById('dg-amount-box');
+  const newPriceEl  = document.getElementById('dg-new-price');
+  const totalEl     = document.getElementById('dg-total');
+  const paySection  = document.getElementById('dg-payment-section');
+  const freeSection = document.getElementById('dg-free-section');
+  const billingWrap = document.getElementById('dg-billing-wrap');
+  if (!box) return;
+  if (!targetPlan) { box.style.display = 'none'; return; }
   const newPrice = prices[targetPlan]?.[cycle] ?? 0;
   const isFree   = newPrice === 0;
-
   if (newPriceEl) newPriceEl.textContent = isFree ? 'Free' : fmt(newPrice);
-  if (totalEl)   totalEl.textContent    = isFree ? 'Free' : fmt(newPrice);
-
+  if (totalEl)    totalEl.textContent    = isFree ? 'Free' : fmt(newPrice);
   box.style.display = 'block';
-
-  // Hide payment fields and billing cycle for free/Starter plan
-  if (payFields)   payFields.style.display   = isFree ? 'none' : 'block';
-  if (billingWrap) billingWrap.style.display  = isFree ? 'none' : 'block';
-
-  // Update submit button color
-  const btn = document.getElementById('dg-submit-btn');
-  if (btn) {
-    btn.style.background = isFree ? 'rgba(100,116,139,.4)' : 'rgba(100,116,139,.5)';
-  }
+  if (paySection)  paySection.style.display  = isFree ? 'none' : 'block';
+  if (freeSection) freeSection.style.display = isFree ? 'block' : 'none';
+  if (billingWrap) billingWrap.style.display = isFree ? 'none' : 'block';
+  syncDgPlan(targetPlan);
+  syncDgCycle(cycle);
 }
-
 function confirmDowngrade() {
-  const targetPlan = document.getElementById('downgrade_to')?.value;
+  const targetPlan = document.getElementById('downgrade_to_shared')?.value;
   if (!targetPlan) { alert('Please select a plan to downgrade to.'); return false; }
   return confirm(
     `Are you sure you want to downgrade to the ${targetPlan} plan?\n\n` +

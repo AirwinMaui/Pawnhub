@@ -32,7 +32,9 @@ if (!$tid || !$uid) {
 }
 
 // ── Validate POST ──────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || ($_POST['action'] ?? '') !== 'pay_via_paymongo') {
+$allowed_actions = ['pay_via_paymongo', 'pay_upgrade_paymongo', 'pay_downgrade_paymongo'];
+$action = $_POST['action'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !in_array($action, $allowed_actions)) {
     header('Location: tenant_subscription.php'); exit;
 }
 
@@ -49,9 +51,56 @@ if (!$tenant || $tenant['status'] !== 'active') {
     die('Tenant account not found or inactive.');
 }
 
-$plan     = $tenant['plan'];
-$email    = $tenant['email'];
-$biz_name = $tenant['business_name'];
+$current_plan = $tenant['plan'];
+$email        = $tenant['email'];
+$biz_name     = $tenant['business_name'];
+$sub_end      = $tenant['subscription_end'] ?? null;
+
+// ── Determine payment type and target plan ────────────────────
+$payment_type = 'renewal';
+$target_plan  = $current_plan;
+$line_label   = '';
+
+$plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
+
+if ($action === 'pay_upgrade_paymongo') {
+    $upgrade_to = trim($_POST['upgrade_to'] ?? '');
+    if (!isset($plan_hierarchy[$upgrade_to]) || $plan_hierarchy[$upgrade_to] <= ($plan_hierarchy[$current_plan] ?? 0)) {
+        header('Location: tenant_subscription.php?error=invalid_upgrade'); exit;
+    }
+    $target_plan  = $upgrade_to;
+    $payment_type = 'upgrade';
+    $line_label   = "PawnHub Plan Upgrade: {$current_plan} → {$upgrade_to}";
+
+} elseif ($action === 'pay_downgrade_paymongo') {
+    $downgrade_to = trim($_POST['downgrade_to'] ?? '');
+    if (!isset($plan_hierarchy[$downgrade_to]) || $plan_hierarchy[$downgrade_to] >= ($plan_hierarchy[$current_plan] ?? 99)) {
+        header('Location: tenant_subscription.php?error=invalid_downgrade'); exit;
+    }
+    // Block downgrade if subscription still active
+    if ($sub_end && strtotime($sub_end) > time()) {
+        $days_left = (int)ceil((strtotime($sub_end) - time()) / 86400);
+        $expiry    = date('F d, Y', strtotime($sub_end));
+        die("<p style='font-family:sans-serif;padding:30px;color:#dc2626;'>
+            ⛔ You cannot downgrade while your <strong>{$current_plan}</strong> subscription is still active.<br>
+            It expires on <strong>{$expiry}</strong> ({$days_left} day(s) remaining).<br>
+            <a href='tenant_subscription.php'>← Back to Subscription</a>
+        </p>");
+    }
+    // Starter is free — should not pay via PayMongo
+    if ($downgrade_to === 'Starter') {
+        header('Location: tenant_subscription.php?error=starter_free'); exit;
+    }
+    $target_plan  = $downgrade_to;
+    $payment_type = 'downgrade';
+    $line_label   = "PawnHub Plan Downgrade: {$current_plan} → {$downgrade_to}";
+
+} else {
+    // Normal renewal
+    $payment_type = 'renewal';
+    $target_plan  = $current_plan;
+    $line_label   = '';
+}
 
 // ── Check for existing pending renewal ───────────────────────
 $pending_chk = $pdo->prepare("
@@ -76,13 +125,29 @@ $billing_labels = [
     'annually'  => 'Annual (12 months)',
 ];
 
-// Starter is free — should not reach here, but guard anyway
-if (!isset($billing_amounts_centavos[$plan])) {
+// Starter is free — guard
+if (!isset($billing_amounts_centavos[$target_plan])) {
     header('Location: tenant_subscription.php?error=free_plan'); exit;
 }
 
-$amount_centavos = $billing_amounts_centavos[$plan][$billing_cycle] ?? 99900;
+$amount_centavos = $billing_amounts_centavos[$target_plan][$billing_cycle] ?? 99900;
 $amount_pesos    = $amount_centavos / 100;
+
+// For upgrades: apply proration credit
+$proration_credit_centavos = 0;
+if ($payment_type === 'upgrade' && $sub_end && strtotime($sub_end) > time()) {
+    $days_left_upgrade = (int)ceil((strtotime($sub_end) - time()) / 86400);
+    $current_monthly_centavos = $billing_amounts_centavos[$current_plan]['monthly'] ?? 0;
+    $daily_rate_centavos = $current_monthly_centavos / 30;
+    $proration_credit_centavos = (int)round($daily_rate_centavos * $days_left_upgrade);
+    $amount_centavos = max(0, $amount_centavos - $proration_credit_centavos);
+    $amount_pesos    = $amount_centavos / 100;
+}
+
+if (empty($line_label)) {
+    $plan = $target_plan;
+    $line_label = "PawnHub {$plan} Plan — {$billing_labels[$billing_cycle]} Renewal";
+}
 
 // ── Build Checkout Session payload ────────────────────────────
 $payload = [
@@ -94,19 +159,21 @@ $payload = [
             ],
             'line_items' => [[
                 'currency' => 'PHP',
-                'amount'   => $amount_centavos,
-                'name'     => "PawnHub {$plan} Plan — {$billing_labels[$billing_cycle]} Renewal",
+                'amount'   => max(100, $amount_centavos), // PayMongo min = ₱1
+                'name'     => $line_label,
                 'quantity' => 1,
             ]],
             'payment_method_types' => ['card', 'gcash', 'dob', 'billease'],
-            'success_url' => PAYMONGO_SUCCESS_URL_RENEWAL . '?tenant=' . $tid . '&user=' . $uid . '&cycle=' . $billing_cycle,
+            'success_url' => PAYMONGO_SUCCESS_URL_RENEWAL . '?tenant=' . $tid . '&user=' . $uid . '&cycle=' . $billing_cycle . '&type=' . $payment_type,
             'cancel_url'  => PAYMONGO_CANCEL_URL_RENEWAL,
             'metadata'    => [
-                'tenant_id'     => $tid,
-                'user_id'       => $uid,
-                'plan'          => $plan,
-                'billing_cycle' => $billing_cycle,
-                'type'          => 'renewal',   // ← distinguishes from initial signup
+                'tenant_id'                => $tid,
+                'user_id'                  => $uid,
+                'plan'                     => $target_plan,
+                'current_plan'             => $current_plan,
+                'billing_cycle'            => $billing_cycle,
+                'type'                     => $payment_type,  // 'renewal', 'upgrade', 'downgrade'
+                'proration_credit_centavos'=> $proration_credit_centavos,
             ],
         ],
     ],
@@ -140,16 +207,28 @@ $session_id = $response['data']['id'];
 $_SESSION['renewal_paymongo_session']  = $session_id;
 $_SESSION['renewal_billing_cycle']     = $billing_cycle;
 $_SESSION['renewal_amount']            = $amount_pesos;
+$_SESSION['renewal_type']              = $payment_type;
 
 // ── Log the attempt ───────────────────────────────────────────
+$action_map = [
+    'renewal'   => 'RENEWAL_PAYMONGO_INITIATED',
+    'upgrade'   => 'UPGRADE_PAYMONGO_INITIATED',
+    'downgrade' => 'DOWNGRADE_PAYMONGO_INITIATED',
+];
+$log_action = $action_map[$payment_type] ?? 'RENEWAL_PAYMONGO_INITIATED';
+$log_msg    = match($payment_type) {
+    'upgrade'   => "PayMongo upgrade checkout initiated for {$biz_name} ({$current_plan} → {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+    'downgrade' => "PayMongo downgrade checkout initiated for {$biz_name} ({$current_plan} → {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+    default     => "PayMongo renewal checkout initiated for {$biz_name} ({$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+};
 try {
     $pdo->prepare("
         INSERT INTO audit_logs
             (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
-        VALUES (?,?,?,?,'RENEWAL_PAYMONGO_INITIATED','subscription',?,?,?,NOW())
+        VALUES (?,?,?,?,?,'subscription',?,?,?,NOW())
     ")->execute([
-        $tid, $uid, $u['username'], 'admin', $tid,
-        "PayMongo renewal checkout initiated for {$biz_name} ({$plan}, {$billing_cycle}). Session: {$session_id}.",
+        $tid, $uid, $u['username'], 'admin', $log_action, $tid,
+        $log_msg,
         $_SERVER['REMOTE_ADDR'] ?? '::1',
     ]);
 } catch (Throwable $e) {}

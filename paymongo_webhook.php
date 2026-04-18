@@ -83,79 +83,122 @@ if ($event_type === 'checkout_session.payment.paid') {
         exit;
     }
 
+    // Also extract upgrade/downgrade metadata
+    $current_plan              = $metadata['current_plan']              ?? $plan;
+    $proration_credit_centavos = intval($metadata['proration_credit_centavos'] ?? 0);
+    $proration_credit_pesos    = $proration_credit_centavos / 100;
+
     try {
-        // ── A. RENEWAL PAYMENT ────────────────────────────────
-        if ($payment_type === 'renewal') {
+        // ── Mark tenant payment_status = paid (all types) ─────
+        $pdo->prepare("
+            UPDATE tenants
+            SET payment_status = 'paid',
+                paymongo_paid_at = NOW(),
+                paymongo_session_id = ?
+            WHERE id = ?
+        ")->execute([$session_id, $tenant_id]);
 
-            // 1. Mark tenant payment_status = paid (for admin visibility)
-            $pdo->prepare("
-                UPDATE tenants
-                SET payment_status = 'paid',
-                    paymongo_paid_at = NOW(),
-                    paymongo_session_id = ?
-                WHERE id = ?
-            ")->execute([$session_id, $tenant_id]);
+        // ── Deduplicate check ─────────────────────────────────
+        $dup = $pdo->prepare("
+            SELECT id FROM subscription_renewals
+            WHERE tenant_id = ? AND payment_reference = ? AND status = 'pending'
+            LIMIT 1
+        ");
+        $dup->execute([$tenant_id, $session_id]);
 
-            // 2. Insert subscription_renewals row (status = 'pending' — SA must approve)
-            // Check for duplicate first (webhook may fire more than once)
-            $dup = $pdo->prepare("
-                SELECT id FROM subscription_renewals
-                WHERE tenant_id = ? AND payment_reference = ? AND status = 'pending'
-                LIMIT 1
-            ");
-            $dup->execute([$tenant_id, $session_id]);
-            if (!$dup->fetch()) {
+        if (!$dup->fetch()) {
+
+            if ($payment_type === 'upgrade') {
+                // ── A. UPGRADE PAYMENT ────────────────────────
+                // Insert as upgrade row — SA approves to switch plan
+                $upgrade_notes = "PLAN UPGRADE: {$current_plan} → {$plan} ({$billing_cycle}) via PayMongo."
+                    . ($proration_credit_pesos > 0 ? " Proration credit: ₱{$proration_credit_pesos}." : '');
+                try {
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, payment_method, payment_reference,
+                             amount, notes, status, requested_at, is_upgrade, upgrade_from, upgrade_to, proration_credit)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), 1, ?, ?, ?)
+                    ")->execute([
+                        $tenant_id, $plan, $billing_cycle,
+                        'PayMongo — ' . $payment_method,
+                        $session_id, $amount_paid,
+                        $upgrade_notes,
+                        $current_plan, $plan, $proration_credit_pesos,
+                    ]);
+                } catch (PDOException $e) {
+                    // Fallback without new columns
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, notes, status, requested_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+                    ")->execute([
+                        $tenant_id, $plan, $billing_cycle,
+                        'PayMongo — ' . $payment_method,
+                        $session_id, $amount_paid, $upgrade_notes,
+                    ]);
+                }
+                error_log("[Webhook] UPGRADE payment recorded for tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
+
+            } elseif ($payment_type === 'downgrade') {
+                // ── B. DOWNGRADE PAYMENT ──────────────────────
+                // Insert as downgrade row — SA approves to switch plan
+                $dg_notes = "PLAN DOWNGRADE: {$current_plan} → {$plan} ({$billing_cycle}) via PayMongo.";
+                try {
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, payment_method, payment_reference,
+                             amount, notes, status, requested_at, is_upgrade, upgrade_from, upgrade_to, proration_credit)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), 0, ?, ?, 0)
+                    ")->execute([
+                        $tenant_id, $plan, $billing_cycle,
+                        'PayMongo — ' . $payment_method,
+                        $session_id, $amount_paid,
+                        $dg_notes,
+                        $current_plan, $plan,
+                    ]);
+                } catch (PDOException $e) {
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, notes, status, requested_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+                    ")->execute([
+                        $tenant_id, $plan, $billing_cycle,
+                        'PayMongo — ' . $payment_method,
+                        $session_id, $amount_paid, $dg_notes,
+                    ]);
+                }
+                error_log("[Webhook] DOWNGRADE payment recorded for tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
+
+            } elseif ($payment_type === 'renewal') {
+                // ── C. RENEWAL PAYMENT ────────────────────────
                 $pdo->prepare("
                     INSERT INTO subscription_renewals
                         (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at)
                     VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
                 ")->execute([
-                    $tenant_id,
-                    $plan,
-                    $billing_cycle,
+                    $tenant_id, $plan, $billing_cycle,
                     'PayMongo — ' . $payment_method,
-                    $session_id,
-                    $amount_paid,
+                    $session_id, $amount_paid,
                 ]);
+                error_log("[Webhook] RENEWAL payment recorded for tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
+
+            } else {
+                // ── D. INITIAL SIGNUP PAYMENT ─────────────────
+                // No subscription_renewals row — just mark paid, SA reviews permit + payment
+                error_log("[Webhook] SIGNUP payment recorded for tenant_id={$tenant_id}, plan={$plan}, method={$payment_method}. Awaiting SA approval.");
             }
+        }
 
-            // 3. Log to payment_logs (non-fatal)
-            try {
-                $pdo->prepare("
-                    INSERT INTO payment_logs
-                        (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
-                ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
-            } catch (PDOException $e) {
-                error_log('[Webhook] payment_logs insert skipped: ' . $e->getMessage());
-            }
-
-            error_log("[Webhook] RENEWAL payment recorded for tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
-
-        // ── B. INITIAL SIGNUP PAYMENT ─────────────────────────
-        } else {
-
-            // Mark payment received only — tenant stays 'pending' until SA approves
+        // ── Log to payment_logs (non-fatal, all types) ────────
+        try {
             $pdo->prepare("
-                UPDATE tenants
-                SET payment_status      = 'paid',
-                    paymongo_paid_at    = NOW(),
-                    paymongo_session_id = ?
-                WHERE id = ?
-            ")->execute([$session_id, $tenant_id]);
-
-            // Log to payment_logs (non-fatal)
-            try {
-                $pdo->prepare("
-                    INSERT INTO payment_logs
-                        (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
-                ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
-            } catch (PDOException $e) {
-                error_log('[Webhook] payment_logs insert skipped: ' . $e->getMessage());
-            }
-
-            error_log("[Webhook] SIGNUP payment recorded for tenant_id={$tenant_id}, plan={$plan}, method={$payment_method}. Awaiting SA approval.");
+                INSERT INTO payment_logs
+                    (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
+            ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
+        } catch (PDOException $e) {
+            error_log('[Webhook] payment_logs insert skipped: ' . $e->getMessage());
         }
 
     } catch (Throwable $e) {
