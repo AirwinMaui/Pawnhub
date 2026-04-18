@@ -38,7 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $needs_payment = in_array($plan, ['Pro', 'Enterprise']);
 
-    if (!$fullname || !$email || !$username || !$pass || !$biz_name) {
+    if (empty($_POST['agree_terms'])) {
+        $error = 'You must agree to the Terms & Conditions before registering.';
+    } elseif (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
     } elseif ($pass !== $conf) {
         $error = 'Passwords do not match.';
@@ -476,8 +478,35 @@ select.glass-input option {
           ℹ️ The Super Admin will review your Business Permit and Payment details. Once verified and approved, you'll receive your login link.
         </p>
 
-        <button type="submit" id="submit_btn" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;"
-          onmouseover="this.style.background='#2563eb';this.style.transform='translateY(-1px)'"
+        <!-- Terms & Conditions -->
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:18px;">
+          <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:10px;">📜 Terms &amp; Conditions</div>
+          <!-- Scrollable Terms Box -->
+          <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px 16px;max-height:160px;overflow-y:auto;font-size:0.76rem;color:rgba(255,255,255,0.55);line-height:1.8;margin-bottom:14px;">
+            <p style="font-weight:700;color:rgba(255,255,255,0.75);margin-bottom:8px;">PawnHub Subscription Terms</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">1. Subscription &amp; Billing.</strong> By subscribing to a PawnHub plan (Starter, Pro, or Enterprise), you agree to pay the applicable subscription fee for your selected billing cycle. All fees are non-refundable once your subscription has been activated.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">2. No Mid-Cycle Cancellation.</strong> Once your subscription is active, you <strong style="color:#fca5a5;">cannot cancel or request a refund</strong> mid-subscription period. Your access will remain active until the end of your paid billing period. You may choose not to renew after your current period ends.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">3. Plan Downgrades.</strong> If you wish to downgrade to a lower plan, you may submit a downgrade request <strong style="color:#fcd34d;">only after your current subscription has expired</strong>. Downgrade requests submitted while a subscription is still active will not be processed until the expiry date.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">4. Plan Upgrades.</strong> You may request an upgrade to a higher plan at any time. Unused days from your current plan will be credited as proration toward the new plan cost, subject to admin approval.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">5. Account Approval.</strong> All registrations are subject to review and approval by the PawnHub Super Admin. Submission does not guarantee activation.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">6. Business Permit.</strong> You are required to upload a valid Business Permit. Providing false or invalid documents may result in account rejection or termination without refund.</p>
+            <p><strong style="color:rgba(255,255,255,0.65);">7. Changes to Terms.</strong> PawnHub reserves the right to update these terms at any time. Continued use of the service constitutes acceptance of any revised terms.</p>
+          </div>
+          <!-- Checkbox -->
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+            <input type="checkbox" name="agree_terms" id="agree_terms" required
+              style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:#3b82f6;cursor:pointer;"
+              onchange="document.getElementById('submit_btn').style.opacity = this.checked ? '1' : '0.45';">
+            <span style="font-size:0.79rem;color:rgba(255,255,255,0.65);line-height:1.6;">
+              I have read and agree to the <strong style="color:#93c5fd;">PawnHub Terms &amp; Conditions</strong>, including the
+              <strong style="color:#fca5a5;">no-cancellation policy</strong> — I understand that once my subscription is active,
+              I cannot cancel or get a refund mid-period. I may only opt out of renewal after my current period ends.
+            </span>
+          </label>
+        </div>
+
+        <button type="submit" id="submit_btn" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,0.3);transition:all 0.2s;opacity:0.45;"
+          onmouseover="if(document.getElementById('agree_terms').checked){this.style.background='#2563eb';this.style.transform='translateY(-1px)'}"
           onmouseout="this.style.background='#3b82f6';this.style.transform='translateY(0)'">
           <?= $selected_plan === 'Starter' ? 'Submit Application →' : 'Continue to Payment →' ?>
         </button>
