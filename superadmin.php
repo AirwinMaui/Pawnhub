@@ -836,14 +836,40 @@ try {
 $pending_sub_renewals = array_filter($sub_renewals, fn($r) => $r['status'] === 'pending');
 $pending_sub_count    = count($pending_sub_renewals);
 // ── PLAN CHANGE REQUESTS ──────────────────────────────────
+// Combines plan_change_requests table AND upgrade/downgrade rows from subscription_renewals
+// so superadmin sees ALL plan change requests in one place.
 try {
     $plan_change_requests = $pdo->query("
-        SELECT pcr.*, t.business_name, t.email, t.owner_name, t.plan AS current_plan_live,
+        SELECT pcr.id, pcr.tenant_id, pcr.current_plan, pcr.requested_plan,
+               pcr.reason AS notes, pcr.status, pcr.created_at AS requested_at,
+               pcr.reviewed_by, pcr.reviewed_at, pcr.admin_notes,
+               NULL AS is_upgrade, NULL AS upgrade_from, NULL AS upgrade_to,
+               NULL AS billing_cycle, NULL AS amount, NULL AS payment_method,
+               NULL AS payment_reference, NULL AS proration_credit,
+               'pcr' AS source_table,
+               t.business_name, t.email, t.owner_name, t.plan AS current_plan_live,
                u.fullname AS reviewed_by_name
         FROM plan_change_requests pcr
         JOIN tenants t ON pcr.tenant_id = t.id
         LEFT JOIN users u ON pcr.reviewed_by = u.id
-        ORDER BY FIELD(pcr.status,'pending','approved','rejected'), pcr.created_at DESC
+        UNION ALL
+        SELECT sr.id, sr.tenant_id,
+               COALESCE(sr.upgrade_from, t.plan) AS current_plan,
+               COALESCE(sr.upgrade_to, sr.plan)  AS requested_plan,
+               sr.notes, sr.status, sr.requested_at,
+               sr.reviewed_by, sr.reviewed_at, NULL AS admin_notes,
+               sr.is_upgrade, sr.upgrade_from, sr.upgrade_to,
+               sr.billing_cycle, sr.amount, sr.payment_method,
+               sr.payment_reference, sr.proration_credit,
+               'sr' AS source_table,
+               t.business_name, t.email, t.owner_name, t.plan AS current_plan_live,
+               u.fullname AS reviewed_by_name
+        FROM subscription_renewals sr
+        JOIN tenants t ON sr.tenant_id = t.id
+        LEFT JOIN users u ON sr.reviewed_by = u.id
+        WHERE (sr.is_upgrade = 1
+            OR (sr.upgrade_from IS NOT NULL AND sr.upgrade_to IS NOT NULL AND sr.upgrade_from != sr.upgrade_to))
+        ORDER BY FIELD(status,'pending','approved','rejected'), requested_at DESC
         LIMIT 100
     ")->fetchAll();
 } catch (PDOException $e) { $plan_change_requests = []; }
@@ -1820,6 +1846,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     <?php foreach($plan_change_requests as $pcr):
       $is_pending  = $pcr['status'] === 'pending';
       $is_approved = $pcr['status'] === 'approved';
+      $source      = $pcr['source_table'] ?? 'pcr'; // 'pcr' = plan_change_requests, 'sr' = subscription_renewals
       $plan_rank   = ['Starter'=>1,'Pro'=>2,'Enterprise'=>3];
       $cur_r = $plan_rank[$pcr['current_plan']] ?? 1;
       $req_r = $plan_rank[$pcr['requested_plan']] ?? 1;
@@ -1830,11 +1857,24 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       $dir_border= $is_down ? '#fca5a5' : '#86efac';
       $status_map = ['pending'=>['⏳ Pending','#92400e','#fef3c7','#fcd34d'],'approved'=>['✅ Approved','#14532d','#f0fdf4','#86efac'],'rejected'=>['❌ Rejected','#7f1d1d','#fef2f2','#fca5a5']];
       [$slabel,$stc,$stbg,$stborder] = $status_map[$pcr['status']] ?? ['—','#64748b','#f8fafc','#e2e8f0'];
+      // Scheduled? detect from notes
+      $pcr_notes_text   = $pcr['notes'] ?? '';
+      $pcr_is_scheduled = (strpos($pcr_notes_text, '[SCHEDULED') !== false);
+      // Date to display
+      $pcr_date = $pcr['requested_at'] ?? ($pcr['created_at'] ?? null);
     ?>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;<?= $is_pending ? 'border-left:4px solid #f59e0b;' : '' ?>">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
-          <div style="font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:4px;"><?= htmlspecialchars($pcr['business_name']) ?></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <div style="font-size:.9rem;font-weight:700;color:var(--text);"><?= htmlspecialchars($pcr['business_name']) ?></div>
+            <?php if ($source === 'sr'): ?>
+            <span style="font-size:.62rem;font-weight:700;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:2px 7px;border-radius:100px;">via Subscription</span>
+            <?php endif; ?>
+            <?php if ($pcr_is_scheduled): ?>
+            <span style="font-size:.62rem;font-weight:700;background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:2px 7px;border-radius:100px;">📅 Scheduled</span>
+            <?php endif; ?>
+          </div>
           <div style="font-size:.75rem;color:var(--text-dim);margin-bottom:10px;"><?= htmlspecialchars($pcr['email']) ?> · <?= htmlspecialchars($pcr['owner_name']) ?></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
             <span style="font-size:.78rem;font-weight:700;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:3px 10px;border-radius:6px;"><?= htmlspecialchars($pcr['current_plan']) ?></span>
@@ -1842,9 +1882,17 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             <span style="font-size:.78rem;font-weight:700;background:<?=$dir_bg?>;border:1px solid <?=$dir_border?>;color:<?=$dir_color?>;padding:3px 10px;border-radius:6px;"><?= htmlspecialchars($pcr['requested_plan']) ?></span>
             <span style="font-size:.72rem;font-weight:800;background:<?=$dir_bg?>;border:1px solid <?=$dir_border?>;color:<?=$dir_color?>;padding:3px 9px;border-radius:100px;"><?= $direction ?></span>
           </div>
-          <?php if(!empty($pcr['reason'])): ?>
+          <?php if (!empty($pcr['billing_cycle']) || !empty($pcr['amount'])): ?>
+          <div style="font-size:.76rem;color:var(--text-dim);margin-bottom:6px;">
+            <?php if (!empty($pcr['billing_cycle'])): ?>💳 <?= ucfirst($pcr['billing_cycle']) ?><?php endif; ?>
+            <?php if (!empty($pcr['amount'])): ?> · <strong>₱<?= number_format((float)$pcr['amount'], 2) ?></strong><?php endif; ?>
+            <?php if (!empty($pcr['payment_method'])): ?> · <?= htmlspecialchars($pcr['payment_method']) ?><?php endif; ?>
+            <?php if (!empty($pcr['payment_reference'])): ?> · Ref: <?= htmlspecialchars($pcr['payment_reference']) ?><?php endif; ?>
+          </div>
+          <?php endif; ?>
+          <?php if(!empty($pcr['notes'])): ?>
           <div style="font-size:.77rem;color:var(--text-dim);background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px 11px;margin-bottom:6px;line-height:1.6;">
-            <strong style="color:var(--text-m);">Reason:</strong> <?= htmlspecialchars($pcr['reason']) ?>
+            <strong style="color:var(--text-m);">Notes:</strong> <?= htmlspecialchars(mb_substr($pcr['notes'], 0, 200)) ?><?= mb_strlen($pcr['notes']) > 200 ? '…' : '' ?>
           </div>
           <?php endif; ?>
           <?php if(!empty($pcr['admin_notes']) && !$is_pending): ?>
@@ -1856,7 +1904,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
           <span style="font-size:.72rem;font-weight:700;background:<?=$stbg?>;border:1px solid <?=$stborder?>;color:<?=$stc?>;padding:4px 11px;border-radius:100px;"><?= $slabel ?></span>
           <div style="font-size:.7rem;color:var(--text-dim);text-align:right;">
-            Requested: <?= date('M d, Y g:i A', strtotime($pcr['created_at'])) ?>
+            Requested: <?= $pcr_date ? date('M d, Y g:i A', strtotime($pcr_date)) : '—' ?>
             <?php if(!$is_pending && !empty($pcr['reviewed_at'])): ?>
             <br>Reviewed: <?= date('M d, Y g:i A', strtotime($pcr['reviewed_at'])) ?>
             <?php if(!empty($pcr['reviewed_by_name'])): ?> by <strong style="color:var(--text-m);"><?= htmlspecialchars($pcr['reviewed_by_name']) ?></strong><?php endif; ?>
@@ -1864,14 +1912,32 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           </div>
           <?php if($is_pending): ?>
           <div style="display:flex;gap:7px;margin-top:4px;">
-            <button onclick="openApprovePlanReq(<?= $pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>', '<?= htmlspecialchars($pcr['current_plan']) ?>', '<?= htmlspecialchars($pcr['requested_plan']) ?>')"
-              class="btn-sm btn-primary" style="font-size:.75rem;padding:6px 13px;background:#16a34a;border-color:#16a34a;">
-              ✅ Approve
-            </button>
-            <button onclick="openRejectPlanReq(<?= $pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>')"
+            <?php if ($source === 'sr'): ?>
+            <!-- Rows from subscription_renewals: use approve_sub_renewal / reject_sub_renewal -->
+            <form method="POST" style="margin:0;">
+              <input type="hidden" name="action" value="approve_sub_renewal"/>
+              <input type="hidden" name="renewal_id" value="<?= (int)$pcr['id'] ?>"/>
+              <button type="submit" class="btn-sm btn-primary"
+                style="font-size:.75rem;padding:6px 13px;background:#16a34a;border-color:#16a34a;"
+                onclick="return confirm('Approve this <?= $is_down ? 'downgrade' : 'upgrade' ?> request for <?= htmlspecialchars(addslashes($pcr['business_name'])) ?>?\n\n<?= htmlspecialchars($pcr['current_plan']) ?> → <?= htmlspecialchars($pcr['requested_plan']) ?>')">
+                ✅ Approve
+              </button>
+            </form>
+            <button onclick="openRejectSrReq(<?= (int)$pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>')"
               class="btn-sm" style="font-size:.75rem;padding:6px 13px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;">
               ❌ Reject
             </button>
+            <?php else: ?>
+            <!-- Rows from plan_change_requests table -->
+            <button onclick="openApprovePlanReq(<?= (int)$pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>', '<?= htmlspecialchars($pcr['current_plan']) ?>', '<?= htmlspecialchars($pcr['requested_plan']) ?>')"
+              class="btn-sm btn-primary" style="font-size:.75rem;padding:6px 13px;background:#16a34a;border-color:#16a34a;">
+              ✅ Approve
+            </button>
+            <button onclick="openRejectPlanReq(<?= (int)$pcr['id'] ?>, '<?= htmlspecialchars(addslashes($pcr['business_name'])) ?>')"
+              class="btn-sm" style="font-size:.75rem;padding:6px 13px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;">
+              ❌ Reject
+            </button>
+            <?php endif; ?>
           </div>
           <?php endif; ?>
         </div>
@@ -1881,7 +1947,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     </div>
     <?php endif; ?>
 
-    <!-- Approve Plan Request Modal -->
+    <!-- Approve Plan Request Modal (for plan_change_requests table rows) -->
     <div class="modal-overlay" id="approvePlanReqModal">
       <div class="modal" style="width:460px;max-width:97vw;">
         <div class="mhdr">
@@ -1907,7 +1973,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
     </div>
 
-    <!-- Reject Plan Request Modal -->
+    <!-- Reject Plan Request Modal (for plan_change_requests table rows) -->
     <div class="modal-overlay" id="rejectPlanReqModal">
       <div class="modal" style="width:420px;max-width:97vw;">
         <div class="mhdr">
@@ -1930,6 +1996,31 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         </div>
       </div>
     </div>
+
+    <!-- Reject Subscription Renewal Modal (for subscription_renewals rows shown here) -->
+    <div class="modal-overlay" id="rejectSrReqModal">
+      <div class="modal" style="width:420px;max-width:97vw;">
+        <div class="mhdr">
+          <div><div class="mtitle">❌ Reject Request</div><div class="msub" id="rsr_sub"></div></div>
+          <button class="mclose" onclick="document.getElementById('rejectSrReqModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="mbody">
+          <form method="POST">
+            <input type="hidden" name="action" value="reject_sub_renewal">
+            <input type="hidden" name="renewal_id" id="rsr_req_id">
+            <div style="margin-bottom:14px;">
+              <label style="font-size:.77rem;font-weight:700;color:var(--text-dim);display:block;margin-bottom:5px;">Reason for Rejection <span style="color:#dc2626;">*</span></label>
+              <textarea name="reject_notes" rows="3" required style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:.82rem;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text);" placeholder="Explain why this request is being rejected..."></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:9px;">
+              <button type="button" class="btn-sm" onclick="document.getElementById('rejectSrReqModal').classList.remove('open')">Cancel</button>
+              <button type="submit" class="btn-sm" style="background:#dc2626;border-color:#dc2626;color:#fff;">❌ Confirm Reject</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <script>
     function openApprovePlanReq(id, biz, curPlan, newPlan) {
       document.getElementById('apr_req_id').value = id;
@@ -1943,6 +2034,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       document.getElementById('rpr_req_id').value = id;
       document.getElementById('rpr_sub').textContent = biz;
       document.getElementById('rejectPlanReqModal').classList.add('open');
+    }
+    function openRejectSrReq(id, biz) {
+      document.getElementById('rsr_req_id').value = id;
+      document.getElementById('rsr_sub').textContent = biz;
+      document.getElementById('rejectSrReqModal').classList.add('open');
     }
     </script>
 

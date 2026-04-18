@@ -282,6 +282,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
         // is_scheduled = request was submitted while subscription still active (takes effect after expiry)
         $is_scheduled_dg = $in_schedule_window;
 
+        // Normalize: free plan needs no payment method
+        if ($downgrade_to === 'Starter' && !$payment_method) {
+            $payment_method = 'N/A (Free Plan)';
+        }
+
         if (!$is_valid_downgrade) {
             $error_msg = 'Invalid downgrade target. You can only downgrade to a lower plan.';
         } elseif ($too_early) {
@@ -289,16 +294,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
             $error_msg = "⚠️ You can only request a downgrade within 7 days of your subscription expiry. "
                        . "Your <strong>{$plan}</strong> plan expires on <strong>{$expiry_fmt_dg}</strong> ({$days_left_dg} days remaining). "
                        . "You may submit a downgrade request when you have 7 or fewer days left.";
-        } elseif ($downgrade_to === 'Starter' && !$payment_method) {
-            // Starter is free — no payment needed; just submit
-            $payment_method = 'N/A (Free Plan)';
-            goto process_downgrade;
         } elseif (!$sub_still_active && !$payment_method && $downgrade_to !== 'Starter') {
             $error_msg = 'Please select a payment method.';
         } elseif ($in_schedule_window && !$payment_method && $downgrade_to !== 'Starter') {
             $error_msg = 'Please select a payment method for your scheduled downgrade.';
         } else {
-            process_downgrade:
             $billing_amounts_dg = [
                 'Starter'    => ['monthly' => 0,    'quarterly' => 0,    'annually' => 0],
                 'Pro'        => ['monthly' => 999,   'quarterly' => 2697, 'annually' => 9588],
@@ -1028,203 +1028,27 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         </div>
       </div>
 
-      <?php elseif ($in_7day_window): ?>
-      <!-- State 2: In 7-day window — schedule downgrade -->
+      <?php elseif ($in_7day_window || $sub_expired_for_downgrade): ?>
+      <?php
+      // ── Unified State 2 + State 3 — single set of IDs, no duplicates ──
+      $dg_is_scheduled = $in_7day_window; // true = schedule (State 2), false = immediate (State 3)
+      $dg_sub_end_fmt  = ($sub_end && $dg_is_scheduled) ? date('M d, Y', strtotime($sub_end)) : null;
+
+      if ($dg_is_scheduled): ?>
       <div class="alert" style="background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.3);color:#93c5fd;margin-bottom:16px;">
         📅 <strong>Schedule your downgrade now.</strong> Your <strong><?= htmlspecialchars($plan) ?></strong> subscription expires in
         <strong><?= $days_left ?> day(s)</strong> (<?= date('F d, Y', strtotime($sub_end)) ?>).<br>
         Your downgrade will take effect <strong>after your current subscription ends</strong> — you keep full access until then.
+        <?php if (count($downgrade_targets) > 0 && !in_array('Starter', array_values($downgrade_targets))): ?>
         You still need to pay for the new plan to activate it.
+        <?php endif; ?>
       </div>
-
-      <?php
-      $downgrade_plan_details = [
-        'Starter' => [
-          'price_monthly' => 0,
-          'color'  => '#64748b',
-          'icon'   => 'inventory_2',
-          'perks'  => ['Basic pawn ticket management', 'Customer records', 'Staff accounts', 'Shop page'],
-          'loses'  => ['Theme & Branding', 'Manager Invitations', 'Audit Logs', 'Advanced Reports'],
-        ],
-        'Pro' => [
-          'price_monthly' => 999,
-          'color'  => '#3b82f6',
-          'icon'   => 'workspace_premium',
-          'perks'  => ['Theme & Branding', 'Manager Invitations', 'Audit Logs', 'Advanced Reports'],
-          'loses'  => ['Data Export (PDF/Excel)', 'White Label Branding', 'Dedicated Account Manager'],
-        ],
-      ];
-      ?>
-      <!-- Downgrade target cards -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
-        <?php foreach ($downgrade_targets as $dtarget):
-          $dpd = $downgrade_plan_details[$dtarget] ?? null;
-          if (!$dpd) continue;
-        ?>
-        <div style="background:rgba(255,255,255,.03);border:1.5px solid color-mix(in srgb,<?= $dpd['color'] ?> 25%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
-          <div style="position:absolute;top:-20px;right:-20px;opacity:.05;">
-            <span class="material-symbols-outlined" style="font-size:100px;color:<?= $dpd['color'] ?>"><?= $dpd['icon'] ?></span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-            <span class="material-symbols-outlined" style="font-size:18px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $dpd['icon'] ?></span>
-            <span style="font-size:.9rem;font-weight:800;color:#fff;"><?= $dtarget ?></span>
-            <?php if ($dpd['price_monthly'] === 0): ?>
-            <span style="font-size:.65rem;font-weight:700;background:rgba(100,116,139,.2);color:#94a3b8;padding:2px 8px;border-radius:100px;">Free</span>
-            <?php else: ?>
-            <span style="font-size:.65rem;font-weight:700;background:rgba(59,130,246,.15);color:#93c5fd;padding:2px 8px;border-radius:100px;">₱<?= number_format($dpd['price_monthly']) ?>/mo</span>
-            <?php endif; ?>
-          </div>
-          <div style="margin-bottom:8px;">
-            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.3);margin-bottom:4px;">Keeps</div>
-            <?php foreach ($dpd['perks'] as $perk): ?>
-            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.55);margin-bottom:3px;">
-              <span class="material-symbols-outlined" style="font-size:13px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">check_circle</span>
-              <?= htmlspecialchars($perk) ?>
-            </div>
-            <?php endforeach; ?>
-          </div>
-          <div>
-            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(239,68,68,.4);margin-bottom:4px;">Loses</div>
-            <?php foreach ($dpd['loses'] as $lose): ?>
-            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.3);margin-bottom:3px;text-decoration:line-through;">
-              <span class="material-symbols-outlined" style="font-size:13px;color:rgba(239,68,68,.4);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">cancel</span>
-              <?= htmlspecialchars($lose) ?>
-            </div>
-            <?php endforeach; ?>
-          </div>
-        </div>
-        <?php endforeach; ?>
-      </div>
-
-      <!-- Plan + Billing selectors (shared) -->
-      <div class="form-grid" style="margin-bottom:14px;">
-        <div>
-          <label class="flabel">Downgrade To</label>
-          <select id="downgrade_to_shared" class="fselect" onchange="syncDgPlan(this.value); updateDowngradeAmount();" required>
-            <option value="">— Select Plan —</option>
-            <?php foreach ($downgrade_targets as $dtarget): ?>
-            <option value="<?= htmlspecialchars($dtarget) ?>"><?= htmlspecialchars($dtarget) ?>
-              <?= $dtarget === 'Starter' ? '(Free)' : '(₱999/mo)' ?>
-            </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div id="dg-billing-wrap">
-          <label class="flabel">Billing Cycle</label>
-          <select id="dg_billing_shared" class="fselect" onchange="syncDgCycle(this.value); updateDowngradeAmount();">
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="annually">Annually</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Amount due preview -->
-      <div id="dg-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
-          <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
-          <div style="color:#fff;font-weight:700;text-align:right;" id="dg-new-price">—</div>
-          <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
-          <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
-        </div>
-        <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:8px;line-height:1.5;">
-          📅 Scheduled: This payment activates the new plan <strong>after</strong> your current subscription ends on <?= date('M d, Y', strtotime($sub_end)) ?>.
-          Free (Starter) downgrades require no payment.
-        </div>
-      </div>
-
-      <!-- Payment tabs (hidden for free/Starter) -->
-      <div id="dg-payment-section">
-        <div class="pay-tabs" style="margin-bottom:0;">
-          <button type="button" class="pay-tab active" onclick="switchDgTab('paymongo', this)">⚡ Pay via PayMongo</button>
-          <button type="button" class="pay-tab" onclick="switchDgTab('manual', this)">📋 Manual Payment</button>
-        </div>
-
-        <!-- PayMongo Tab -->
-        <div id="dg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
-          <div class="alert alert-info" style="margin-bottom:16px;">
-            ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking. Payment will be held and your plan will switch after <?= date('M d, Y', strtotime($sub_end)) ?>.
-          </div>
-          <form method="POST" action="paymongo_renewal.php" id="downgradeFormPM">
-            <input type="hidden" name="action"        value="pay_downgrade_paymongo"/>
-            <input type="hidden" name="downgrade_to"  id="dg_pm_plan"  value=""/>
-            <input type="hidden" name="billing_cycle" id="dg_pm_cycle" value="monthly"/>
-            <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
-              onclick="return validateDgSelect()">
-              ⚡ Schedule & Pay via PayMongo
-            </button>
-          </form>
-        </div>
-
-        <!-- Manual Tab -->
-        <div id="dg-panel-manual" class="pay-panel" style="padding-top:16px;">
-          <div class="alert alert-info" style="margin-bottom:16px;">
-            📌 <strong>Manual payment:</strong> Send payment to our GCash/bank, then submit the reference. Admin will confirm your scheduled downgrade within 24 hours. Your plan switches after <?= date('M d, Y', strtotime($sub_end)) ?>.
-          </div>
-          <form method="POST" id="downgradeFormManual">
-            <input type="hidden" name="action"        value="request_downgrade"/>
-            <input type="hidden" name="downgrade_to"  id="dg_mn_plan"  value=""/>
-            <input type="hidden" name="billing_cycle" id="dg_mn_cycle" value="monthly"/>
-            <div class="form-group">
-              <label class="flabel">Payment Method</label>
-              <select name="payment_method" id="dg_payment_method" class="fselect">
-                <option value="">— Select Payment Method —</option>
-                <option value="GCash">GCash</option>
-                <option value="Maya">Maya (PayMaya)</option>
-                <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-                <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-                <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-                <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-                <option value="Cash">Cash (walk-in)</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="flabel">Payment Reference <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-              <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
-            </div>
-            <div class="form-group">
-              <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-              <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-            </div>
-            <button type="submit" class="btn" id="dg-submit-btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
-              onclick="return validateDgSelect() && confirmDowngrade()">
-              <span class="material-symbols-outlined" style="font-size:17px;">schedule</span>
-              Schedule Downgrade Request
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Free/Starter scheduled downgrade — no payment needed -->
-      <div id="dg-free-section" style="display:none;">
-        <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:#94a3b8;margin-bottom:14px;">
-          ℹ️ Downgrading to <strong>Starter</strong> is free — no payment required. Your plan will switch after <?= date('M d, Y', strtotime($sub_end)) ?>. Admin will confirm within 24 hours.
-        </div>
-        <form method="POST" id="downgradeFormFree">
-          <input type="hidden" name="action"        value="request_downgrade"/>
-          <input type="hidden" name="downgrade_to"  id="dg_free_plan"  value="Starter"/>
-          <input type="hidden" name="billing_cycle" id="dg_free_cycle" value="monthly"/>
-          <input type="hidden" name="payment_method" value="N/A (Free Plan)"/>
-          <div class="form-group">
-            <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-            <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-          </div>
-          <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
-            onclick="return confirmDowngrade()">
-            <span class="material-symbols-outlined" style="font-size:17px;">schedule</span>
-            Schedule Downgrade to Starter (Free)
-          </button>
-        </form>
-      </div>
-
       <?php else: ?>
-      <!-- State 3: Subscription expired — immediate downgrade (pay now) -->
       <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.25);color:rgba(148,163,184,.9);margin-bottom:16px;">
         📉 Your subscription has expired. You may now switch to a lower plan and pay for the new period.
         <strong>Note:</strong> Downgrading will reduce your available features.
       </div>
+      <?php endif; ?>
 
       <?php
       $downgrade_plan_details = [
@@ -1285,7 +1109,7 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         <?php endforeach; ?>
       </div>
 
-      <!-- Plan + Billing selectors (shared) -->
+      <!-- ── Unified Plan + Billing selectors (single set of IDs) ── -->
       <div class="form-grid" style="margin-bottom:14px;">
         <div>
           <label class="flabel">Downgrade To</label>
@@ -1318,11 +1142,14 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
           <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
         </div>
         <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:8px;line-height:1.5;">
-          * Free (Starter) downgrades require no payment. Admin will apply the plan change within 24 hours.
+          <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
+          📅 Scheduled: This activates the new plan <strong>after</strong> your current subscription ends on <?= $dg_sub_end_fmt ?>.
+          <?php endif; ?>
+          Free (Starter) downgrades require no payment.
         </div>
       </div>
 
-      <!-- Payment tabs (hidden for free/Starter) -->
+      <!-- Payment tabs — hidden for free/Starter, shown for paid plans -->
       <div id="dg-payment-section">
         <div class="pay-tabs" style="margin-bottom:0;">
           <button type="button" class="pay-tab active" onclick="switchDgTab('paymongo', this)">⚡ Pay via PayMongo</button>
@@ -1333,6 +1160,9 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         <div id="dg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
           <div class="alert alert-info" style="margin-bottom:16px;">
             ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking.
+            <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
+            Your plan will switch after <?= $dg_sub_end_fmt ?>.
+            <?php endif; ?>
           </div>
           <form method="POST" action="paymongo_renewal.php" id="downgradeFormPM">
             <input type="hidden" name="action"        value="pay_downgrade_paymongo"/>
@@ -1340,7 +1170,7 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
             <input type="hidden" name="billing_cycle" id="dg_pm_cycle" value="monthly"/>
             <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
               onclick="return validateDgSelect()">
-              ⚡ Pay Now via PayMongo
+              <?= $dg_is_scheduled ? '⚡ Schedule & Pay via PayMongo' : '⚡ Pay Now via PayMongo' ?>
             </button>
           </form>
         </div>
@@ -1349,6 +1179,9 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         <div id="dg-panel-manual" class="pay-panel" style="padding-top:16px;">
           <div class="alert alert-info" style="margin-bottom:16px;">
             📌 <strong>Manual payment:</strong> Send payment to our GCash/bank, then submit the reference. Admin verifies within 24 hours.
+            <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
+            Your plan switches after <?= $dg_sub_end_fmt ?>.
+            <?php endif; ?>
           </div>
           <form method="POST" id="downgradeFormManual">
             <input type="hidden" name="action"        value="request_downgrade"/>
@@ -1376,10 +1209,10 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
               <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
               <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
             </div>
-            <button type="submit" class="btn" id="dg-submit-btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
+            <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
               onclick="return validateDgSelect() && confirmDowngrade()">
-              <span class="material-symbols-outlined" style="font-size:17px;">arrow_downward</span>
-              Submit Downgrade Request
+              <span class="material-symbols-outlined" style="font-size:17px;"><?= $dg_is_scheduled ? 'schedule' : 'arrow_downward' ?></span>
+              <?= $dg_is_scheduled ? 'Schedule Downgrade Request' : 'Submit Downgrade Request' ?>
             </button>
           </form>
         </div>
@@ -1388,12 +1221,16 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
       <!-- Free/Starter downgrade — no payment needed -->
       <div id="dg-free-section" style="display:none;">
         <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:#94a3b8;margin-bottom:14px;">
-          ℹ️ Downgrading to <strong>Starter</strong> is free — no payment required. Admin will process your request within 24 hours.
+          ℹ️ Downgrading to <strong>Starter</strong> is free — no payment required.
+          <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
+          Your plan will switch after <?= $dg_sub_end_fmt ?>.
+          <?php endif; ?>
+          Admin will confirm within 24 hours.
         </div>
         <form method="POST" id="downgradeFormFree">
-          <input type="hidden" name="action"        value="request_downgrade"/>
-          <input type="hidden" name="downgrade_to"  id="dg_free_plan"  value="Starter"/>
-          <input type="hidden" name="billing_cycle" id="dg_free_cycle" value="monthly"/>
+          <input type="hidden" name="action"         value="request_downgrade"/>
+          <input type="hidden" name="downgrade_to"   id="dg_free_plan"  value="Starter"/>
+          <input type="hidden" name="billing_cycle"  id="dg_free_cycle" value="monthly"/>
           <input type="hidden" name="payment_method" value="N/A (Free Plan)"/>
           <div class="form-group">
             <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
@@ -1401,8 +1238,8 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
           </div>
           <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
             onclick="return confirmDowngrade()">
-            <span class="material-symbols-outlined" style="font-size:17px;">arrow_downward</span>
-            Submit Downgrade to Starter (Free)
+            <span class="material-symbols-outlined" style="font-size:17px;"><?= $dg_is_scheduled ? 'schedule' : 'arrow_downward' ?></span>
+            <?= $dg_is_scheduled ? 'Schedule Downgrade to Starter (Free)' : 'Submit Downgrade to Starter (Free)' ?>
           </button>
         </form>
       </div>
