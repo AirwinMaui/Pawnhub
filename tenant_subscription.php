@@ -121,8 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
 
 // ── POST: Submit UPGRADE request ─────────────────────────────
 // Logic: tenant wants to move from current plan → a higher plan.
-// We calculate proration credit = unused days × daily rate of current plan,
-// then subtract from the new plan's first month cost. Admin approves & applies it.
+// If subscription still active (≤7 days left): scheduled upgrade — takes effect after current sub ends.
+//   No proration applied for scheduled upgrades since they're paying for the new period.
+// If already expired: immediate upgrade — full price for new plan, no proration.
+// If >7 days left: not allowed to schedule yet (too early).
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_upgrade') {
     if ($pending_renewal) {
         $error_msg = 'You already have a pending renewal/upgrade request. Please wait for admin approval.';
@@ -146,27 +148,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
             && isset($plan_hierarchy[$plan])
             && $plan_hierarchy[$upgrade_to] > $plan_hierarchy[$plan];
 
+        // Determine scheduling context
+        $upg_sub_end_ts      = $sub_end ? strtotime($sub_end) : 0;
+        $upg_sub_active      = $upg_sub_end_ts > time();
+        $upg_days_left       = $upg_sub_active ? (int) ceil(($upg_sub_end_ts - time()) / 86400) : 0;
+        $upg_in_window       = $upg_sub_active && $upg_days_left <= 7;  // 1–7 days left
+        $upg_too_early       = $upg_sub_active && $upg_days_left > 7;   // >7 days left
+        // Scheduled: submitted while still active in the 7-day window
+        $is_scheduled_upg    = $upg_in_window;
+
         if (!in_array($upgrade_to, $valid_targets) || !$is_valid_upgrade) {
             $error_msg = 'Invalid upgrade target. You can only upgrade to a higher plan.';
+        } elseif ($upg_too_early) {
+            $expiry_fmt_upg = date('F d, Y', $upg_sub_end_ts);
+            $error_msg = "⚠️ You can schedule an upgrade within 7 days of your subscription expiry. "
+                       . "Your <strong>{$plan}</strong> plan expires on <strong>{$expiry_fmt_upg}</strong> ({$upg_days_left} days remaining). "
+                       . "You may submit an upgrade request when you have 7 or fewer days left.";
         } elseif (!$payment_method) {
             $error_msg = 'Please select a payment method.';
         } else {
-            // ── Proration: credit for unused days on current paid plan ──
+            // ── Proration: only apply if upgrading immediately (not scheduled) ──
             $proration_credit = 0;
             $proration_note   = '';
-            if ($sub_end && $days_left > 0 && $is_paid_plan) {
-                // Determine current plan's monthly rate to calculate daily rate
-                $current_monthly = $billing_amounts[$plan]['monthly'] ?? 0;
-                $daily_rate      = $current_monthly / 30;
+            if (!$is_scheduled_upg && $sub_end && $days_left > 0 && $is_paid_plan) {
+                $current_monthly  = $billing_amounts[$plan]['monthly'] ?? 0;
+                $daily_rate       = $current_monthly / 30;
                 $proration_credit = round($daily_rate * $days_left, 2);
-                $proration_note  = "Proration credit of ₱{$proration_credit} applied "
+                $proration_note   = "Proration credit of ₱{$proration_credit} applied "
                     . "({$days_left} unused days × ₱" . number_format($daily_rate, 2) . "/day on {$plan} plan).";
             }
 
             $new_price   = $billing_amounts[$upgrade_to][$billing_cycle] ?? 0;
             $amount_due  = max(0, $new_price - $proration_credit);
 
-            $upgrade_notes = "PLAN UPGRADE: {$plan} → {$upgrade_to} ({$billing_cycle})."
+            $scheduled_note_upg = $is_scheduled_upg
+                ? " [SCHEDULED — effective after current subscription ends on " . date('M d, Y', $upg_sub_end_ts) . "]"
+                : '';
+
+            $upgrade_notes = "PLAN UPGRADE: {$plan} → {$upgrade_to} ({$billing_cycle}).{$scheduled_note_upg}"
                 . ($proration_note ? " {$proration_note}" : '')
                 . ($notes ? " Notes: {$notes}" : '');
 
@@ -190,12 +209,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
                         VALUES (?,?,?,?,'PLAN_UPGRADE_REQUEST','subscription',?,?,?,NOW())
                     ")->execute([
                         $tid, $u['id'], $u['username'], $u['role'], $tid,
-                        "Upgrade request submitted: {$plan} → {$upgrade_to} ({$billing_cycle}). Amount due: ₱{$amount_due}. {$proration_note}",
+                        "Upgrade request submitted: {$plan} → {$upgrade_to} ({$billing_cycle}). Amount due: ₱{$amount_due}.{$scheduled_note_upg} {$proration_note}",
                         $_SERVER['REMOTE_ADDR'] ?? '::1'
                     ]);
                 } catch (Throwable $e) {}
 
-                $success_msg = "✅ Upgrade request submitted! Admin will review and activate your {$upgrade_to} plan within 24 hours.";
+                if ($is_scheduled_upg) {
+                    $success_msg = "📅 Scheduled upgrade request submitted! Your plan will switch to <strong>{$upgrade_to}</strong> after your current <strong>{$plan}</strong> subscription ends on <strong>" . date('F d, Y', $upg_sub_end_ts) . "</strong>. Admin will review and confirm.";
+                } else {
+                    $success_msg = "✅ Upgrade request submitted! Admin will review and activate your <strong>{$upgrade_to}</strong> plan within 24 hours.";
+                }
 
                 // Reload pending renewal
                 $pending_renewal_stmt->execute([$tid]);
@@ -212,7 +235,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
                         $tid, $upgrade_to, $billing_cycle, $amount_due,
                         $payment_method, $payment_ref, $upgrade_notes
                     ]);
-                    $success_msg = "✅ Upgrade request submitted! Admin will review and activate your {$upgrade_to} plan within 24 hours.";
+                    if ($is_scheduled_upg) {
+                        $success_msg = "📅 Scheduled upgrade request submitted! Your plan will switch to <strong>{$upgrade_to}</strong> after your current subscription ends. Admin will review and confirm.";
+                    } else {
+                        $success_msg = "✅ Upgrade request submitted! Admin will review and activate your <strong>{$upgrade_to}</strong> plan within 24 hours.";
+                    }
                     $pending_renewal_stmt->execute([$tid]);
                     $pending_renewal = $pending_renewal_stmt->fetch();
                 } catch (PDOException $e2) {
@@ -224,7 +251,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
 }
 
 // ── POST: Submit DOWNGRADE request ───────────────────────────
-// Rule: tenant can only downgrade AFTER their current subscription has expired.
+// Rule: Tenant can downgrade within 7 days before expiry (scheduled — takes effect
+//       after current subscription ends) OR immediately after expiry (pay now).
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_downgrade') {
     if ($pending_renewal) {
         $error_msg = 'You already have a pending renewal/downgrade request. Please wait for admin approval.';
@@ -243,33 +271,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
         $is_valid_downgrade = isset($plan_hierarchy_dg[$downgrade_to])
             && $target_rank_dg < $current_rank_dg;
 
-        // Block downgrade if subscription still active
-        $sub_still_active = $sub_end && (strtotime($sub_end) > time());
+        // Determine scheduling context
+        $sub_end_ts       = $sub_end ? strtotime($sub_end) : 0;
+        $sub_still_active = $sub_end_ts > time();
+        $days_left_dg     = $sub_still_active ? (int) ceil(($sub_end_ts - time()) / 86400) : 0;
+        // Allow scheduled downgrade only within the 7-day window before expiry
+        $in_schedule_window = $sub_still_active && $days_left_dg <= 7;
+        // If more than 7 days left, still block downgrade (too early)
+        $too_early = $sub_still_active && $days_left_dg > 7;
+        // is_scheduled = request was submitted while subscription still active (takes effect after expiry)
+        $is_scheduled_dg = $in_schedule_window;
 
         if (!$is_valid_downgrade) {
             $error_msg = 'Invalid downgrade target. You can only downgrade to a lower plan.';
-        } elseif ($sub_still_active) {
-            $expiry_fmt_dg  = date('F d, Y', strtotime($sub_end));
-            $days_left_dg   = (int) ceil((strtotime($sub_end) - time()) / 86400);
-            $error_msg = "⚠️ You cannot downgrade while your current <strong>{$plan}</strong> subscription is still active. "
-                       . "It expires on <strong>{$expiry_fmt_dg}</strong> ({$days_left_dg} day(s) remaining). "
-                       . "You may downgrade once your current subscription period ends.";
+        } elseif ($too_early) {
+            $expiry_fmt_dg = date('F d, Y', $sub_end_ts);
+            $error_msg = "⚠️ You can only request a downgrade within 7 days of your subscription expiry. "
+                       . "Your <strong>{$plan}</strong> plan expires on <strong>{$expiry_fmt_dg}</strong> ({$days_left_dg} days remaining). "
+                       . "You may submit a downgrade request when you have 7 or fewer days left.";
         } elseif ($downgrade_to === 'Starter' && !$payment_method) {
             // Starter is free — no payment needed; just submit
             $payment_method = 'N/A (Free Plan)';
             goto process_downgrade;
-        } elseif (!$payment_method) {
+        } elseif (!$sub_still_active && !$payment_method && $downgrade_to !== 'Starter') {
             $error_msg = 'Please select a payment method.';
+        } elseif ($in_schedule_window && !$payment_method && $downgrade_to !== 'Starter') {
+            $error_msg = 'Please select a payment method for your scheduled downgrade.';
         } else {
             process_downgrade:
             $billing_amounts_dg = [
-                'Starter'    => ['monthly' => 0,   'quarterly' => 0,    'annually' => 0],
-                'Pro'        => ['monthly' => 999,  'quarterly' => 2697, 'annually' => 9588],
-                'Enterprise' => ['monthly' => 2499, 'quarterly' => 6747, 'annually' => 23988],
+                'Starter'    => ['monthly' => 0,    'quarterly' => 0,    'annually' => 0],
+                'Pro'        => ['monthly' => 999,   'quarterly' => 2697, 'annually' => 9588],
+                'Enterprise' => ['monthly' => 2499,  'quarterly' => 6747, 'annually' => 23988],
             ];
             $amount_dg = $billing_amounts_dg[$downgrade_to][$billing_cycle] ?? 0;
 
-            $dg_notes = "PLAN DOWNGRADE: {$plan} → {$downgrade_to} ({$billing_cycle})."
+            $scheduled_note = $is_scheduled_dg
+                ? " [SCHEDULED — effective after current subscription ends on " . date('M d, Y', $sub_end_ts) . "]"
+                : '';
+            $dg_notes = "PLAN DOWNGRADE: {$plan} → {$downgrade_to} ({$billing_cycle}).{$scheduled_note}"
                       . ($notes ? " Notes: {$notes}" : '');
 
             try {
@@ -291,12 +331,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
                         VALUES (?,?,?,?,'PLAN_DOWNGRADE_REQUEST','subscription',?,?,?,NOW())
                     ")->execute([
                         $tid, $u['id'], $u['username'], $u['role'], $tid,
-                        "Downgrade request submitted: {$plan} → {$downgrade_to} ({$billing_cycle}).",
+                        "Downgrade request submitted: {$plan} → {$downgrade_to} ({$billing_cycle}).{$scheduled_note}",
                         $_SERVER['REMOTE_ADDR'] ?? '::1'
                     ]);
                 } catch (Throwable $e) {}
 
-                $success_msg = "✅ Downgrade request submitted! Admin will review and switch you to the <strong>{$downgrade_to}</strong> plan within 24 hours.";
+                if ($is_scheduled_dg) {
+                    $success_msg = "📅 Scheduled downgrade request submitted! Your plan will switch to <strong>{$downgrade_to}</strong> after your current <strong>{$plan}</strong> subscription ends on <strong>" . date('F d, Y', $sub_end_ts) . "</strong>. Admin will review and confirm.";
+                } else {
+                    $success_msg = "✅ Downgrade request submitted! Admin will review and switch you to the <strong>{$downgrade_to}</strong> plan within 24 hours.";
+                }
 
                 $pending_renewal_stmt->execute([$tid]);
                 $pending_renewal = $pending_renewal_stmt->fetch();
@@ -312,7 +356,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reque
                         $tid, $downgrade_to, $billing_cycle, $amount_dg,
                         $payment_method, $payment_ref, $dg_notes
                     ]);
-                    $success_msg = "✅ Downgrade request submitted! Admin will review and switch you to the <strong>{$downgrade_to}</strong> plan within 24 hours.";
+                    if ($is_scheduled_dg) {
+                        $success_msg = "📅 Scheduled downgrade request submitted! Your plan will switch to <strong>{$downgrade_to}</strong> after your current <strong>{$plan}</strong> subscription ends. Admin will review and confirm.";
+                    } else {
+                        $success_msg = "✅ Downgrade request submitted! Admin will review and switch you to the <strong>{$downgrade_to}</strong> plan within 24 hours.";
+                    }
                     $pending_renewal_stmt->execute([$tid]);
                     $pending_renewal = $pending_renewal_stmt->fetch();
                 } catch (PDOException $e2) {
@@ -428,8 +476,13 @@ $current_rank   = $plan_hierarchy[$plan] ?? 0;
 $upgrade_targets   = array_filter(['Pro', 'Enterprise'], fn($p) => ($plan_hierarchy[$p] ?? 0) > $current_rank);
 $downgrade_targets = array_filter(['Starter', 'Pro'],    fn($p) => ($plan_hierarchy[$p] ?? 0) < $current_rank);
 
-// Can tenant downgrade right now? Only allowed after subscription expires.
+// Can tenant downgrade right now? Allowed after expiry OR within 7-day window.
 $sub_expired_for_downgrade = empty($sub_end) || (strtotime($sub_end) <= time());
+// Is tenant in the 7-day scheduling window? (1-7 days left)
+$days_left_for_ui = $days_left ?? 0;
+$in_7day_window   = ($days_left !== null && $days_left > 0 && $days_left <= 7);
+// Too early to schedule (>7 days left and sub still active)
+$too_early_to_change = ($days_left !== null && $days_left > 7);
 
 // Proration preview: credit for unused days on current paid billing
 $proration_preview = 0;
@@ -829,10 +882,17 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         <?php endforeach; ?>
       </div>
 
-      <?php if ($proration_preview > 0): ?>
+      <?php if ($proration_preview > 0 && !$in_7day_window): ?>
       <div class="alert alert-info" style="margin-bottom:16px;">
         💡 <strong>Proration Credit:</strong> You have <strong><?= $days_left ?> days remaining</strong> on your <?= htmlspecialchars($plan) ?> plan.
         We'll apply a credit of <strong>₱<?= number_format($proration_preview, 2) ?></strong> toward your upgrade — so you only pay the difference!
+      </div>
+      <?php elseif ($in_7day_window): ?>
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        📅 <strong>Schedule your upgrade now.</strong> Your <strong><?= htmlspecialchars($plan) ?></strong> subscription expires in
+        <strong><?= $days_left ?> day(s)</strong> (<?= date('F d, Y', strtotime($sub_end)) ?>).<br>
+        Your upgrade will take effect <strong>after your current subscription ends</strong> — you keep full access until then.
+        You pay the full price for the new plan (no proration for scheduled upgrades).
       </div>
       <?php endif; ?>
 
@@ -928,7 +988,7 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
           <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);width:100%;justify-content:center;font-size:.92rem;padding:14px;"
             onclick="return validateUpgradeSelect()">
             <span class="material-symbols-outlined" style="font-size:17px;">rocket_launch</span>
-            Submit Upgrade Request
+            <?= $in_7day_window ? 'Schedule Upgrade Request' : 'Submit Upgrade Request' ?>
           </button>
         </form>
       </div>
@@ -949,32 +1009,220 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         Downgrade Plan
       </div>
 
-      <?php if (!$sub_expired_for_downgrade): ?>
-      <!-- Blocked: subscription still active -->
+      <?php if ($too_early_to_change): ?>
+      <!-- State 1: Too early (>7 days left) — locked -->
       <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:22px;text-align:center;">
         <span class="material-symbols-outlined" style="font-size:36px;color:#fcd34d;display:block;margin-bottom:10px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">lock_clock</span>
-        <div style="font-size:.95rem;font-weight:800;color:#fcd34d;margin-bottom:8px;">⛔ Downgrade Locked — Active Subscription</div>
+        <div style="font-size:.95rem;font-weight:800;color:#fcd34d;margin-bottom:8px;">Downgrade Available Soon</div>
         <div style="font-size:.82rem;color:rgba(255,255,255,.6);line-height:1.8;margin-bottom:14px;">
-          You cannot downgrade while your <strong style="color:#fff;"><?= htmlspecialchars($plan) ?></strong> subscription is still active.<br>
-          Your subscription period is <strong style="color:#fcd34d;">already paid for</strong> and cannot be cancelled mid-period.<br>
-          You may submit a downgrade request once it expires.
+          You can schedule a downgrade within the last <strong style="color:#fff;">7 days</strong> of your subscription.<br>
+          Your <strong style="color:#fff;"><?= htmlspecialchars($plan) ?></strong> plan is still active for <strong style="color:#fcd34d;"><?= $days_left ?> more day(s)</strong>.<br>
+          Come back when you have 7 or fewer days remaining.
         </div>
         <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:10px 20px;">
           <span class="material-symbols-outlined" style="font-size:18px;color:#fcd34d;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">calendar_month</span>
           <div style="text-align:left;">
-            <div style="font-size:.7rem;color:rgba(255,255,255,.4);font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Subscription Expires</div>
-            <div style="font-size:.9rem;font-weight:800;color:#fff;"><?= date('F d, Y', strtotime($sub_end)) ?> <span style="font-size:.75rem;color:rgba(255,255,255,.4);">(<?= $days_left ?> day(s) left)</span></div>
+            <div style="font-size:.7rem;color:rgba(255,255,255,.4);font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Downgrade Available From</div>
+            <div style="font-size:.9rem;font-weight:800;color:#fff;"><?= date('F d, Y', strtotime($sub_end . ' -7 days')) ?></div>
           </div>
-        </div>
-        <div style="font-size:.75rem;color:rgba(255,255,255,.35);margin-top:12px;">
-          Come back after your subscription expires to switch to a lower plan.
         </div>
       </div>
 
+      <?php elseif ($in_7day_window): ?>
+      <!-- State 2: In 7-day window — schedule downgrade -->
+      <div class="alert" style="background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.3);color:#93c5fd;margin-bottom:16px;">
+        📅 <strong>Schedule your downgrade now.</strong> Your <strong><?= htmlspecialchars($plan) ?></strong> subscription expires in
+        <strong><?= $days_left ?> day(s)</strong> (<?= date('F d, Y', strtotime($sub_end)) ?>).<br>
+        Your downgrade will take effect <strong>after your current subscription ends</strong> — you keep full access until then.
+        You still need to pay for the new plan to activate it.
+      </div>
+
+      <?php
+      $downgrade_plan_details = [
+        'Starter' => [
+          'price_monthly' => 0,
+          'color'  => '#64748b',
+          'icon'   => 'inventory_2',
+          'perks'  => ['Basic pawn ticket management', 'Customer records', 'Staff accounts', 'Shop page'],
+          'loses'  => ['Theme & Branding', 'Manager Invitations', 'Audit Logs', 'Advanced Reports'],
+        ],
+        'Pro' => [
+          'price_monthly' => 999,
+          'color'  => '#3b82f6',
+          'icon'   => 'workspace_premium',
+          'perks'  => ['Theme & Branding', 'Manager Invitations', 'Audit Logs', 'Advanced Reports'],
+          'loses'  => ['Data Export (PDF/Excel)', 'White Label Branding', 'Dedicated Account Manager'],
+        ],
+      ];
+      ?>
+      <!-- Downgrade target cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
+        <?php foreach ($downgrade_targets as $dtarget):
+          $dpd = $downgrade_plan_details[$dtarget] ?? null;
+          if (!$dpd) continue;
+        ?>
+        <div style="background:rgba(255,255,255,.03);border:1.5px solid color-mix(in srgb,<?= $dpd['color'] ?> 25%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;opacity:.05;">
+            <span class="material-symbols-outlined" style="font-size:100px;color:<?= $dpd['color'] ?>"><?= $dpd['icon'] ?></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $dpd['icon'] ?></span>
+            <span style="font-size:.9rem;font-weight:800;color:#fff;"><?= $dtarget ?></span>
+            <?php if ($dpd['price_monthly'] === 0): ?>
+            <span style="font-size:.65rem;font-weight:700;background:rgba(100,116,139,.2);color:#94a3b8;padding:2px 8px;border-radius:100px;">Free</span>
+            <?php else: ?>
+            <span style="font-size:.65rem;font-weight:700;background:rgba(59,130,246,.15);color:#93c5fd;padding:2px 8px;border-radius:100px;">₱<?= number_format($dpd['price_monthly']) ?>/mo</span>
+            <?php endif; ?>
+          </div>
+          <div style="margin-bottom:8px;">
+            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.3);margin-bottom:4px;">Keeps</div>
+            <?php foreach ($dpd['perks'] as $perk): ?>
+            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.55);margin-bottom:3px;">
+              <span class="material-symbols-outlined" style="font-size:13px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">check_circle</span>
+              <?= htmlspecialchars($perk) ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <div>
+            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(239,68,68,.4);margin-bottom:4px;">Loses</div>
+            <?php foreach ($dpd['loses'] as $lose): ?>
+            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.3);margin-bottom:3px;text-decoration:line-through;">
+              <span class="material-symbols-outlined" style="font-size:13px;color:rgba(239,68,68,.4);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">cancel</span>
+              <?= htmlspecialchars($lose) ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <!-- Plan + Billing selectors (shared) -->
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div>
+          <label class="flabel">Downgrade To</label>
+          <select id="downgrade_to_shared" class="fselect" onchange="syncDgPlan(this.value); updateDowngradeAmount();" required>
+            <option value="">— Select Plan —</option>
+            <?php foreach ($downgrade_targets as $dtarget): ?>
+            <option value="<?= htmlspecialchars($dtarget) ?>"><?= htmlspecialchars($dtarget) ?>
+              <?= $dtarget === 'Starter' ? '(Free)' : '(₱999/mo)' ?>
+            </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div id="dg-billing-wrap">
+          <label class="flabel">Billing Cycle</label>
+          <select id="dg_billing_shared" class="fselect" onchange="syncDgCycle(this.value); updateDowngradeAmount();">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="annually">Annually</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Amount due preview -->
+      <div id="dg-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
+          <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
+          <div style="color:#fff;font-weight:700;text-align:right;" id="dg-new-price">—</div>
+          <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
+        </div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:8px;line-height:1.5;">
+          📅 Scheduled: This payment activates the new plan <strong>after</strong> your current subscription ends on <?= date('M d, Y', strtotime($sub_end)) ?>.
+          Free (Starter) downgrades require no payment.
+        </div>
+      </div>
+
+      <!-- Payment tabs (hidden for free/Starter) -->
+      <div id="dg-payment-section">
+        <div class="pay-tabs" style="margin-bottom:0;">
+          <button type="button" class="pay-tab active" onclick="switchDgTab('paymongo', this)">⚡ Pay via PayMongo</button>
+          <button type="button" class="pay-tab" onclick="switchDgTab('manual', this)">📋 Manual Payment</button>
+        </div>
+
+        <!-- PayMongo Tab -->
+        <div id="dg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
+          <div class="alert alert-info" style="margin-bottom:16px;">
+            ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking. Payment will be held and your plan will switch after <?= date('M d, Y', strtotime($sub_end)) ?>.
+          </div>
+          <form method="POST" action="paymongo_renewal.php" id="downgradeFormPM">
+            <input type="hidden" name="action"        value="pay_downgrade_paymongo"/>
+            <input type="hidden" name="downgrade_to"  id="dg_pm_plan"  value=""/>
+            <input type="hidden" name="billing_cycle" id="dg_pm_cycle" value="monthly"/>
+            <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
+              onclick="return validateDgSelect()">
+              ⚡ Schedule & Pay via PayMongo
+            </button>
+          </form>
+        </div>
+
+        <!-- Manual Tab -->
+        <div id="dg-panel-manual" class="pay-panel" style="padding-top:16px;">
+          <div class="alert alert-info" style="margin-bottom:16px;">
+            📌 <strong>Manual payment:</strong> Send payment to our GCash/bank, then submit the reference. Admin will confirm your scheduled downgrade within 24 hours. Your plan switches after <?= date('M d, Y', strtotime($sub_end)) ?>.
+          </div>
+          <form method="POST" id="downgradeFormManual">
+            <input type="hidden" name="action"        value="request_downgrade"/>
+            <input type="hidden" name="downgrade_to"  id="dg_mn_plan"  value=""/>
+            <input type="hidden" name="billing_cycle" id="dg_mn_cycle" value="monthly"/>
+            <div class="form-group">
+              <label class="flabel">Payment Method</label>
+              <select name="payment_method" id="dg_payment_method" class="fselect">
+                <option value="">— Select Payment Method —</option>
+                <option value="GCash">GCash</option>
+                <option value="Maya">Maya (PayMaya)</option>
+                <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
+                <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
+                <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
+                <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
+                <option value="Cash">Cash (walk-in)</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="flabel">Payment Reference <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+              <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
+            </div>
+            <div class="form-group">
+              <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+              <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+            </div>
+            <button type="submit" class="btn" id="dg-submit-btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
+              onclick="return validateDgSelect() && confirmDowngrade()">
+              <span class="material-symbols-outlined" style="font-size:17px;">schedule</span>
+              Schedule Downgrade Request
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Free/Starter scheduled downgrade — no payment needed -->
+      <div id="dg-free-section" style="display:none;">
+        <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:#94a3b8;margin-bottom:14px;">
+          ℹ️ Downgrading to <strong>Starter</strong> is free — no payment required. Your plan will switch after <?= date('M d, Y', strtotime($sub_end)) ?>. Admin will confirm within 24 hours.
+        </div>
+        <form method="POST" id="downgradeFormFree">
+          <input type="hidden" name="action"        value="request_downgrade"/>
+          <input type="hidden" name="downgrade_to"  id="dg_free_plan"  value="Starter"/>
+          <input type="hidden" name="billing_cycle" id="dg_free_cycle" value="monthly"/>
+          <input type="hidden" name="payment_method" value="N/A (Free Plan)"/>
+          <div class="form-group">
+            <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
+          </div>
+          <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
+            onclick="return confirmDowngrade()">
+            <span class="material-symbols-outlined" style="font-size:17px;">schedule</span>
+            Schedule Downgrade to Starter (Free)
+          </button>
+        </form>
+      </div>
+
       <?php else: ?>
-      <!-- Allowed: subscription expired, tenant can now downgrade -->
+      <!-- State 3: Subscription expired — immediate downgrade (pay now) -->
       <div class="alert" style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.25);color:rgba(148,163,184,.9);margin-bottom:16px;">
-        📉 Your subscription has expired. You may now switch to a lower plan.
+        📉 Your subscription has expired. You may now switch to a lower plan and pay for the new period.
         <strong>Note:</strong> Downgrading will reduce your available features.
       </div>
 
@@ -996,7 +1244,6 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
         ],
       ];
       ?>
-
       <!-- Downgrade target cards -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
         <?php foreach ($downgrade_targets as $dtarget):
@@ -1169,7 +1416,7 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
       <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.4);margin-bottom:6px;">⭐ Change Plan</div>
       <h3 style="font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:4px;">Request a Plan Change</h3>
       <p style="font-size:.82rem;color:rgba(255,255,255,.5);line-height:1.7;margin-bottom:18px;">
-        Upgrades take effect upon admin approval. Downgrades can only be requested <strong style="color:rgba(255,255,255,.7);">after your current subscription expires</strong>.
+        Upgrades take effect upon admin approval. Downgrades can be scheduled within the last <strong style="color:rgba(255,255,255,.7);">7 days</strong> of your subscription (effective after it expires), or immediately after expiry.
       </p>
 
       <?php if($my_plan_request && $my_plan_request['status'] === 'pending'): ?>

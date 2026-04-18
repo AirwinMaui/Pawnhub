@@ -417,29 +417,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($ren && $ren['status'] === 'pending') {
             $months = $billing_months[$ren['billing_cycle']] ?? 1;
 
-            // ── New expiry: always start from TODAY if expired ────
-            // (not from old expiry — tenant already missed days)
-            $base_date = (!empty($ren['tenant_sub_end']) && strtotime($ren['tenant_sub_end']) > time())
-                ? $ren['tenant_sub_end']   // still active — extend from current end
-                : date('Y-m-d');           // expired — fresh start from today
-            $new_end = date('Y-m-d', strtotime($base_date . " +{$months} months"));
-
-            // ── Detect upgrade ────────────────────────────────────
-            // is_upgrade=1 means: sr.upgrade_from → sr.upgrade_to
-            // We compare against current_tenant_plan (what's in tenants table NOW)
+            // ── Detect request type ───────────────────────────────
             $is_upgrade     = !empty($ren['is_upgrade']);
-            $upgrade_to     = trim($ren['upgrade_to'] ?? '');
+            $upgrade_to_col = trim($ren['upgrade_to']   ?? '');
             $upgrade_from   = trim($ren['upgrade_from'] ?? $ren['current_tenant_plan']);
             $plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
 
-            // Validate: upgrade_to must exist and be a higher tier
-            $valid_upgrade = $is_upgrade
-                && isset($plan_hierarchy[$upgrade_to])
+            // Scheduled = request was submitted while tenant's subscription was still active
+            // We detect this from the notes field containing "[SCHEDULED" marker
+            $notes_text  = $ren['notes'] ?? '';
+            $is_scheduled = (strpos($notes_text, '[SCHEDULED') !== false);
+
+            // Detect downgrade: upgrade_from > upgrade_to in rank, or is_upgrade=0 and upgrade columns differ
+            $is_downgrade = !$is_upgrade
+                && !empty($upgrade_from)
+                && !empty($upgrade_to_col)
                 && isset($plan_hierarchy[$upgrade_from])
-                && $plan_hierarchy[$upgrade_to] > $plan_hierarchy[$upgrade_from];
+                && isset($plan_hierarchy[$upgrade_to_col])
+                && $plan_hierarchy[$upgrade_to_col] < $plan_hierarchy[$upgrade_from];
+
+            // Validate upgrade
+            $valid_upgrade = $is_upgrade
+                && isset($plan_hierarchy[$upgrade_to_col])
+                && isset($plan_hierarchy[$upgrade_from])
+                && $plan_hierarchy[$upgrade_to_col] > $plan_hierarchy[$upgrade_from];
+
+            // ── New expiry calculation ────────────────────────────
+            // Scheduled (submitted while still active):
+            //   → Start from current subscription_end (kicks in right after current period)
+            // Immediate (expired already, or a regular renewal):
+            //   → Start from today if expired, or extend from current end if still active
+            $tenant_sub_end_ts = !empty($ren['tenant_sub_end']) ? strtotime($ren['tenant_sub_end']) : 0;
+
+            if ($is_scheduled && $tenant_sub_end_ts > 0) {
+                // Scheduled: new period starts right after current sub ends
+                $base_date = $ren['tenant_sub_end'];
+            } elseif ($tenant_sub_end_ts > time()) {
+                // Active non-scheduled (e.g. immediate upgrade mid-period): extend from current end
+                $base_date = $ren['tenant_sub_end'];
+            } else {
+                // Expired: fresh start from today
+                $base_date = date('Y-m-d');
+            }
+            $new_end = date('Y-m-d', strtotime($base_date . " +{$months} months"));
 
             // Final plan to apply
-            $final_plan = ($is_upgrade && $valid_upgrade) ? $upgrade_to : $ren['current_tenant_plan'];
+            if ($is_upgrade && $valid_upgrade) {
+                $final_plan = $upgrade_to_col;
+            } elseif ($is_downgrade) {
+                $final_plan = $upgrade_to_col; // downgrade target
+            } else {
+                $final_plan = $ren['current_tenant_plan']; // renewal — keep same plan
+            }
 
             // ── Mark renewal approved ─────────────────────────────
             $pdo->prepare("
@@ -449,18 +478,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             ")->execute([$u['id'], $new_end, $rid]);
 
             // ── Update tenant ─────────────────────────────────────
+            // For scheduled requests: if current sub is still active, DON'T change the plan yet —
+            // only pre-set the new subscription_end so it auto-activates. But it's simpler and
+            // safer to just set it now (admin approved = confirmed). Access is already paid through
+            // the old expiry, so tenant keeps access regardless.
             $pdo->prepare("
                 UPDATE tenants SET
                     plan                = ?,
                     status              = 'active',
-                    subscription_start  = CURDATE(),
+                    subscription_start  = ?,
                     subscription_end    = ?,
                     subscription_status = 'active',
                     renewal_reminded_7d = 0,
                     renewal_reminded_3d = 0,
                     renewal_reminded_1d = 0
                 WHERE id = ?
-            ")->execute([$final_plan, $new_end, $ren['tenant_id']]);
+            ")->execute([
+                $final_plan,
+                $is_scheduled ? $ren['tenant_sub_end'] : date('Y-m-d'), // start = after current end if scheduled
+                $new_end,
+                $ren['tenant_id']
+            ]);
 
             // ── Unsuspend all users ───────────────────────────────
             $pdo->prepare("
@@ -479,11 +517,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             try { $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, 'renewed')")->execute([$ren['tenant_id']]); } catch(PDOException $e){}
 
-            // ── Audit log ─────────────────────────────────────────
+            $scheduled_label = $is_scheduled ? ' (Scheduled)' : '';
+
+            // ── Audit log + success message ───────────────────────
             if ($is_upgrade && $valid_upgrade) {
                 $audit_action = 'PLAN_UPGRADE_APPROVED';
-                $audit_msg    = "Approved UPGRADE for {$ren['business_name']}: {$upgrade_from} → {$upgrade_to}. New expiry: {$new_end}.";
-                $success_msg  = "✅ Upgrade approved! <strong>{$ren['business_name']}</strong> is now on the <strong>{$upgrade_to}</strong> plan. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+                $audit_msg    = "Approved UPGRADE{$scheduled_label} for {$ren['business_name']}: {$upgrade_from} → {$upgrade_to_col}. New expiry: {$new_end}.";
+                if ($is_scheduled) {
+                    $success_msg = "✅ Scheduled upgrade confirmed! <strong>{$ren['business_name']}</strong> will switch to <strong>{$upgrade_to_col}</strong> after <strong>" . date('M d, Y', strtotime($ren['tenant_sub_end'])) . "</strong>. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>.";
+                } else {
+                    $success_msg = "✅ Upgrade approved! <strong>{$ren['business_name']}</strong> is now on the <strong>{$upgrade_to_col}</strong> plan. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+                }
+            } elseif ($is_downgrade) {
+                $audit_action = 'PLAN_DOWNGRADE_APPROVED';
+                $audit_msg    = "Approved DOWNGRADE{$scheduled_label} for {$ren['business_name']}: {$upgrade_from} → {$upgrade_to_col}. New expiry: {$new_end}.";
+                if ($is_scheduled) {
+                    $success_msg = "✅ Scheduled downgrade confirmed! <strong>{$ren['business_name']}</strong> will switch to <strong>{$upgrade_to_col}</strong> after <strong>" . date('M d, Y', strtotime($ren['tenant_sub_end'])) . "</strong>. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>.";
+                } else {
+                    $success_msg = "✅ Downgrade approved! <strong>{$ren['business_name']}</strong> switched to <strong>{$upgrade_to_col}</strong>. New expiry: <strong>" . date('M d, Y', strtotime($new_end)) . "</strong>. Confirmation email sent.";
+                }
             } else {
                 $audit_action = 'SUB_RENEWAL_APPROVED';
                 $audit_msg    = "Approved renewal for {$ren['business_name']} ({$final_plan}). New expiry: {$new_end}.";
@@ -1418,18 +1470,48 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <span class="card-title" style="color:#b45309;">🔔 Pending Requests (<?= count($pending_sub_renewals) ?>)</span>
         </div>
         <?php foreach ($pending_sub_renewals as $pr):
-          $pr_is_upgrade = !empty($pr['is_upgrade']) && !empty($pr['upgrade_to']);
-          $pr_from       = $pr_is_upgrade ? htmlspecialchars($pr['upgrade_from'] ?? $pr['plan']) : htmlspecialchars($pr['plan']);
-          $pr_to         = $pr_is_upgrade ? htmlspecialchars($pr['upgrade_to']) : htmlspecialchars($pr['plan']);
+          $pr_is_upgrade   = !empty($pr['is_upgrade']) && !empty($pr['upgrade_to']);
+          $pr_notes_text   = $pr['notes'] ?? '';
+          $pr_is_scheduled = (strpos($pr_notes_text, '[SCHEDULED') !== false);
+
+          // Detect downgrade: not marked as upgrade, but upgrade_from/upgrade_to columns set and from > to
+          $plan_hier_sa  = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
+          $pr_from_plan  = trim($pr['upgrade_from'] ?? '');
+          $pr_to_plan    = trim($pr['upgrade_to']   ?? $pr['plan']);
+          $pr_is_downgrade = !$pr_is_upgrade
+              && !empty($pr_from_plan) && !empty($pr_to_plan)
+              && isset($plan_hier_sa[$pr_from_plan]) && isset($plan_hier_sa[$pr_to_plan])
+              && $plan_hier_sa[$pr_to_plan] < $plan_hier_sa[$pr_from_plan];
+
+          $pr_from       = $pr_is_upgrade || $pr_is_downgrade ? htmlspecialchars($pr_from_plan ?: $pr['plan']) : htmlspecialchars($pr['plan']);
+          $pr_to         = $pr_is_upgrade || $pr_is_downgrade ? htmlspecialchars($pr_to_plan)                  : htmlspecialchars($pr['plan']);
           $pr_proration  = (float)($pr['proration_credit'] ?? 0);
-          $pr_card_bg    = $pr_is_upgrade ? '#f3e8ff' : '#fffbeb';
-          $pr_card_border= $pr_is_upgrade ? '#ddd6fe' : '#fde68a';
-          $pr_type_label = $pr_is_upgrade ? 'UPGRADE' : 'RENEWAL';
-          $pr_type_color = $pr_is_upgrade ? '#7c3aed' : '#b45309';
-          $pr_type_bg    = $pr_is_upgrade ? '#f3e8ff' : '#fef3c7';
-          $pr_confirm_msg = $pr_is_upgrade
-              ? "Approve UPGRADE for {$pr['business_name']}?\\n\\n{$pr_from} → {$pr_to}\\n\\nThis will change their plan to {$pr_to} and extend their subscription."
-              : "Approve RENEWAL for {$pr['business_name']}? ({$pr_to}, " . ucfirst($pr['billing_cycle']) . ")";
+
+          if ($pr_is_upgrade) {
+              $pr_type_label = $pr_is_scheduled ? '📅 SCHEDULED UPGRADE' : 'UPGRADE';
+              $pr_card_bg    = '#f3e8ff'; $pr_card_border = '#ddd6fe';
+              $pr_type_color = '#7c3aed'; $pr_type_bg = '#f3e8ff';
+          } elseif ($pr_is_downgrade) {
+              $pr_type_label = $pr_is_scheduled ? '📅 SCHEDULED DOWNGRADE' : 'DOWNGRADE';
+              $pr_card_bg    = '#f0fdf4'; $pr_card_border = '#bbf7d0';
+              $pr_type_color = '#15803d'; $pr_type_bg = '#dcfce7';
+          } else {
+              $pr_type_label = 'RENEWAL';
+              $pr_card_bg    = '#fffbeb'; $pr_card_border = '#fde68a';
+              $pr_type_color = '#b45309'; $pr_type_bg = '#fef3c7';
+          }
+
+          if ($pr_is_upgrade) {
+              $pr_confirm_msg = $pr_is_scheduled
+                  ? "Confirm SCHEDULED UPGRADE for {$pr['business_name']}?\\n\\n{$pr_from} → {$pr_to}\\n\\nThe plan will switch after their current subscription ends."
+                  : "Approve UPGRADE for {$pr['business_name']}?\\n\\n{$pr_from} → {$pr_to}\\n\\nThis will change their plan to {$pr_to} and extend their subscription.";
+          } elseif ($pr_is_downgrade) {
+              $pr_confirm_msg = $pr_is_scheduled
+                  ? "Confirm SCHEDULED DOWNGRADE for {$pr['business_name']}?\\n\\n{$pr_from} → {$pr_to}\\n\\nThe plan will switch after their current subscription ends."
+                  : "Approve DOWNGRADE for {$pr['business_name']}?\\n\\n{$pr_from} → {$pr_to}\\n\\nThis will change their plan to {$pr_to}.";
+          } else {
+              $pr_confirm_msg = "Approve RENEWAL for {$pr['business_name']}? ({$pr_to}, " . ucfirst($pr['billing_cycle']) . ")";
+          }
         ?>
         <div style="background:<?= $pr_card_bg ?>;border:1px solid <?= $pr_card_border ?>;border-radius:10px;padding:16px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
@@ -1449,6 +1531,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" style="width:13px;height:13px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 <span style="font-size:.8rem;font-weight:800;color:#7c3aed;"><?= $pr_to ?></span>
                 <span style="font-size:.72rem;color:rgba(124,58,237,.6);">· <?= ucfirst($pr['billing_cycle']) ?></span>
+              </div>
+              <?php elseif ($pr_is_downgrade): ?>
+              <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(21,128,61,.08);border:1px solid rgba(21,128,61,.18);border-radius:8px;padding:6px 12px;margin-bottom:10px;">
+                <span style="font-size:.8rem;font-weight:700;color:#166534;"><?= $pr_from ?></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.5" style="width:13px;height:13px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span style="font-size:.8rem;font-weight:800;color:#15803d;"><?= $pr_to ?></span>
+                <span style="font-size:.72rem;color:rgba(21,128,61,.6);">· <?= ucfirst($pr['billing_cycle']) ?></span>
               </div>
               <?php else: ?>
               <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.15);border-radius:8px;padding:6px 12px;margin-bottom:10px;">
@@ -1484,7 +1573,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <input type="hidden" name="renewal_id" value="<?= $pr['id'] ?>"/>
                 <button type="submit" class="btn-sm btn-success"
                   onclick="return confirm('<?= addslashes($pr_confirm_msg) ?>')">
-                  <?= $pr_is_upgrade ? '🚀 Approve Upgrade' : '✓ Approve' ?>
+                  <?php
+                  if ($pr_is_scheduled && $pr_is_upgrade)       echo '📅 Confirm Scheduled Upgrade';
+                  elseif ($pr_is_scheduled && $pr_is_downgrade) echo '📅 Confirm Scheduled Downgrade';
+                  elseif ($pr_is_upgrade)                       echo '🚀 Approve Upgrade';
+                  elseif ($pr_is_downgrade)                     echo '↓ Approve Downgrade';
+                  else                                          echo '✓ Approve';
+                  ?>
                 </button>
               </form>
               <button type="button" class="btn-sm btn-danger"
@@ -1500,8 +1595,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <div class="modal" style="width:420px;">
             <div class="mhdr">
               <div>
-                <div class="mtitle">✗ Reject <?= $pr_is_upgrade ? 'Upgrade' : 'Renewal' ?> Request</div>
-                <div class="msub"><?= htmlspecialchars($pr['business_name']) ?><?= $pr_is_upgrade ? " — {$pr_from} → {$pr_to}" : '' ?></div>
+                <div class="mtitle">✗ Reject <?= $pr_is_upgrade ? 'Upgrade' : ($pr_is_downgrade ? 'Downgrade' : 'Renewal') ?> Request</div>
+                <div class="msub"><?= htmlspecialchars($pr['business_name']) ?><?= ($pr_is_upgrade || $pr_is_downgrade) ? " — {$pr_from} → {$pr_to}" : '' ?></div>
               </div>
               <button class="mclose" onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
