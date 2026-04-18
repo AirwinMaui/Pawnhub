@@ -424,28 +424,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // ── PROMOS & ANNOUNCEMENTS: Save (add or edit) ────────────
     if ($_POST['action'] === 'save_promo') {
-        $promo_id   = intval($_POST['promo_id'] ?? 0);
-        $title      = trim($_POST['promo_title'] ?? '');
-        $body       = trim($_POST['promo_body']  ?? '');
-        $type       = in_array($_POST['promo_type'] ?? '', ['announcement','promo','sale','warning'])
-                        ? $_POST['promo_type'] : 'announcement';
-        $is_pinned  = intval($_POST['is_pinned']  ?? 0);
-        $is_active  = intval($_POST['is_active']  ?? 1);
-        $start_date = trim($_POST['start_date'] ?? '') ?: null;
-        $end_date   = trim($_POST['end_date']   ?? '') ?: null;
-        $image_url  = trim($_POST['image_url']  ?? '') ?: null;
+        $promo_id     = intval($_POST['promo_id'] ?? 0);
+        $title        = trim($_POST['promo_title'] ?? '');
+        $body         = trim($_POST['promo_body']  ?? '');
+        $type         = in_array($_POST['promo_type'] ?? '', ['announcement','promo','sale','warning'])
+                          ? $_POST['promo_type'] : 'announcement';
+        $is_pinned    = intval($_POST['is_pinned']    ?? 0);
+        $is_active    = intval($_POST['is_active']    ?? 1);
+        $start_date   = trim($_POST['start_date']   ?? '') ?: null;
+        $end_date     = trim($_POST['end_date']     ?? '') ?: null;
+        $image_url    = trim($_POST['image_url']    ?? '') ?: null;
+        $linked_item_id = intval($_POST['linked_item_id'] ?? 0) ?: null;
+        $discount_pct   = floatval($_POST['discount_pct'] ?? 0);
 
         if ($title === '') {
             $error_msg = 'Title is required.';
         } else {
+            // If a discount % is set and an item is linked, apply discounted price
+            $original_price = null;
+            if ($linked_item_id && $discount_pct > 0 && $discount_pct <= 100) {
+                $item_row = $pdo->prepare("SELECT display_price FROM item_inventory WHERE id=? AND tenant_id=? LIMIT 1");
+                $item_row->execute([$linked_item_id, $tid]);
+                $item_row = $item_row->fetch();
+                if ($item_row) {
+                    $original_price   = (float)$item_row['display_price'];
+                    $discounted_price = round($original_price * (1 - $discount_pct / 100), 2);
+                    $pdo->prepare("UPDATE item_inventory SET display_price=?, promo_original_price=?, updated_at=NOW() WHERE id=? AND tenant_id=?")
+                        ->execute([$discounted_price, $original_price, $linked_item_id, $tid]);
+                }
+            }
+            // If previously had a linked item and discount, restore price when item is unlinked or discount removed
             if ($promo_id > 0) {
-                $pdo->prepare("UPDATE tenant_promos SET title=?,body=?,type=?,is_pinned=?,is_active=?,start_date=?,end_date=?,image_url=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
-                    ->execute([$title,$body,$type,$is_pinned,$is_active,$start_date,$end_date,$image_url,$promo_id,$tid]);
+                $old_promo = $pdo->prepare("SELECT linked_item_id, discount_pct FROM tenant_promos WHERE id=? AND tenant_id=? LIMIT 1");
+                $old_promo->execute([$promo_id, $tid]);
+                $old_promo = $old_promo->fetch();
+                if ($old_promo && $old_promo['linked_item_id'] && (!$linked_item_id || $linked_item_id !== (int)$old_promo['linked_item_id'] || $discount_pct == 0)) {
+                    // Restore original price on the old linked item
+                    $pdo->prepare("UPDATE item_inventory SET display_price=COALESCE(promo_original_price, display_price), promo_original_price=NULL, updated_at=NOW() WHERE id=? AND tenant_id=? AND promo_original_price IS NOT NULL")
+                        ->execute([$old_promo['linked_item_id'], $tid]);
+                }
+            }
+
+            if ($promo_id > 0) {
+                $pdo->prepare("UPDATE tenant_promos SET title=?,body=?,type=?,is_pinned=?,is_active=?,start_date=?,end_date=?,image_url=?,linked_item_id=?,discount_pct=?,original_price=?,updated_at=NOW() WHERE id=? AND tenant_id=?")
+                    ->execute([$title,$body,$type,$is_pinned,$is_active,$start_date,$end_date,$image_url,$linked_item_id,$discount_pct,$original_price,$promo_id,$tid]);
                 $success_msg = 'Promo/Announcement updated.';
                 write_audit($pdo,$u['id'],$u['username'],'manager','PROMO_UPDATE','tenant_promos',(string)$promo_id,"Updated: $title",$tid);
             } else {
-                $pdo->prepare("INSERT INTO tenant_promos (tenant_id,title,body,type,is_pinned,is_active,start_date,end_date,image_url,created_at) VALUES (?,?,?,?,?,?,?,?,?,NOW())")
-                    ->execute([$tid,$title,$body,$type,$is_pinned,$is_active,$start_date,$end_date,$image_url]);
+                $pdo->prepare("INSERT INTO tenant_promos (tenant_id,title,body,type,is_pinned,is_active,start_date,end_date,image_url,linked_item_id,discount_pct,original_price,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW())")
+                    ->execute([$tid,$title,$body,$type,$is_pinned,$is_active,$start_date,$end_date,$image_url,$linked_item_id,$discount_pct,$original_price]);
                 $success_msg = 'Promo/Announcement posted!';
                 write_audit($pdo,$u['id'],$u['username'],'manager','PROMO_ADD','tenant_promos',(string)$pdo->lastInsertId(),"Added: $title",$tid);
             }
@@ -456,6 +483,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // ── PROMOS: Delete ────────────────────────────────────────
     if ($_POST['action'] === 'delete_promo') {
         $promo_id = intval($_POST['promo_id'] ?? 0);
+        // Restore original price if item was linked with a discount
+        try {
+            $dp = $pdo->prepare("SELECT linked_item_id FROM tenant_promos WHERE id=? AND tenant_id=? LIMIT 1");
+            $dp->execute([$promo_id,$tid]);
+            $dp = $dp->fetch();
+            if ($dp && $dp['linked_item_id']) {
+                $pdo->prepare("UPDATE item_inventory SET display_price=COALESCE(promo_original_price, display_price), promo_original_price=NULL, updated_at=NOW() WHERE id=? AND tenant_id=? AND promo_original_price IS NOT NULL")
+                    ->execute([$dp['linked_item_id'], $tid]);
+            }
+        } catch (Throwable $e) {}
         $pdo->prepare("DELETE FROM tenant_promos WHERE id=? AND tenant_id=?")->execute([$promo_id,$tid]);
         $success_msg = 'Deleted.';
         write_audit($pdo,$u['id'],$u['username'],'manager','PROMO_DELETE','tenant_promos',(string)$promo_id,"Promo deleted",$tid);
@@ -507,7 +544,15 @@ $shop_featured_count = count(array_filter($shop_items, fn($i)=>(int)$i['is_featu
 // Promos & Announcements
 $mgr_promos = [];
 try {
-    $ps = $pdo->prepare("SELECT * FROM tenant_promos WHERE tenant_id=? ORDER BY is_pinned DESC, created_at DESC LIMIT 100");
+    $ps = $pdo->prepare("
+        SELECT p.*, i.item_name AS linked_item_name, i.item_photo_path AS linked_item_photo,
+               i.display_price AS linked_item_price, i.promo_original_price AS linked_item_orig_price
+        FROM tenant_promos p
+        LEFT JOIN item_inventory i ON i.id = p.linked_item_id AND i.tenant_id = p.tenant_id
+        WHERE p.tenant_id=?
+        ORDER BY p.is_pinned DESC, p.created_at DESC
+        LIMIT 100
+    ");
     $ps->execute([$tid]); $mgr_promos = $ps->fetchAll();
 } catch (Throwable $e) { $mgr_promos = []; }
 $active_promos_count = count(array_filter($mgr_promos, fn($p)=>(int)$p['is_active']===1));
@@ -1604,9 +1649,38 @@ tr:hover td{background:rgba(255,255,255,.02);}
       }
     ?>
     <div style="background:rgba(255,255,255,.04);border:1px solid <?= $is_active && !$is_expired ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)' ?>;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;<?= $is_pinned ? 'border-color:color-mix(in srgb,'.$type_color.' 50%,transparent);' : '' ?>opacity:<?= $is_active && !$is_expired ? '1' : '.55' ?>;">
-      <?php if(!empty($promo['image_url'])): ?>
-      <div style="height:120px;overflow:hidden;flex-shrink:0;">
-        <img src="<?=htmlspecialchars($promo['image_url'])?>" alt="" style="width:100%;height:100%;object-fit:cover;">
+      <?php
+        $card_photo = $promo['image_url'] ?? '';
+        $has_item   = !empty($promo['linked_item_id']);
+        $item_photo = $promo['linked_item_photo'] ?? '';
+        $item_name  = $promo['linked_item_name']  ?? '';
+        $item_price = $promo['linked_item_price']  ?? null;
+        $item_orig  = $promo['linked_item_orig_price'] ?? null;
+      ?>
+      <?php if($card_photo || ($has_item && $item_photo)): ?>
+      <div style="position:relative;height:130px;overflow:hidden;flex-shrink:0;background:rgba(0,0,0,.3);">
+        <?php if($card_photo): ?>
+          <img src="<?=htmlspecialchars($card_photo)?>" alt="" style="width:100%;height:100%;object-fit:cover;opacity:.85;">
+        <?php elseif($item_photo): ?>
+          <img src="<?=htmlspecialchars($item_photo)?>" alt="<?=htmlspecialchars($item_name)?>" style="width:100%;height:100%;object-fit:cover;opacity:.85;">
+        <?php endif; ?>
+        <?php if($has_item && $item_photo && !$card_photo): ?>
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.7),transparent 55%);"></div>
+          <div style="position:absolute;bottom:10px;left:12px;right:12px;display:flex;align-items:center;gap:8px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:rgba(255,255,255,.6);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">link</span>
+            <span style="font-size:.72rem;font-weight:600;color:rgba(255,255,255,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?=htmlspecialchars($item_name)?></span>
+          </div>
+        <?php endif; ?>
+      </div>
+      <?php elseif($has_item): ?>
+      <div style="height:56px;background:rgba(255,255,255,.03);display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.05);">
+        <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:rgba(255,255,255,.2);">diamond</span>
+        </div>
+        <div>
+          <div style="font-size:.68rem;color:rgba(255,255,255,.3);font-weight:600;">Linked Item</div>
+          <div style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;"><?=htmlspecialchars($item_name)?></div>
+        </div>
       </div>
       <?php endif; ?>
       <div style="padding:16px 18px;flex:1;display:flex;flex-direction:column;gap:9px;">
@@ -1631,6 +1705,16 @@ tr:hover td{background:rgba(255,255,255,.02);}
         </div>
         <!-- Title -->
         <div style="font-size:.95rem;font-weight:700;color:#fff;line-height:1.3;"><?=htmlspecialchars($promo['title'])?></div>
+        <!-- Sale price display -->
+        <?php if($has_item && !empty($promo['discount_pct']) && (float)$promo['discount_pct'] > 0): ?>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:1rem;font-weight:800;color:#fcd34d;">₱<?=number_format((float)$item_price,2)?></span>
+          <?php if($item_orig): ?>
+          <span style="font-size:.78rem;color:rgba(255,255,255,.3);text-decoration:line-through;">₱<?=number_format((float)$item_orig,2)?></span>
+          <?php endif; ?>
+          <span style="font-size:.65rem;font-weight:800;background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3);padding:2px 8px;border-radius:100px;"><?=(float)$promo['discount_pct']?>% OFF</span>
+        </div>
+        <?php endif; ?>
         <!-- Body preview -->
         <?php if(!empty($promo['body'])): ?>
         <div style="font-size:.79rem;color:rgba(255,255,255,.45);line-height:1.55;flex:1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;"><?=htmlspecialchars($promo['body'])?></div>
@@ -1940,8 +2024,8 @@ function previewPhoto(input) {
 
 <!-- PROMO / ANNOUNCEMENT ADD-EDIT MODAL -->
 <div class="modal-overlay" id="promoModal">
-  <div class="modal" style="width:520px;">
-    <div class="mhdr">
+  <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto;">
+    <div class="mhdr" style="position:sticky;top:0;background:#070d0a;z-index:10;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.07);">
       <div class="mtitle" id="promoModalTitle">New Promo / Announcement</div>
       <button class="mclose" onclick="closePromoModal()">
         <span class="material-symbols-outlined">close</span>
@@ -1957,19 +2041,74 @@ function previewPhoto(input) {
           <input type="text" name="promo_title" id="promo_title_field" class="finput" placeholder="e.g. Special Interest Rate This Month!" required maxlength="255">
         </div>
 
-        <div class="fgroup">
-          <label class="flabel">Type</label>
-          <select name="promo_type" id="promo_type_field" class="finput">
-            <option value="announcement">📢 Announcement</option>
-            <option value="promo">🏷️ Promo</option>
-            <option value="sale">🔖 Sale</option>
-            <option value="warning">⚠️ Notice / Warning</option>
-          </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="fgroup">
+            <label class="flabel">Type</label>
+            <select name="promo_type" id="promo_type_field" class="finput" onchange="onPromoTypeChange(this.value)">
+              <option value="announcement">📢 Announcement</option>
+              <option value="promo">🏷️ Promo</option>
+              <option value="sale">🔖 Sale</option>
+              <option value="warning">⚠️ Notice / Warning</option>
+            </select>
+          </div>
+          <div class="fgroup" id="discount_pct_group" style="display:none;">
+            <label class="flabel">Discount % <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <div style="position:relative;">
+              <input type="number" name="discount_pct" id="promo_discount_field" class="finput" placeholder="e.g. 20" min="0" max="100" step="0.01" style="padding-right:36px;">
+              <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:.8rem;color:rgba(255,255,255,.3);font-weight:700;">%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linked Item Picker -->
+        <div class="fgroup" id="linked_item_group" style="display:none;">
+          <label class="flabel">Link to Shop Item <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional — shows item photo on promo card)</span></label>
+          <input type="hidden" name="linked_item_id" id="linked_item_id_field" value="">
+          <div style="position:relative;">
+            <input type="text" id="item_search_input" class="finput" placeholder="Search item name…" autocomplete="off"
+              oninput="filterItemDropdown(this.value)" onfocus="showItemDropdown()" style="padding-right:36px;">
+            <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:18px;color:rgba(255,255,255,.2);">search</span>
+          </div>
+          <!-- Item preview -->
+          <div id="linked_item_preview" style="display:none;margin-top:8px;background:rgba(255,255,255,.04);border:1px solid rgba(5,150,105,.25);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;">
+            <img id="linked_item_preview_img" src="" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.08);">
+            <div style="flex:1;min-width:0;">
+              <div id="linked_item_preview_name" style="font-size:.82rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+              <div id="linked_item_preview_price" style="font-size:.73rem;color:#6ee7b7;margin-top:2px;"></div>
+            </div>
+            <button type="button" onclick="clearLinkedItem()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.3);padding:4px;">
+              <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+            </button>
+          </div>
+          <!-- Dropdown list -->
+          <div id="item_dropdown" style="display:none;position:absolute;z-index:999;width:100%;max-width:460px;background:#0d1f14;border:1px solid rgba(5,150,105,.25);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.6);overflow:hidden;max-height:220px;overflow-y:auto;margin-top:4px;">
+            <?php foreach($shop_items as $si):
+              if(!(int)$si['is_shop_visible']) continue; ?>
+            <div class="item-opt" data-id="<?=(int)$si['id']?>"
+              data-name="<?=htmlspecialchars($si['item_name']??'Item',ENT_QUOTES)?>"
+              data-photo="<?=htmlspecialchars($si['item_photo_path']??'',ENT_QUOTES)?>"
+              data-price="<?=number_format((float)$si['display_price'],2)?>"
+              onclick="selectLinkedItem(this)"
+              style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .15s;border-bottom:1px solid rgba(255,255,255,.04);">
+              <?php if(!empty($si['item_photo_path'])): ?>
+              <img src="<?=htmlspecialchars($si['item_photo_path'])?>" alt="" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;">
+              <?php else: ?>
+              <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="material-symbols-outlined" style="font-size:17px;color:rgba(255,255,255,.2);">diamond</span></div>
+              <?php endif; ?>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:.82rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?=htmlspecialchars($si['item_name']??'Item')?></div>
+                <div style="font-size:.71rem;color:rgba(255,255,255,.35);">₱<?=number_format((float)$si['display_price'],2)?><?php if($si['cat_name']): ?> · <?=htmlspecialchars($si['cat_name'])?><?php endif;?></div>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <!-- Discount preview -->
+          <div id="discount_preview" style="display:none;margin-top:6px;font-size:.75rem;color:#fcd34d;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:7px 11px;"></div>
         </div>
 
         <div class="fgroup">
           <label class="flabel">Body / Details</label>
-          <textarea name="promo_body" id="promo_body_field" class="finput" rows="4" placeholder="Describe the promo, dates, conditions, etc." style="resize:vertical;"></textarea>
+          <textarea name="promo_body" id="promo_body_field" class="finput" rows="3" placeholder="Describe the promo, dates, conditions, etc." style="resize:vertical;"></textarea>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -1984,7 +2123,7 @@ function previewPhoto(input) {
         </div>
 
         <div class="fgroup">
-          <label class="flabel">Banner Image URL <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+          <label class="flabel">Banner Image URL <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional — overrides item photo)</span></label>
           <input type="url" name="image_url" id="promo_img_field" class="finput" placeholder="https://...">
         </div>
 
@@ -2011,37 +2150,138 @@ function previewPhoto(input) {
 </div>
 
 <script>
+// ── Promo Modal ──────────────────────────────────────────────
+function onPromoTypeChange(val) {
+  const needsItem = (val === 'promo' || val === 'sale');
+  document.getElementById('linked_item_group').style.display = needsItem ? 'block' : 'none';
+  document.getElementById('discount_pct_group').style.display = needsItem ? 'block' : 'none';
+}
+
 function openPromoModal(promo) {
   const modal = document.getElementById('promoModal');
   const title = document.getElementById('promoModalTitle');
 
   if (promo) {
     title.textContent = 'Edit Promo / Announcement';
-    document.getElementById('promo_id_field').value    = promo.id || 0;
-    document.getElementById('promo_title_field').value = promo.title || '';
-    document.getElementById('promo_type_field').value  = promo.type || 'announcement';
-    document.getElementById('promo_body_field').value  = promo.body || '';
-    document.getElementById('promo_start_field').value = (promo.start_date || '').substring(0,10);
-    document.getElementById('promo_end_field').value   = (promo.end_date   || '').substring(0,10);
-    document.getElementById('promo_img_field').value   = promo.image_url || '';
+    document.getElementById('promo_id_field').value      = promo.id || 0;
+    document.getElementById('promo_title_field').value   = promo.title || '';
+    document.getElementById('promo_type_field').value    = promo.type || 'announcement';
+    document.getElementById('promo_body_field').value    = promo.body || '';
+    document.getElementById('promo_start_field').value   = (promo.start_date || '').substring(0,10);
+    document.getElementById('promo_end_field').value     = (promo.end_date   || '').substring(0,10);
+    document.getElementById('promo_img_field').value     = promo.image_url || '';
     document.getElementById('promo_active_field').checked = parseInt(promo.is_active) === 1;
     document.getElementById('promo_pinned_field').checked = parseInt(promo.is_pinned) === 1;
+    document.getElementById('promo_discount_field').value = promo.discount_pct > 0 ? promo.discount_pct : '';
+    // Restore linked item
+    if (promo.linked_item_id) {
+      document.getElementById('linked_item_id_field').value = promo.linked_item_id;
+      document.getElementById('item_search_input').value = promo.linked_item_name || '';
+      showLinkedItemPreview(
+        promo.linked_item_photo || '',
+        promo.linked_item_name  || 'Item',
+        promo.linked_item_price  || '',
+        promo.linked_item_orig_price || ''
+      );
+    } else {
+      clearLinkedItem();
+    }
+    onPromoTypeChange(promo.type || 'announcement');
   } else {
     title.textContent = 'New Promo / Announcement';
     document.getElementById('promoForm').reset();
     document.getElementById('promo_id_field').value = 0;
     document.getElementById('promo_active_field').checked = true;
+    clearLinkedItem();
+    onPromoTypeChange('announcement');
   }
 
+  document.getElementById('item_dropdown').style.display = 'none';
   modal.classList.add('open');
 }
 
 function closePromoModal() {
   document.getElementById('promoModal').classList.remove('open');
+  document.getElementById('item_dropdown').style.display = 'none';
 }
 
 document.getElementById('promoModal').addEventListener('click', function(e) {
   if (e.target === this) closePromoModal();
+});
+
+// ── Item search dropdown ──────────────────────────────────────
+function showItemDropdown() {
+  filterItemDropdown(document.getElementById('item_search_input').value);
+}
+
+function filterItemDropdown(q) {
+  const dd = document.getElementById('item_dropdown');
+  const opts = dd.querySelectorAll('.item-opt');
+  const search = q.toLowerCase().trim();
+  let any = false;
+  opts.forEach(o => {
+    const name = o.dataset.name.toLowerCase();
+    const show = !search || name.includes(search);
+    o.style.display = show ? 'flex' : 'none';
+    if (show) any = true;
+  });
+  dd.style.display = any ? 'block' : 'none';
+}
+
+function showLinkedItemPreview(photo, name, price, origPrice) {
+  const wrap = document.getElementById('linked_item_preview');
+  document.getElementById('linked_item_preview_img').src = photo || '';
+  document.getElementById('linked_item_preview_img').style.display = photo ? 'block' : 'none';
+  document.getElementById('linked_item_preview_name').textContent = name;
+  document.getElementById('linked_item_preview_price').textContent = price ? '₱' + price : '';
+  wrap.style.display = 'flex';
+  updateDiscountPreview();
+}
+
+function selectLinkedItem(el) {
+  document.getElementById('linked_item_id_field').value = el.dataset.id;
+  document.getElementById('item_search_input').value    = el.dataset.name;
+  document.getElementById('item_dropdown').style.display = 'none';
+  showLinkedItemPreview(el.dataset.photo, el.dataset.name, el.dataset.price, '');
+}
+
+function clearLinkedItem() {
+  document.getElementById('linked_item_id_field').value = '';
+  document.getElementById('item_search_input').value    = '';
+  document.getElementById('linked_item_preview').style.display = 'none';
+  document.getElementById('discount_preview').style.display    = 'none';
+  document.getElementById('item_dropdown').style.display       = 'none';
+}
+
+function updateDiscountPreview() {
+  const pct   = parseFloat(document.getElementById('promo_discount_field').value) || 0;
+  const priceEl = document.getElementById('linked_item_preview_price');
+  const preview = document.getElementById('discount_preview');
+  if (!pct || pct <= 0 || pct > 100) { preview.style.display = 'none'; return; }
+  const priceText = priceEl.textContent.replace('₱','').replace(/,/g,'');
+  const orig = parseFloat(priceText);
+  if (!orig) { preview.style.display = 'none'; return; }
+  const disc = (orig * (1 - pct/100)).toFixed(2);
+  preview.textContent = `💸 Sale price: ₱${parseFloat(disc).toLocaleString('en-PH',{minimumFractionDigits:2})} (${pct}% off ₱${orig.toLocaleString('en-PH',{minimumFractionDigits:2})})`;
+  preview.style.display = 'block';
+}
+
+document.getElementById('promo_discount_field').addEventListener('input', updateDiscountPreview);
+
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#linked_item_group')) {
+    document.getElementById('item_dropdown').style.display = 'none';
+  }
+});
+// Hover effect for item options
+document.getElementById('item_dropdown').addEventListener('mouseover', e => {
+  const opt = e.target.closest('.item-opt');
+  if (opt) opt.style.background = 'rgba(5,150,105,.12)';
+});
+document.getElementById('item_dropdown').addEventListener('mouseout', e => {
+  const opt = e.target.closest('.item-opt');
+  if (opt) opt.style.background = '';
 });
 </script>
 </body>

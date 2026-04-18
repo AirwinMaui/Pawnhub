@@ -94,21 +94,35 @@ try {
     $cnt2->execute([$tid]); $active_pawns = (int)$cnt2->fetchColumn();
 } catch (Throwable $e) { $total_customers = 0; $active_pawns = 0; }
 
-// Promos & Announcements
+// Promos & Announcements (with linked item data)
 $promos = [];
 try {
     $promo_stmt = $pdo->prepare("
-        SELECT * FROM tenant_promos
-        WHERE tenant_id = ?
-          AND is_active = 1
-          AND (start_date IS NULL OR start_date <= NOW())
-          AND (end_date IS NULL OR end_date >= NOW())
-        ORDER BY is_pinned DESC, created_at DESC
+        SELECT p.*,
+               i.item_name        AS linked_item_name,
+               i.item_photo_path  AS linked_item_photo,
+               i.display_price    AS linked_item_price,
+               i.promo_original_price AS linked_item_orig_price
+        FROM tenant_promos p
+        LEFT JOIN item_inventory i ON i.id = p.linked_item_id AND i.tenant_id = p.tenant_id
+        WHERE p.tenant_id = ?
+          AND p.is_active = 1
+          AND (p.start_date IS NULL OR p.start_date <= NOW())
+          AND (p.end_date IS NULL OR p.end_date >= NOW())
+        ORDER BY p.is_pinned DESC, p.created_at DESC
         LIMIT 12
     ");
     $promo_stmt->execute([$tid]);
     $promos = $promo_stmt->fetchAll();
 } catch (Throwable $e) { $promos = []; }
+
+// Build a map of item_id => promo for sale badge on item cards
+$item_promo_map = [];
+foreach ($promos as $p) {
+    if (!empty($p['linked_item_id']) && !empty($p['discount_pct']) && (float)$p['discount_pct'] > 0) {
+        $item_promo_map[(int)$p['linked_item_id']] = $p;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -390,6 +404,19 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   text-transform: uppercase; letter-spacing: .1em;
   padding: 3px 9px; border-radius: 100px;
   box-shadow: 0 2px 10px rgba(245,158,11,.4);
+}
+.item-sale-badge {
+  position: absolute; top: 10px; left: 10px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff; font-size: .62rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .1em;
+  padding: 3px 9px; border-radius: 100px;
+  box-shadow: 0 2px 10px rgba(239,68,68,.45);
+  animation: salePulse 2s ease-in-out infinite;
+}
+@keyframes salePulse {
+  0%,100% { box-shadow: 0 2px 10px rgba(239,68,68,.45); }
+  50%      { box-shadow: 0 2px 18px rgba(239,68,68,.7); }
 }
 .item-cat-badge {
   position: absolute; top: 10px; right: 10px;
@@ -837,14 +864,43 @@ footer {
         default   => 'Announcement',
       };
     ?>
+    <?php
+      $p_img      = $promo['image_url'] ?? '';
+      $p_item_photo = $promo['linked_item_photo'] ?? '';
+      $p_item_name  = $promo['linked_item_name']  ?? '';
+      $p_item_price = $promo['linked_item_price']  ?? null;
+      $p_item_orig  = $promo['linked_item_orig_price'] ?? null;
+      $p_has_item   = !empty($promo['linked_item_id']);
+      $p_disc       = (float)($promo['discount_pct'] ?? 0);
+      $p_show_photo = $p_img ?: ($p_has_item ? $p_item_photo : '');
+    ?>
     <div style="
       background:var(--surface);border:1px solid var(--border);border-radius:18px;
       overflow:hidden;display:flex;flex-direction:column;
       <?= !empty($promo['is_pinned']) ? 'border-color:color-mix(in srgb,'.htmlspecialchars($type_color).' 40%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,'.htmlspecialchars($type_color).' 15%,transparent);' : '' ?>
     ">
-      <?php if(!empty($promo['image_url'])): ?>
-      <div style="height:160px;overflow:hidden;">
-        <img src="<?= htmlspecialchars($promo['image_url']) ?>" alt="" style="width:100%;height:100%;object-fit:cover;">
+      <?php if($p_show_photo): ?>
+      <div style="height:180px;overflow:hidden;position:relative;background:rgba(0,0,0,.3);">
+        <img src="<?= htmlspecialchars($p_show_photo) ?>" alt="<?= htmlspecialchars($p_item_name) ?>" style="width:100%;height:100%;object-fit:cover;<?= !$p_img && $p_item_photo ? 'opacity:.85;' : '' ?>">
+        <?php if(!$p_img && $p_item_photo): ?>
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(8,9,12,.75) 0%,transparent 55%);"></div>
+          <?php if($p_disc > 0): ?>
+          <div style="position:absolute;top:12px;right:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:.7rem;font-weight:800;padding:4px 11px;border-radius:100px;box-shadow:0 2px 12px rgba(245,158,11,.5);letter-spacing:.03em;">
+            <?= $p_disc ?>% OFF
+          </div>
+          <?php endif; ?>
+          <div style="position:absolute;bottom:10px;left:14px;right:14px;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;">
+            <div style="font-size:.79rem;font-weight:700;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($p_item_name) ?></div>
+            <?php if($p_disc > 0 && $p_item_price !== null): ?>
+            <div style="flex-shrink:0;text-align:right;">
+              <div style="font-size:.95rem;font-weight:800;color:#fcd34d;line-height:1;">₱<?= number_format((float)$p_item_price, 2) ?></div>
+              <?php if($p_item_orig): ?>
+              <div style="font-size:.68rem;color:rgba(255,255,255,.4);text-decoration:line-through;line-height:1.3;">₱<?= number_format((float)$p_item_orig, 2) ?></div>
+              <?php endif; ?>
+            </div>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
       <div style="padding:18px 20px;flex:1;display:flex;flex-direction:column;gap:10px;">
@@ -862,6 +918,24 @@ footer {
         </div>
         <!-- Title -->
         <div style="font-size:1rem;font-weight:700;color:#fff;line-height:1.3;"><?= htmlspecialchars($promo['title']) ?></div>
+        <!-- Linked item price (if no photo overlay was shown) -->
+        <?php if(!$p_show_photo && $p_has_item && $p_disc > 0 && $p_item_price !== null): ?>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 12px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:12px;">
+          <div style="width:38px;height:38px;border-radius:9px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span class="material-symbols-outlined" style="font-size:19px;color:rgba(255,255,255,.2);">diamond</span>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.77rem;color:rgba(255,255,255,.5);"><?= htmlspecialchars($p_item_name) ?></div>
+            <div style="display:flex;align-items:center;gap:7px;margin-top:2px;">
+              <span style="font-size:1rem;font-weight:800;color:#fcd34d;">₱<?= number_format((float)$p_item_price, 2) ?></span>
+              <?php if($p_item_orig): ?>
+              <span style="font-size:.78rem;color:rgba(255,255,255,.3);text-decoration:line-through;">₱<?= number_format((float)$p_item_orig, 2) ?></span>
+              <?php endif; ?>
+              <span style="font-size:.62rem;font-weight:800;background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3);padding:1px 7px;border-radius:100px;"><?= $p_disc ?>% OFF</span>
+            </div>
+          </div>
+        </div>
+        <?php endif; ?>
         <!-- Body -->
         <?php if(!empty($promo['body'])): ?>
         <div style="font-size:.84rem;color:var(--text-m);line-height:1.65;flex:1;"><?= nl2br(htmlspecialchars($promo['body'])) ?></div>
@@ -954,11 +1028,16 @@ footer {
   </div>
   <?php else: ?>
   <div class="items-grid" id="itemsGrid">
-    <?php foreach($items as $item): ?>
+    <?php foreach($items as $item):
+      $item_promo_data = $item_promo_map[(int)$item['id']] ?? null;
+      $on_sale = $item_promo_data !== null;
+      $orig_price = $on_sale ? (float)($item['promo_original_price'] ?? $item_promo_data['original_price'] ?? 0) : 0;
+      $sale_disc  = $on_sale ? (float)($item_promo_data['discount_pct'] ?? 0) : 0;
+    ?>
     <a href="#"
        class="item-card"
        data-cat="<?= (int)($item['category_id'] ?? 0) ?>"
-       onclick="openItem(<?= htmlspecialchars(json_encode($item), ENT_QUOTES) ?>); return false;">
+       onclick="openItem(<?= htmlspecialchars(json_encode($item + ['on_sale'=>$on_sale,'orig_price'=>$orig_price,'sale_disc'=>$sale_disc]), ENT_QUOTES) ?>); return false;">
       <div class="item-img-wrap">
         <?php if(!empty($item['item_photo_path'])): ?>
           <img src="<?= htmlspecialchars($item['item_photo_path']) ?>" alt="<?= htmlspecialchars($item['item_name']??'') ?>" loading="lazy">
@@ -967,7 +1046,9 @@ footer {
             <span class="material-symbols-outlined">diamond</span>
           </div>
         <?php endif; ?>
-        <?php if((int)$item['is_featured']): ?>
+        <?php if($on_sale && $sale_disc > 0): ?>
+          <div class="item-sale-badge"><?= $sale_disc ?>% OFF</div>
+        <?php elseif((int)$item['is_featured']): ?>
           <div class="item-featured-badge">Featured</div>
         <?php endif; ?>
         <?php if($item['cat_name']): ?>
@@ -981,8 +1062,14 @@ footer {
         <?php endif; ?>
         <div class="item-footer">
           <div>
-            <div class="item-price-label">Price</div>
-            <div class="item-price">₱<?= number_format($item['display_price'], 2) ?></div>
+            <?php if($on_sale && $orig_price > 0): ?>
+              <div class="item-price-label" style="color:#fcd34d;">Sale Price</div>
+              <div class="item-price" style="color:#fcd34d;">₱<?= number_format($item['display_price'], 2) ?></div>
+              <div style="font-size:.68rem;color:rgba(255,255,255,.3);text-decoration:line-through;line-height:1.3;margin-top:1px;">₱<?= number_format($orig_price, 2) ?></div>
+            <?php else: ?>
+              <div class="item-price-label">Price</div>
+              <div class="item-price">₱<?= number_format($item['display_price'], 2) ?></div>
+            <?php endif; ?>
           </div>
           <div class="item-stock">
             <?= $item['stock_qty'] ?> in stock
@@ -1111,12 +1198,21 @@ function openItem(item) {
   if (item.cat_name) badges.push(`<span class="item-detail-badge"><span class="material-symbols-outlined" style="font-size:13px;">category</span>${escHtml(item.cat_name)}</span>`);
   if (item.condition_notes) badges.push(`<span class="item-detail-badge"><span class="material-symbols-outlined" style="font-size:13px;">info</span>${escHtml(item.condition_notes)}</span>`);
   if (item.stock_qty) badges.push(`<span class="item-detail-badge"><span class="material-symbols-outlined" style="font-size:13px;">inventory_2</span>${item.stock_qty} in stock</span>`);
-  if (item.is_featured == 1) badges.push(`<span class="item-detail-badge" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#fcd34d;">⭐ Featured</span>`);
+  if (item.on_sale) badges.push(`<span class="item-detail-badge" style="background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#fca5a5;">🔖 On Sale</span>`);
+  else if (item.is_featured == 1) badges.push(`<span class="item-detail-badge" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#fcd34d;">⭐ Featured</span>`);
+
+  const priceHtml = item.on_sale && item.orig_price > 0
+    ? `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+         <div class="item-detail-price" style="color:#fcd34d;">₱${parseFloat(item.display_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+         <div style="font-size:.9rem;color:rgba(255,255,255,.3);text-decoration:line-through;">₱${parseFloat(item.orig_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+         <div style="font-size:.72rem;font-weight:800;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25);padding:2px 9px;border-radius:100px;">${item.sale_disc}% OFF</div>
+       </div>`
+    : `<div class="item-detail-price">₱${parseFloat(item.display_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>`;
 
   document.getElementById('modalContent').innerHTML = `
     ${photo}
     <div class="item-detail-name">${escHtml(item.item_name || 'Item')}</div>
-    <div class="item-detail-price">₱${parseFloat(item.display_price).toLocaleString('en-PH', {minimumFractionDigits:2})}</div>
+    ${priceHtml}
     <div class="item-detail-meta">${badges.join('')}</div>
   `;
   document.getElementById('itemModal').classList.add('open');
