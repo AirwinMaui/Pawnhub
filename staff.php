@@ -404,9 +404,10 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="logout.php?role=staff&slug=<?= rawurlencode($u['tenant_slug'] ?? '') ?>" class="sb-logout">
+    <?php $logout_url = 'logout.php?role=staff&slug=' . rawurlencode($u['tenant_slug'] ?? ''); ?>
+    <button type="button" class="sb-logout" onclick="showLogoutModal('<?= $logout_url ?>')">
       <span class="material-symbols-outlined">logout</span>Sign Out
-    </a>
+    </button>
   </div>
 </aside>
 
@@ -809,6 +810,46 @@ function toggleGoldFields() {
     document.getElementById('item_karat').value  = '';
   }
 }
+</script>
+<!-- LOGOUT CONFIRMATION MODAL -->
+<div id="logoutModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);animation:logoutIn .22s ease both;">
+    <div style="background:linear-gradient(135deg,#7f1d1d,#991b1b);padding:24px 24px 20px;display:flex;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <span class="material-symbols-outlined" style="color:#fff;font-size:22px;">logout</span>
+      </div>
+      <div>
+        <div style="font-size:1.1rem;font-weight:700;color:#fff;line-height:1.2;">Sign Out</div>
+        <div style="font-size:.75rem;color:rgba(255,255,255,.6);margin-top:2px;">Confirm your action</div>
+      </div>
+    </div>
+    <div style="padding:22px 24px 24px;">
+      <p style="font-size:.9rem;color:rgba(240,242,247,.65);line-height:1.65;margin-bottom:22px;">Are you sure you want to log out? Any unsaved changes may be lost.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a id="logoutConfirmBtn" href="#" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#dc2626;color:#fff;font-weight:700;font-size:.9rem;border-radius:12px;text-decoration:none;transition:filter .18s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+          <span class="material-symbols-outlined" style="font-size:17px;">logout</span>Yes, Log Out
+        </a>
+        <button onclick="hideLogoutModal()" style="width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(240,242,247,.6);font-weight:600;font-size:.9rem;border-radius:12px;cursor:pointer;font-family:inherit;transition:all .18s;" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+@keyframes logoutIn { from { opacity:0;transform:translateY(14px) } to { opacity:1;transform:none } }
+.sb-logout { background:none; border:none; cursor:pointer; font-family:inherit; width:100%; text-align:left; }
+</style>
+<script>
+function showLogoutModal(url) {
+  document.getElementById('logoutConfirmBtn').href = url;
+  const m = document.getElementById('logoutModal');
+  m.style.display = 'flex';
+}
+function hideLogoutModal() {
+  document.getElementById('logoutModal').style.display = 'none';
+}
+document.getElementById('logoutModal').addEventListener('click', function(e){ if(e.target===this) hideLogoutModal(); });
 </script>
 </body>
 </html>

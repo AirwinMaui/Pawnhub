@@ -720,6 +720,10 @@ footer {
 @media (max-width: 480px) {
   .hero-stat-divider { display: none; }
 }
+@media (max-width: 700px) {
+  #app > div { grid-template-columns: 1fr !important; }
+  #app > div > div:last-child { display: none; }
+}
 </style>
 </head>
 <body>
@@ -1116,6 +1120,119 @@ footer {
   </div>
 </section>
 <?php endif; ?>
+
+<!-- DOWNLOAD APP SECTION -->
+<section id="app" style="padding-top:0;">
+  <div style="
+    background: linear-gradient(135deg, #0d1120 0%, #0f172a 50%, #0d1120 100%);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 28px;
+    padding: 48px clamp(24px,5vw,60px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  ">
+    <!-- Glow blobs -->
+    <div style="position:absolute;top:-80px;right:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--primary) 18%,transparent),transparent 70%);pointer-events:none;"></div>
+    <div style="position:absolute;bottom:-60px;left:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%);pointer-events:none;"></div>
+
+    <!-- LEFT: Text content -->
+    <div style="position:relative;z-index:1;">
+      <div style="display:inline-flex;align-items:center;gap:7px;font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:color-mix(in srgb,var(--primary) 90%,#fff);background:color-mix(in srgb,var(--primary) 12%,transparent);border:1px solid color-mix(in srgb,var(--primary) 25%,transparent);padding:5px 14px;border-radius:100px;margin-bottom:20px;">
+        <span class="material-symbols-outlined" style="font-size:13px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">smartphone</span>
+        Mobile App
+      </div>
+      <h2 style="font-family:'DM Serif Display',serif;font-size:clamp(1.8rem,4vw,2.8rem);color:#fff;line-height:1.1;letter-spacing:-.03em;margin-bottom:16px;">
+        Manage Your Pawn<br><span style="color:var(--primary);font-style:italic;">From Your Pocket</span>
+      </h2>
+      <p style="font-size:clamp(.88rem,1.5vw,1rem);color:rgba(240,242,247,.6);line-height:1.75;max-width:400px;margin-bottom:30px;">
+        Download the <?= $biz_name ?> app to track your pawn transactions, receive real-time status alerts, and manage your items with a single tap.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start;">
+        <a href="<?= htmlspecialchars($login_url) ?>" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#fff;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
+          <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">download</span>
+          </div>
+          <div>
+            <div style="font-size:.65rem;font-weight:600;opacity:.8;letter-spacing:.06em;text-transform:uppercase;line-height:1;">Access Our Mobile App</div>
+            <div style="font-size:1rem;font-weight:800;line-height:1.3;">Download Here</div>
+          </div>
+        </a>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:15px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
+          <span style="font-size:.78rem;color:rgba(240,242,247,.45);">Free · No credit card required</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Phone mockup with service status -->
+    <div style="position:relative;z-index:1;display:flex;justify-content:center;">
+      <div style="width:100%;max-width:280px;background:linear-gradient(145deg,#1a1f2e,#141824);border:1px solid rgba(255,255,255,.12);border-radius:24px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.05);padding:0 0 4px;">
+        <!-- Status bar -->
+        <div style="background:linear-gradient(135deg,var(--secondary),var(--primary));padding:14px 18px 12px;display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+            <?php if($logo_url): ?>
+              <img src="<?= htmlspecialchars($logo_url) ?>" style="width:100%;height:100%;object-fit:cover;" alt="logo">
+            <?php else: ?>
+              <span class="material-symbols-outlined" style="color:#fff;font-size:16px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">storefront</span>
+            <?php endif; ?>
+          </div>
+          <div>
+            <div style="font-size:.75rem;font-weight:700;color:#fff;line-height:1.2;"><?= $biz_name ?></div>
+            <div style="font-size:.62rem;color:rgba(255,255,255,.6);">My Account Overview</div>
+          </div>
+          <span class="material-symbols-outlined" style="color:rgba(255,255,255,.5);font-size:18px;margin-left:auto;">notifications</span>
+        </div>
+        <!-- Content area -->
+        <div style="padding:16px;">
+          <div style="font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:color-mix(in srgb,var(--primary) 90%,#fff);margin-bottom:12px;">Transaction Status</div>
+
+          <!-- Status row 1 -->
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <span style="font-size:.78rem;font-weight:600;color:#fff;">Active Pawns</span>
+              <span style="font-size:.7rem;font-weight:700;color:var(--accent);">Stored</span>
+            </div>
+            <div style="height:6px;background:rgba(255,255,255,.08);border-radius:100px;overflow:hidden;">
+              <div style="height:100%;width:85%;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 70%,#fff));border-radius:100px;"></div>
+            </div>
+          </div>
+
+          <!-- Status row 2 -->
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <span style="font-size:.78rem;font-weight:600;color:#fff;">Due for Renewal</span>
+              <span style="font-size:.7rem;font-weight:700;color:#f59e0b;">Attention</span>
+            </div>
+            <div style="height:6px;background:rgba(255,255,255,.08);border-radius:100px;overflow:hidden;">
+              <div style="height:100%;width:35%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:100px;"></div>
+            </div>
+          </div>
+
+          <!-- Status row 3 -->
+          <div style="margin-bottom:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <span style="font-size:.78rem;font-weight:600;color:#fff;">Redeemed Items</span>
+              <span style="font-size:.7rem;font-weight:700;color:rgba(240,242,247,.4);">Complete</span>
+            </div>
+            <div style="height:6px;background:rgba(255,255,255,.08);border-radius:100px;overflow:hidden;">
+              <div style="height:100%;width:100%;background:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,.25));border-radius:100px;"></div>
+            </div>
+          </div>
+
+          <!-- CTA inside card -->
+          <a href="<?= htmlspecialchars($login_url) ?>" style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:11px;background:var(--primary);color:#fff;text-decoration:none;font-size:.8rem;font-weight:700;border-radius:10px;box-shadow:0 4px 14px color-mix(in srgb,var(--primary) 40%,transparent);transition:filter .2s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+            <span class="material-symbols-outlined" style="font-size:15px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">receipt_long</span>
+            View Full Transactions
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- CTA -->
 <section style="padding-top: 0;">
