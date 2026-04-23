@@ -176,7 +176,11 @@ $business_name = $tenant['business_name'] ?? 'My Branch';
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title><?=htmlspecialchars($business_name)?> — Cashier</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -296,6 +300,72 @@ tr:hover td{background:rgba(255,255,255,.03);}
 .pay-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;margin-bottom:18px;}
 
 @media(max-width:1000px){.stats-row{grid-template-columns:repeat(2,1fr);}.pay-grid{grid-template-columns:1fr;}}
+
+/* ── MOBILE SIDEBAR & HAMBURGER ───────────────────────────── */
+.mob-hamburger{
+  display:none;
+  align-items:center;justify-content:center;
+  width:36px;height:36px;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:9px;cursor:pointer;
+  flex-shrink:0;
+}
+.mob-hamburger span{font-size:20px;color:rgba(255,255,255,.8);}
+
+.mob-overlay{
+  display:none;position:fixed;inset:0;z-index:99;
+  background:rgba(0,0,0,.6);
+  -webkit-backdrop-filter:blur(4px);
+  backdrop-filter:blur(4px);
+  opacity:0;transition:opacity .25s;
+  pointer-events:none;
+}
+.mob-overlay.open{
+  display:block;opacity:1;pointer-events:all;
+}
+
+@media(max-width:768px){
+  body{overflow-x:hidden;}
+
+  .sidebar{
+    position:fixed;left:0;top:0;bottom:0;
+    transform:translateX(-100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    z-index:200;
+    width:min(var(--sw), 85vw);
+    /* Remove blur on sidebar itself to prevent content blur */
+    backdrop-filter:blur(24px);
+    -webkit-backdrop-filter:blur(24px);
+  }
+  .sidebar.mobile-open{
+    transform:translateX(0);
+    box-shadow:4px 0 40px rgba(0,0,0,.7);
+  }
+
+  .main{margin-left:0 !important;}
+
+  .mob-overlay{display:none;}
+  .mob-overlay.open{display:block;}
+
+  .mob-hamburger{display:flex;}
+
+  .topbar{padding:0 14px;}
+  .content{padding:14px;}
+
+  /* Fix blurry content: ensure main content is NOT blurred when sidebar opens */
+  .main{
+    position:relative;z-index:10;
+    transition:none;
+    filter:none !important;
+  }
+}
+
+@media(max-width:480px){
+  .stats-row{grid-template-columns:repeat(2,1fr);}
+  table{font-size:.73rem;}
+  th,td{padding:8px 8px;}
+}
 </style>
 </head>
 <body>
@@ -368,6 +438,10 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
+      <!-- Hamburger for mobile -->
+      <div class="mob-hamburger" onclick="toggleSidebar()" id="hamburgerBtn">
+        <span class="material-symbols-outlined">menu</span>
+      </div>
       <span class="topbar-title"><?php $titles=['dashboard'=>'Cashier Dashboard','process'=>'Process Payment','tickets'=>'Active Tickets','history'=>'My Transactions','inventory'=>'View Inventory'];echo $titles[$active_page]??'Dashboard';?></span>
       <span class="cashier-chip">Cashier<?php if($tenant): ?> · <?=htmlspecialchars($tenant['business_name'])?><?php endif;?></span>
     </div>
@@ -595,6 +669,7 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
   </div>
 </div>
 
+
 <script>
 // Called when ticket is selected
 function fillPayment(sel) {
@@ -659,6 +734,55 @@ function calcChange() {
   document.getElementById('r_cash').textContent    = '₱' + cash.toFixed(2);
   document.getElementById('r_change2').textContent = '₱' + ch.toFixed(2);
 }
+</script>
+<!-- Mobile overlay for sidebar -->
+<div class="mob-overlay" id="mobOverlay" onclick="closeSidebar()"></div>
+
+<script>
+// ── iOS viewport height fix ─────────────────────────────────
+function setVH() {
+  document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', function(){ setTimeout(setVH, 200); });
+
+// ── Sidebar toggle ──────────────────────────────────────────
+function toggleSidebar() {
+  var sb  = document.querySelector('.sidebar');
+  var ov  = document.getElementById('mobOverlay');
+  if (!sb) return;
+  var isOpen = sb.classList.contains('mobile-open');
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sb.classList.add('mobile-open');
+    if (ov) ov.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+  }
+}
+
+function closeSidebar() {
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('mobOverlay');
+  if (sb) sb.classList.remove('mobile-open');
+  if (ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+}
+
+// ── Close sidebar when a nav link is tapped (mobile) ────────
+document.querySelectorAll('.sb-item, .sb-logout').forEach(function(el) {
+  el.addEventListener('click', function() {
+    if (window.innerWidth <= 768) { closeSidebar(); }
+  });
+});
+
+// ── Close sidebar on ESC ────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSidebar();
+});
 </script>
 </body>
 </html>

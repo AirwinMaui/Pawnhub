@@ -475,7 +475,7 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 }
 
 @media(max-width:768px){
-  .main{z-index:auto!important;position:static!important;}
+  .main{position:relative!important;z-index:10!important;filter:none!important;-webkit-filter:none!important;}
   .sidebar{z-index:9999!important;isolation:isolate;}
   .mob-overlay{z-index:9998!important;}
   .topbar{z-index:9997!important;position:sticky!important;}
@@ -508,6 +508,14 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
     background:#0d1117 !important;
     z-index:1 !important;
     padding-bottom:max(12px,env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* ── Mobile fix: disable backdrop-filter blur on Android/iOS ── */
+@media(max-width:768px){
+  .card,.glass-card,.topbar{
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
   }
 }
 </style>
