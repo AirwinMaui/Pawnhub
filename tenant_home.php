@@ -723,6 +723,15 @@ footer {
 @media (max-width: 700px) {
   #app > div { grid-template-columns: 1fr !important; }
   #app > div > div:last-child { display: none; }
+  .hero { min-height: 70vh; }
+  nav { padding: 0 16px; }
+  section { padding: 40px 16px; }
+  footer { padding: 20px 16px; flex-direction: column; gap: 8px; text-align: center; }
+  .cta-banner { padding: 28px 20px; border-radius: 16px; }
+}
+@media (max-width: 480px) {
+  .hero-actions { flex-direction: column; align-items: stretch; }
+  .btn-hero-primary, .btn-hero-secondary { justify-content: center; }
 }
 </style>
 </head>

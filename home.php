@@ -182,7 +182,7 @@ section[id] { scroll-margin-top: 80px; }
         <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">Live System Stats</span>
         <h2 class="text-2xl font-bold text-white mt-2">Trusted by Pawnshops Across the Philippines</h2>
       </div>
-      <div class="grid grid-cols-3 gap-8 text-center">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
         <div>
           <div class="text-4xl md:text-5xl font-extrabold text-blue-400 mb-2"><?php echo number_format($total_tenants); ?></div>
           <div class="text-white/60 text-sm font-medium">Active Pawnshops</div>

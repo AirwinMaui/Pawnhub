@@ -1090,6 +1090,17 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 .page-section{color:#fff;}
 @media(max-width:1200px){.stats-grid,.summary-grid{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr;}}
 @media(max-width:900px){.filter-bar{gap:8px;}.filter-bar .filter-actions{margin-left:0;}}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
+  .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.5);}
+  .main{margin-left:0!important;width:100%;}
+  .topbar{padding:0 16px;}
+  #mob-menu-btn{display:flex!important;}
+  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;backdrop-filter:blur(2px);}
+  .mob-overlay.open{display:block;}
+  .topbar-title{font-size:.88rem;}
+  .content{padding:16px;}
+}
 @media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
 </style>
 </head>
@@ -1149,6 +1160,9 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <span class="topbar-title">
         <?php $titles=['dashboard'=>'System Dashboard','tenants'=>'Tenant Management','invitations'=>'Email Invitations','subscriptions'=>'Subscription Management','reports'=>'Reports','sales_report'=>'Sales Report','audit_logs'=>'Audit Logs','settings'=>'System Settings'];
         echo $titles[$active_page]??'Dashboard'; ?>
@@ -2527,5 +2541,12 @@ function hideLogoutModal() {
 document.getElementById('logoutModal').addEventListener('click', function(e){ if(e.target===this) hideLogoutModal(); });
 </script>
 
+<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
+<script>
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('mobile-open');
+  document.getElementById('mobOverlay').classList.toggle('open');
+}
+</script>
 </body>
 </html>

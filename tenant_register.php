@@ -174,10 +174,16 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
 .footer-bar nav a:hover{color:#fff;}
 .ms-inline{font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;font-size:15px;vertical-align:middle;}
 @media(max-width:600px){
-  .card{padding:28px 22px;}
+  .card{padding:20px 16px;}
   .grid2{grid-template-columns:1fr;}
   .footer-bar nav{display:none;}
   .topnav-right span{display:none;}
+  .topnav{padding:16px 16px;}
+  .page{padding:80px 12px 80px;}
+  .bento-row{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:380px){
+  .bento-row{grid-template-columns:1fr;}
 }
 </style>
 </head>

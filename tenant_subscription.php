@@ -492,7 +492,17 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 .expiry-bar{height:100%;border-radius:100px;}
 .divider{display:flex;align-items:center;gap:12px;color:rgba(255,255,255,.2);font-size:.75rem;font-weight:600;margin:18px 0;}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08);}
-@media(max-width:600px){.form-grid{grid-template-columns:1fr;}.sidebar{display:none;}.main{margin-left:0;}.pay-tabs{flex-direction:column;}.pay-tab{border-right:none;border-bottom:1px solid rgba(255,255,255,.08);}}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
+  .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.7);}
+  .main{margin-left:0!important;width:100%;}
+  .topbar{padding:0 14px;}
+  #mob-menu-btn{display:flex!important;}
+  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;}
+  .mob-overlay.open{display:block;}
+  .content{padding:16px;}
+}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr;}.pay-tabs{flex-direction:column;}.pay-tab{border-right:none;border-bottom:1px solid rgba(255,255,255,.08);}}
 </style>
 </head>
 <body>
@@ -542,10 +552,15 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
 <!-- ── Main ─────────────────────────────────────────────────── -->
 <div class="main">
   <header class="topbar">
-    <a href="tenant.php?page=dashboard" style="color:rgba(255,255,255,.4);text-decoration:none;display:flex;align-items:center;gap:5px;font-size:.8rem;">
-      <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">arrow_back</span>
-      Back to Dashboard
-    </a>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:34px;height:34px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
+        <span class="material-symbols-outlined" style="font-size:18px;">menu</span>
+      </button>
+      <a href="tenant.php?page=dashboard" style="color:rgba(255,255,255,.4);text-decoration:none;display:flex;align-items:center;gap:5px;font-size:.8rem;">
+        <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">arrow_back</span>
+        Back to Dashboard
+      </a>
+    </div>
     <div style="font-size:.78rem;color:rgba(255,255,255,.3);"><?= date('F d, Y') ?></div>
   </header>
 
@@ -1368,6 +1383,13 @@ function confirmDowngrade() {
 updateAmount('monthly');
 updateUpgradeAmount();
 updateDowngradeAmount();
+</script>
+<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
+<script>
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('mobile-open');
+  document.getElementById('mobOverlay').classList.toggle('open');
+}
 </script>
 </body>
 </html>

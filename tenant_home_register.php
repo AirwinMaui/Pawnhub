@@ -434,8 +434,14 @@ nav {
 @media (max-width: 580px) {
   .form-grid { grid-template-columns: 1fr; }
   .form-full { grid-column: auto; }
-  .card-body { padding: 24px 20px 28px; }
-  .card-head { padding: 24px 20px 20px; }
+  .card-body { padding: 20px 16px 24px; }
+  .card-head { padding: 20px 16px 18px; }
+  .role-grid { grid-template-columns: 1fr 1fr; }
+  .page-wrap { padding: 76px 12px 40px; }
+  nav { padding: 0 12px; }
+  .nav-name { font-size: .92rem; }
+}
+@media (max-width: 360px) {
   .role-grid { grid-template-columns: 1fr; }
 }
 </style>

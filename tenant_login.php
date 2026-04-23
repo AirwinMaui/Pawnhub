@@ -272,8 +272,8 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .nav-back { display: flex; align-items: center; gap: 6px; text-decoration: none; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); padding: 7px 14px; border-radius: 10px; transition: all .18s; }
 .nav-back:hover { color: #fff; background: rgba(255,255,255,0.18); }
 .nav-back .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
-.page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; }
-.panel { width: 460px; min-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0 40px; }
+.page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; padding-left: 16px; padding-right: 16px; }
+.panel { width: 100%; max-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0; }
 .card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
 .card-icon { margin-bottom: 12px; }
 .material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
@@ -314,8 +314,8 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .btxt { font-size: 0.63rem; font-weight: 600; color: rgba(255,255,255,0.82); text-transform: uppercase; letter-spacing: 0.1em; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.35} }
 @media (max-width: 560px) {
-  .panel { width: 100%; min-width: unset; padding: 0 16px; }
-  .card { padding: 26px 20px 22px; }
+  .nav { padding: 0 16px; }
+  .card { padding: 22px 18px 20px; }
   .card-title { font-size: 1.5rem; }
   .badge { display: none; }
 }

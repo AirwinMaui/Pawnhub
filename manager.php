@@ -708,6 +708,18 @@ tr:hover td{background:rgba(255,255,255,.02);}
 .qa-icon .material-symbols-outlined{font-size:16px;}
 .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
 @media(max-width:1000px){.stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
+  .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.7);}
+  .main{margin-left:0!important;width:100%;}
+  .topbar{padding:0 14px;}
+  #mob-menu-btn{display:flex!important;}
+  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;backdrop-filter:blur(2px);}
+  .mob-overlay.open{display:block;}
+  .content{padding:14px;}
+  .topbar-title{font-size:.85rem;}
+}
+@media(max-width:600px){.stats-row{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -840,7 +852,9 @@ $notif_count = count($notifs);
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <?php $titles=['dashboard'=>'Manager Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','void_requests'=>'Void Requests','team'=>'Staff & Cashier Team','invite'=>'Invite Team Member','audit'=>'Audit Logs','export'=>'Export to PDF','shop_items'=>'Shop Items','shop_categories'=>'Shop Categories','add_shop_item'=>'Add Shop Item','promos'=>'Promos & Announcements']; ?>
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:34px;height:34px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
+        <span class="material-symbols-outlined" style="font-size:18px;">menu</span>
+      </button>
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
@@ -2395,6 +2409,13 @@ function hideLogoutModal(){
   document.getElementById('logoutModal').style.display='none';
 }
 document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
+</script>
+<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
+<script>
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('mobile-open');
+  document.getElementById('mobOverlay').classList.toggle('open');
+}
 </script>
 </body>
 </html>
