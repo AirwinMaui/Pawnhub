@@ -170,12 +170,12 @@ body {
 }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
-  opacity: .55; filter: saturate(0.75) brightness(0.65);
+  opacity: .82; filter: saturate(0.9) brightness(0.82);
 }
 .bg-gradient {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 15%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.05) 0%, rgba(8,9,12,0.55) 45%, #08090c 82%);
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, #08090c 92%);
 }
 
 /* ── NAV ── */
