@@ -1137,6 +1137,77 @@ html { scroll-behavior: smooth; }
     backdrop-filter: blur(2px);
 }
 .sidebar-overlay.active { display: block; }
+
+/* ===== RESPONSIVE TABLES - Mobile/Tablet/iOS/Android ===== */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+table { width: 100%; border-collapse: collapse; min-width: 500px; }
+
+/* Horizontal scroll hint on mobile */
+@media (max-width: 768px) {
+    .table-wrap::before {
+        content: '← Swipe to see more →';
+        display: block;
+        text-align: center;
+        font-size: .68rem;
+        color: rgba(255,255,255,.3);
+        padding: 4px 0 6px;
+        letter-spacing: .04em;
+    }
+    table { font-size: .75rem !important; }
+    th, td { padding: 8px 10px !important; white-space: nowrap; }
+    /* Hide less important columns on small screens */
+    .hide-mobile { display: none !important; }
+    /* Compact action buttons */
+    .action-btn, button[style*="font-size"] { 
+        padding: 4px 8px !important; 
+        font-size: .7rem !important; 
+    }
+    /* Card-style stat boxes */
+    .stats-row { flex-direction: column !important; gap: 10px !important; }
+    .stat-card { width: 100% !important; }
+}
+@media (max-width: 480px) {
+    table { min-width: 420px; }
+    .card { padding: 14px 12px !important; }
+    .content { padding: 12px 10px !important; }
+}
+
+/* ===== DASHBOARD MOBILE LAYOUT ===== */
+:root { --sw: 240px; }
+
+/* Main area adjusts when sidebar hidden */
+@media (max-width: 900px) {
+    :root { --sw: 0px; }
+    .main { 
+        margin-left: 0 !important; 
+        width: 100% !important; 
+        max-width: 100vw !important;
+    }
+    .topbar { 
+        padding: 10px 14px !important; 
+        gap: 8px !important;
+    }
+    .topbar-title { font-size: 1rem !important; }
+    /* Show hamburger on mobile */
+    .ham { display: flex !important; }
+}
+
+/* Stat cards - grid to column on mobile */
+@media (max-width: 640px) {
+    /* Any flex row of stat cards */
+    div[style*="display:flex"][style*="gap"] > div[style*="flex:1"],
+    div[style*="display:flex"][style*="gap"] > div[style*="flex: 1"] {
+        flex: none !important;
+        width: 100% !important;
+    }
+    /* Grid cards */
+    div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr 1fr !important;
+    }
+    .content { padding: 10px 8px !important; }
+    /* Topbar actions - hide less important ones */
+    .topbar-actions .hide-sm { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -1284,7 +1355,7 @@ html { scroll-behavior: smooth; }
         <div class="card">
           <div class="card-hdr"><span class="card-title">🕐 Recent Tenants</span><a href="?page=tenants" style="font-size:.74rem;color:var(--blue-acc);font-weight:600;text-decoration:none;">View All →</a></div>
           <?php if(empty($tenants)):?><div class="empty-state"><p>No tenants yet.</p></div>
-          <?php else:?><div style="overflow-x:auto;"><table><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Users</th><th>Date</th></tr></thead><tbody>
+          <?php else:?><div class="table-wrap"><table><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Users</th><th>Date</th></tr></thead><tbody>
           <?php foreach(array_slice($tenants,0,6) as $t):?>
           <tr><td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td><td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td><td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td><td><?=$t['user_count']?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td></tr>
           <?php endforeach;?></tbody></table></div><?php endif;?>
@@ -1311,7 +1382,7 @@ html { scroll-behavior: smooth; }
       <?php $pts=array_filter($tenants,fn($t)=>$t['status']==='pending');if(!empty($pts)):?>
       <div class="card" style="border-color:#fde68a;">
         <div class="card-hdr"><span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?=count($pts)?>)</span></div>
-        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Payment</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Payment</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
         <?php foreach($pts as $t):
           $pmt_status = $t['payment_status'] ?? null;
           $is_free    = ($t['plan'] === 'Starter');
@@ -1339,7 +1410,7 @@ html { scroll-behavior: smooth; }
       </div>
       <?php endif;?>
 
-      <div class="card" style="overflow-x:auto;">
+      <div class="card">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
         <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
         <?php else:?><table style="font-size:.79rem;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
@@ -1544,7 +1615,7 @@ html { scroll-behavior: smooth; }
               <?php endif; ?>
 
               <!-- Amount + proration row -->
-              <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;">
+              <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;;flex-wrap:wrap">
                 <span style="font-size:.8rem;color:var(--text-m);">💰 <strong>₱<?= number_format((float)$pr['amount'], 2) ?></strong></span>
                 <?php if ($pr_proration > 0): ?>
                 <span style="font-size:.78rem;color:#16a34a;">✓ Proration credit: ₱<?= number_format($pr_proration, 2) ?> applied</span>
@@ -1556,7 +1627,7 @@ html { scroll-behavior: smooth; }
               </div>
 
               <!-- Date + notes -->
-              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+              <div style="display:flex;gap:16px;flex-wrap:wrap;;flex-wrap:wrap">
                 <span style="font-size:.74rem;color:var(--text-dim);">🕐 <?= date('M d, Y h:i A', strtotime($pr['requested_at'])) ?></span>
                 <span style="font-size:.74rem;color:var(--text-dim);">📅 Current expiry: <?= $pr['subscription_end'] ? date('M d, Y', strtotime($pr['subscription_end'])) : 'None' ?></span>
               </div>
@@ -1565,7 +1636,7 @@ html { scroll-behavior: smooth; }
               <?php endif; ?>
 
             </div>
-            <div style="display:flex;gap:8px;flex-shrink:0;align-items:flex-start;">
+            <div style="display:flex;gap:8px;flex-shrink:0;align-items:flex-start;;flex-wrap:wrap">
               <form method="POST" action="" style="margin:0;">
                 <input type="hidden" name="action" value="approve_sub_renewal"/>
                 <input type="hidden" name="renewal_id" value="<?= $pr['id'] ?>"/>
@@ -1606,7 +1677,7 @@ html { scroll-behavior: smooth; }
                   <label class="flabel">Reason for Rejection</label>
                   <textarea name="reject_notes" class="finput" rows="3" style="resize:vertical;" placeholder="e.g. Payment not verified, invalid reference number..."></textarea>
                 </div>
-                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <div style="display:flex;gap:10px;justify-content:flex-end;;flex-wrap:wrap">
                   <button type="button" class="btn-sm" onclick="document.getElementById('reject-modal-<?= $pr['id'] ?>').classList.remove('open')">Cancel</button>
                   <button type="submit" class="btn-sm btn-danger">Confirm Reject</button>
                 </div>
@@ -1625,8 +1696,7 @@ html { scroll-behavior: smooth; }
           <input type="text" id="sub-search" placeholder="Search tenant..." oninput="filterSubTable(this.value)"
             style="border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;padding:7px 12px;outline:none;width:200px;"/>
         </div>
-        <div style="overflow-x:auto;">
-          <table id="sub-table">
+        <div class="table-wrap"><table id="sub-table">
             <thead>
               <tr>
                 <th>Business</th><th>Plan</th><th>Start</th><th>Expiry</th><th>Days Left</th><th>Status</th><th>Actions</th>
@@ -1693,8 +1763,7 @@ html { scroll-behavior: smooth; }
       <?php if (!empty($sub_renewals)): ?>
       <div class="card" style="margin-top:8px;">
         <div class="card-hdr"><span class="card-title">📋 All Renewal Requests</span></div>
-        <div style="overflow-x:auto;">
-          <table>
+        <div class="table-wrap"><table>
             <thead>
               <tr>
                 <?php foreach (['Business','Plan','Billing','Method','Ref #','Amount','Status','Requested','Reviewed'] as $th): ?>
@@ -1758,7 +1827,7 @@ html { scroll-behavior: smooth; }
                 <option value="Enterprise">Enterprise</option>
               </select>
             </div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <div style="display:flex;gap:10px;justify-content:flex-end;;flex-wrap:wrap">
               <button type="button" class="btn-sm" onclick="document.getElementById('set-sub-modal').classList.remove('open')">Cancel</button>
               <button type="submit" class="btn-sm btn-primary">Save</button>
             </div>
@@ -1798,7 +1867,7 @@ html { scroll-behavior: smooth; }
 
     <!-- ══ REPORTS ══════════════════════════════════════════════ -->
     <?php elseif($active_page==='reports'): ?>
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;;flex-wrap:wrap">
         <?php foreach(['tenant_activity'=>['🏢 Tenant Activity','#2563eb','#eff6ff'],'user_registration'=>['👤 User Registration','#16a34a','#f0fdf4'],'usage_statistics'=>['📊 Usage Statistics','#7c3aed','#f3e8ff']] as $rk=>[$rl,$rc2,$rb]):?>
         <a href="?page=reports&report_type=<?=$rk?>&date_from=<?=$filter_date_from?>&date_to=<?=$filter_date_to?>" style="padding:9px 18px;border-radius:9px;font-size:.82rem;font-weight:700;text-decoration:none;border:2px solid <?=$report_type===$rk?$rc2:'var(--border)'?>;background:<?=$report_type===$rk?$rb:'#fff'?>;color:<?=$report_type===$rk?$rc2:'var(--text-m)'?>;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;"><?=$rl?></a>
         <?php endforeach;?>
@@ -1830,7 +1899,7 @@ html { scroll-behavior: smooth; }
       <?php if($report_type==='tenant_activity'):
         $rt=count($report_data);$ru=array_sum(array_column($report_data,'user_count'));$rat=count(array_filter($report_data,fn($r)=>$r['status']==='active'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Tenants</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rat?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num"><?=$ru?></div><div class="summary-lbl">Total Users</div></div></div>
-        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">🏢 Tenant Activity Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
+        <div class="card"><div class="card-hdr"><span class="card-title">🏢 Tenant Activity Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Business</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><?=htmlspecialchars($r['owner_name'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['user_count']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
@@ -1839,7 +1908,7 @@ html { scroll-behavior: smooth; }
       <?php elseif($report_type==='user_registration'):
         $rt=count($report_data);$ra=count(array_filter($report_data,fn($r)=>$r['status']==='approved'));$rp=count(array_filter($report_data,fn($r)=>$r['status']==='pending'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Registrations</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$ra?></div><div class="summary-lbl">Approved</div></div><div class="summary-item"><div class="summary-num" style="color:var(--warning);"><?=$rp?></div><div class="summary-lbl">Pending</div></div></div>
-        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">👤 User Registration Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
+        <div class="card"><div class="card-hdr"><span class="card-title">👤 User Registration Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Tenant</th><th>Status</th><th>Suspended</th><th>Registered</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['fullname'])?></td><td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?=htmlspecialchars($r['username'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']]??'b-gray'?>"><?=ucfirst($r['role'])?></span></td><td style="font-size:.78rem;"><?=htmlspecialchars($r['business_name']??'—')?></td><td><span class="badge <?=$r['status']==='approved'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($r['status'])?></span></td><td><?=$r['is_suspended']?'<span class="badge b-red">Yes</span>':'<span class="badge b-green">No</span>'?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
@@ -1848,7 +1917,7 @@ html { scroll-behavior: smooth; }
       <?php elseif($report_type==='usage_statistics'):
         $rtu=array_sum(array_column($report_data,'total_users'));$rau=array_sum(array_column($report_data,'active_users'));$rsu=array_sum(array_column($report_data,'suspended_users'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rtu?></div><div class="summary-lbl">Total Users</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rau?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num" style="color:var(--danger);"><?=$rsu?></div><div class="summary-lbl">Suspended</div></div></div>
-        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span></div>
+        <div class="card"><div class="card-hdr"><span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['total_users']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td><span class="badge b-green"><?=$r['active_users']?></span></td><td><span class="badge <?=$r['suspended_users']>0?'b-red':'b-gray'?>"><?=$r['suspended_users']?></span></td></tr><?php endforeach;?>
@@ -1904,7 +1973,7 @@ html { scroll-behavior: smooth; }
       </div>
 
       <div class="two-col">
-        <div class="card" style="overflow-x:auto;">
+        <div class="card">
           <div class="card-hdr"><span class="card-title">🏢 Subscription Payments Per Tenant</span></div>
           <?php if(empty($sales_per_tenant)):?><div class="empty-state"><p>No data.</p></div>
           <?php else:?><table><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Renewals</th><th>Amount Paid (₱)</th><th>Avg (₱)</th><th>Last Payment</th></tr></thead><tbody>
@@ -1931,7 +2000,7 @@ html { scroll-behavior: smooth; }
         </div>
       </div>
 
-      <div class="card" style="overflow-x:auto;">
+      <div class="card">
         <div class="card-hdr"><span class="card-title">📋 Subscription Payment History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
         <?php if(empty($tx_history)):?><div class="empty-state"><p>No subscription payments found for the selected period.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Payment Method</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
@@ -2030,8 +2099,7 @@ html { scroll-behavior: smooth; }
                 $sa_list = $pdo->query("SELECT id, fullname, username, email, created_at FROM users WHERE role = 'super_admin' AND status = 'approved' ORDER BY created_at ASC")->fetchAll();
             } catch (PDOException $e) { $sa_list = []; }
           ?>
-          <div style="overflow-x:auto;">
-            <table>
+          <div class="table-wrap"><table>
               <thead>
                 <tr><th>#</th><th>Full Name</th><th>Username</th><th>Email</th><th>Date Added</th><th>Action</th></tr>
               </thead>
@@ -2071,8 +2139,7 @@ html { scroll-behavior: smooth; }
 
         <div class="card" style="margin-bottom:16px;">
           <div class="card-hdr"><span class="card-title">👤 User Role Permissions</span></div>
-          <div style="overflow-x:auto;">
-            <table>
+          <div class="table-wrap"><table>
               <thead><tr><th>Permission</th><th style="text-align:center;">Super Admin</th><th style="text-align:center;">Admin (Owner)</th><th style="text-align:center;">Manager</th><th style="text-align:center;">Staff</th><th style="text-align:center;">Cashier</th></tr></thead>
               <tbody>
                 <?php
@@ -2135,7 +2202,7 @@ html { scroll-behavior: smooth; }
         <div class="summary-item"><div class="summary-num" style="font-size:.85rem;color:var(--text-dim);"><?=htmlspecialchars($audit_date_from)?> — <?=htmlspecialchars($audit_date_to)?></div><div class="summary-lbl">Date Range</div></div>
       </div>
 
-      <div class="card" style="overflow-x:auto;">
+      <div class="card">
         <div class="card-hdr"><span class="card-title">📋 Audit Logs</span><span style="font-size:.74rem;color:var(--text-dim);">Showing <?=count($audit_logs)?> of <?=number_format($audit_total)?> entries</span></div>
         <?php if(empty($audit_logs)):?>
           <div class="empty-state">
@@ -2184,7 +2251,7 @@ html { scroll-behavior: smooth; }
 
     <!-- ══ INVITATIONS PAGE ════════════════════════════════════ -->
     <?php elseif($active_page==='invitations'): ?>
-      <div class="card" style="overflow-x:auto;">
+      <div class="card">
         <div class="card-hdr">
           <span class="card-title">📧 Email Invitations</span>
           <span style="font-size:.75rem;color:var(--text-dim);"><?=count($invitations)?> total · <?=$pending_inv?> pending</span>

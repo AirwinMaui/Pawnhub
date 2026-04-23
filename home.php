@@ -81,11 +81,29 @@ tailwind.config = {
     .asymmetric-grid { grid-template-columns: 1fr; }
 }
 .bg-pawn-shop {
-    background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.75)),
-        url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVdOMy67RcI3OmEXQ5Ob4N9qbUXkHC8UCa3Ni6E2dPvn8N_9Kg_FuGSOcP4mhYkmmhNphJ8vQukLbFjfnVrv-wy716m8LpTRmRrql1K07LpfXVuqMeCMwQRftqZXZWikKdGhSBaHJEhrAn431mN9EQqELqupcBMhVrkknDFPIyVKW_l8bfki8PfvWSkOTQ129Z5jOMGF5My-stQnfPndc_y1X0jUHBEmlH0AVE04q2vpa87PHKNSxAOHabM4n8c9W6UcgA91Cs-1c');
-    
+    position: relative;
+    background: #0a0f1e;
+    min-height: 100vh;
+}
+/* Pseudo-element background — works on ALL browsers including iOS Safari */
+.bg-pawn-shop::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVdOMy67RcI3OmEXQ5Ob4N9qbUXkHC8UCa3Ni6E2dPvn8N_9Kg_FuGSOcP4mhYkmmhNphJ8vQukLbFjfnVrv-wy716m8LpTRmRrql1K07LpfXVuqMeCMwQRftqZXZWikKdGhSBaHJEhrAn431mN9EQqELqupcBMhVrkknDFPIyVKW_l8bfki8PfvWSkOTQ129Z5jOMGF5My-stQnfPndc_y1X0jUHBEmlH0AVE04q2vpa87PHKNSxAOHabM4n8c9W6UcgA91Cs-1c');
     background-size: cover;
     background-position: center;
+    z-index: -2;
+}
+/* Dark overlay on top of background image */
+.bg-pawn-shop::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(rgba(0,0,0,0.68), rgba(0,0,0,0.78));
+    z-index: -1;
 }
 section[id] { scroll-margin-top: 80px; }
 #mobile-menu { display: none; }

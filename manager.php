@@ -755,6 +755,77 @@ html { scroll-behavior: smooth; }
     backdrop-filter: blur(2px);
 }
 .sidebar-overlay.active { display: block; }
+
+/* ===== RESPONSIVE TABLES - Mobile/Tablet/iOS/Android ===== */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+table { width: 100%; border-collapse: collapse; min-width: 500px; }
+
+/* Horizontal scroll hint on mobile */
+@media (max-width: 768px) {
+    .table-wrap::before {
+        content: '← Swipe to see more →';
+        display: block;
+        text-align: center;
+        font-size: .68rem;
+        color: rgba(255,255,255,.3);
+        padding: 4px 0 6px;
+        letter-spacing: .04em;
+    }
+    table { font-size: .75rem !important; }
+    th, td { padding: 8px 10px !important; white-space: nowrap; }
+    /* Hide less important columns on small screens */
+    .hide-mobile { display: none !important; }
+    /* Compact action buttons */
+    .action-btn, button[style*="font-size"] { 
+        padding: 4px 8px !important; 
+        font-size: .7rem !important; 
+    }
+    /* Card-style stat boxes */
+    .stats-row { flex-direction: column !important; gap: 10px !important; }
+    .stat-card { width: 100% !important; }
+}
+@media (max-width: 480px) {
+    table { min-width: 420px; }
+    .card { padding: 14px 12px !important; }
+    .content { padding: 12px 10px !important; }
+}
+
+/* ===== DASHBOARD MOBILE LAYOUT ===== */
+:root { --sw: 240px; }
+
+/* Main area adjusts when sidebar hidden */
+@media (max-width: 900px) {
+    :root { --sw: 0px; }
+    .main { 
+        margin-left: 0 !important; 
+        width: 100% !important; 
+        max-width: 100vw !important;
+    }
+    .topbar { 
+        padding: 10px 14px !important; 
+        gap: 8px !important;
+    }
+    .topbar-title { font-size: 1rem !important; }
+    /* Show hamburger on mobile */
+    .ham { display: flex !important; }
+}
+
+/* Stat cards - grid to column on mobile */
+@media (max-width: 640px) {
+    /* Any flex row of stat cards */
+    div[style*="display:flex"][style*="gap"] > div[style*="flex:1"],
+    div[style*="display:flex"][style*="gap"] > div[style*="flex: 1"] {
+        flex: none !important;
+        width: 100% !important;
+    }
+    /* Grid cards */
+    div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr 1fr !important;
+    }
+    .content { padding: 10px 8px !important; }
+    /* Topbar actions - hide less important ones */
+    .topbar-actions .hide-sm { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -986,7 +1057,7 @@ $notif_count = count($notifs);
       </div>
       <div class="stat-card" style="grid-column:span 2;">
         <div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">storefront</span></div></div>
-        <div style="display:flex;gap:24px;">
+        <div style="display:flex;gap:24px;;flex-wrap:wrap">
           <div><div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div></div>
           <div><div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured</div></div>
         </div>
@@ -1036,7 +1107,7 @@ $notif_count = count($notifs);
         <?php if(empty($all_tickets)):?>
           <div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No tickets yet.</p></div>
         <?php else:?>
-        <div style="overflow-x:auto;"><table><thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th>Loan</th><th>Status</th><th>Maturity</th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th>Loan</th><th>Status</th><th>Maturity</th></tr></thead><tbody>
         <?php foreach(array_slice($all_tickets,0,8) as $t):
           $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
         <tr>
@@ -1054,7 +1125,7 @@ $notif_count = count($notifs);
 
   <?php elseif($active_page==='tickets'): ?>
     <div class="page-hdr"><div><h2>Pawn Tickets</h2><p><?=count($all_tickets)?> records</p></div></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($all_tickets)):?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No tickets yet.</p></div>
       <?php else:?>
       <table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th></tr></thead><tbody>
@@ -1082,7 +1153,7 @@ $notif_count = count($notifs);
       }
     ?>
     <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?>
       <table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Registered</th><th>Action</th></tr></thead><tbody>
@@ -1198,7 +1269,7 @@ $notif_count = count($notifs);
             <td style="font-size:.72rem;color:rgba(255,255,255,.3);">${t.created_at?t.created_at.substring(0,10):'—'}</td>
           </tr>`;
         }).join('');
-        ticketsHtml = `<div style="margin-top:22px;"><div style="font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:10px;">Pawn Ticket History (${tickets.length})</div><div style="overflow-x:auto;"><table><thead><tr><th>Ticket</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+        ticketsHtml = `<div style="margin-top:22px;"><div style="font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:10px;">Pawn Ticket History (${tickets.length})</div><div class="table-wrap"><table><thead><tr><th>Ticket</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
       } else {
         ticketsHtml = `<div style="margin-top:22px;text-align:center;padding:18px 0;color:rgba(255,255,255,.25);font-size:.82rem;"><span class="material-symbols-outlined" style="display:block;font-size:32px;margin-bottom:6px;opacity:.3;">receipt_long</span>No pawn tickets on record.</div>`;
       }
@@ -1241,7 +1312,7 @@ $notif_count = count($notifs);
 
   <?php elseif($active_page==='void_requests'): ?>
     <div class="page-hdr"><div><h2>Void Requests</h2><p>Approve or reject staff void requests</p></div></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($void_reqs)):?><div class="empty-state"><span class="material-symbols-outlined">cancel_presentation</span><p>No void requests yet.</p></div>
       <?php else:?>
       <table><thead><tr><th>Ticket</th><th>Requested By</th><th>Reason</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody>
@@ -1279,7 +1350,7 @@ $notif_count = count($notifs);
         <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Member
       </button>
     </div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($my_team)):?>
         <div class="empty-state">
           <span class="material-symbols-outlined">badge</span>
@@ -1357,7 +1428,7 @@ $notif_count = count($notifs);
 
   <?php elseif($active_page==='audit'): ?>
     <div class="page-hdr"><div><h2>Audit Logs</h2><p>Activity logs for your branch team</p></div></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($audit_logs)):?>
         <div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,.3);">
           <span class="material-symbols-outlined" style="font-size:3rem;display:block;margin-bottom:10px;">manage_search</span>
@@ -1389,7 +1460,7 @@ $notif_count = count($notifs);
   <?php elseif($active_page==='shop_items'): ?>
     <div class="page-hdr">
       <div><h2>Shop Items</h2><p><?=$shop_visible_count?> visible · <?=count($shop_items)?> total items</p></div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;;flex-wrap:wrap">
         <a href="?page=shop_categories" class="btn-sm">
           <span class="material-symbols-outlined" style="font-size:15px;">category</span>Categories
         </a>
@@ -1402,8 +1473,7 @@ $notif_count = count($notifs);
     <?php if(empty($shop_items)): ?>
       <div class="empty-state"><span class="material-symbols-outlined">storefront</span><p>No items in inventory yet. Items appear here once staff creates pawn tickets.</p></div>
     <?php else: ?>
-    <div class="card" style="overflow-x:auto;">
-      <table>
+    <div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Photo</th><th>Item</th><th>Category</th><th>Appraisal</th><th>Display Price</th><th>Stock</th><th>Featured</th><th>Visible</th><th>Action</th></tr></thead>
         <tbody>
         <?php foreach($shop_items as $item): ?>
@@ -1576,8 +1646,7 @@ $notif_count = count($notifs);
     <?php if(empty($shop_categories_list)): ?>
       <div class="empty-state"><span class="material-symbols-outlined">category</span><p>No categories yet. Add one to organize your shop items.</p></div>
     <?php else: ?>
-    <div class="card" style="overflow-x:auto;">
-      <table>
+    <div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Name</th><th>Icon</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
         <tbody>
         <?php foreach($shop_categories_list as $cat): ?>
@@ -1586,7 +1655,7 @@ $notif_count = count($notifs);
           <td style="font-family:monospace;font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($cat['icon']??'—')?></td>
           <td><span class="badge <?=$cat['is_active']?'b-green':'b-gray'?>"><?=$cat['is_active']?'Active':'Inactive'?></span></td>
           <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($cat['created_at']))?></td>
-          <td style="display:flex;gap:6px;">
+          <td style="display:flex;gap:6px;;flex-wrap:wrap">
             <button class="btn-sm btn-edit-cat" style="font-size:.7rem;"
               data-id="<?=$cat['id']?>"
               data-name="<?=htmlspecialchars($cat['name'],ENT_QUOTES)?>"

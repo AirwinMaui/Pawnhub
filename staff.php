@@ -402,6 +402,77 @@ html { scroll-behavior: smooth; }
     backdrop-filter: blur(2px);
 }
 .sidebar-overlay.active { display: block; }
+
+/* ===== RESPONSIVE TABLES - Mobile/Tablet/iOS/Android ===== */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+table { width: 100%; border-collapse: collapse; min-width: 500px; }
+
+/* Horizontal scroll hint on mobile */
+@media (max-width: 768px) {
+    .table-wrap::before {
+        content: '← Swipe to see more →';
+        display: block;
+        text-align: center;
+        font-size: .68rem;
+        color: rgba(255,255,255,.3);
+        padding: 4px 0 6px;
+        letter-spacing: .04em;
+    }
+    table { font-size: .75rem !important; }
+    th, td { padding: 8px 10px !important; white-space: nowrap; }
+    /* Hide less important columns on small screens */
+    .hide-mobile { display: none !important; }
+    /* Compact action buttons */
+    .action-btn, button[style*="font-size"] { 
+        padding: 4px 8px !important; 
+        font-size: .7rem !important; 
+    }
+    /* Card-style stat boxes */
+    .stats-row { flex-direction: column !important; gap: 10px !important; }
+    .stat-card { width: 100% !important; }
+}
+@media (max-width: 480px) {
+    table { min-width: 420px; }
+    .card { padding: 14px 12px !important; }
+    .content { padding: 12px 10px !important; }
+}
+
+/* ===== DASHBOARD MOBILE LAYOUT ===== */
+:root { --sw: 240px; }
+
+/* Main area adjusts when sidebar hidden */
+@media (max-width: 900px) {
+    :root { --sw: 0px; }
+    .main { 
+        margin-left: 0 !important; 
+        width: 100% !important; 
+        max-width: 100vw !important;
+    }
+    .topbar { 
+        padding: 10px 14px !important; 
+        gap: 8px !important;
+    }
+    .topbar-title { font-size: 1rem !important; }
+    /* Show hamburger on mobile */
+    .ham { display: flex !important; }
+}
+
+/* Stat cards - grid to column on mobile */
+@media (max-width: 640px) {
+    /* Any flex row of stat cards */
+    div[style*="display:flex"][style*="gap"] > div[style*="flex:1"],
+    div[style*="display:flex"][style*="gap"] > div[style*="flex: 1"] {
+        flex: none !important;
+        width: 100% !important;
+    }
+    /* Grid cards */
+    div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr 1fr !important;
+    }
+    .content { padding: 10px 8px !important; }
+    /* Topbar actions - hide less important ones */
+    .topbar-actions .hide-sm { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -601,7 +672,7 @@ $notif_count = count($notifs);
         </div>
         <?php if(empty($my_active)): ?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No active tickets yet.</p></div>
         <?php else: ?>
-        <div style="overflow-x:auto;"><table><thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th>Loan</th><th>Maturity</th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th>Loan</th><th>Maturity</th></tr></thead><tbody>
         <?php foreach(array_slice($my_active,0,6) as $t): ?>
         <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()?'#fca5a5':'rgba(255,255,255,.35)'?>;"><?=$t['maturity_date']?></td></tr>
         <?php endforeach;?></tbody></table></div>
@@ -705,7 +776,7 @@ $notif_count = count($notifs);
 
   <?php elseif($active_page==='tickets'): ?>
     <div class="page-hdr"><div><h2>All Tickets</h2><p><?=count($all_tickets)?> records</p></div><a href="?page=create_ticket" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ New Ticket</a></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($all_tickets)): ?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No tickets yet.</p></div>
       <?php else: ?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Action</th></tr></thead><tbody>
       <?php foreach($all_tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
@@ -716,7 +787,7 @@ $notif_count = count($notifs);
 
   <?php elseif($active_page==='customers'): ?>
     <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div><a href="?page=register_customer" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ Register</a></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>ID Type</th><th>ID Photo</th><th>Registered</th></tr></thead><tbody>
       <?php foreach($customers as $c):?>
@@ -823,7 +894,7 @@ $notif_count = count($notifs);
 
   <?php elseif($active_page==='void_requests'): ?>
     <div class="page-hdr"><div><h2>My Void Requests</h2><p>Void requests you've submitted</p></div></div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card">
       <?php if(empty($my_void_reqs)):?><div class="empty-state"><span class="material-symbols-outlined">cancel_presentation</span><p>No void requests yet.</p></div>
       <?php else:?><table><thead><tr><th>Ticket</th><th>Reason</th><th>Status</th><th>Submitted</th><th>Decided</th></tr></thead><tbody>
       <?php foreach($my_void_reqs as $v):?>

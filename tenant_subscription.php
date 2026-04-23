@@ -533,6 +533,18 @@ html { scroll-behavior: smooth; }
     }
     .page { padding: 0 !important; align-items: flex-start !important; }
 }
+
+/* ===== RESPONSIVE TABLES ===== */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+table { width: 100%; border-collapse: collapse; min-width: 480px; }
+@media (max-width: 768px) {
+    .table-wrap::before { content: '← Swipe →'; display: block; text-align: center; font-size: .65rem; color: rgba(255,255,255,.3); padding: 3px 0; }
+    table { font-size: .74rem !important; }
+    th, td { padding: 7px 9px !important; white-space: nowrap; }
+}
+@media (max-width: 480px) {
+    .content, .page-content { padding: 10px 8px !important; }
+}
 </style>
 </head>
 <body>
@@ -1216,8 +1228,7 @@ html { scroll-behavior: smooth; }
     <?php if (!empty($renewal_history)): ?>
     <div class="card">
       <div class="card-label">Renewal &amp; Upgrade History</div>
-      <div style="overflow-x:auto;">
-        <table class="history-table">
+      <div class="table-wrap"><table class="history-table">
           <thead>
             <tr><th>Date</th><th>Type</th><th>Plan</th><th>Billing</th><th>Method</th><th>Amount</th><th>Status</th><th>New Expiry</th></tr>
           </thead>
