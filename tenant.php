@@ -431,13 +431,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .bg-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(15,23,42,.95) 0%,rgba(15,23,42,.75) 60%,rgba(30,58,138,.15) 100%);}
 
 /* ── SIDEBAR ── */
-.sidebar{
-  width:var(--sw);min-height:100vh;
+.sidebar{isolation:isolate;
+  width:var(--sw);min-height:100dvh;
   background:rgba(10,14,26,0.8);
   backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
   border-right:1px solid rgba(255,255,255,0.06);
   display:flex;flex-direction:column;
-  position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
+  position:fixed;left:0;top:0;bottom:0;z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch;height:100dvh;
 }
 .sb-brand{padding:22px 18px 16px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:11px;}
 .sb-logo{width:40px;height:40px;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#1e3a8a));border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 4px 16px rgba(37,99,235,.4);}
@@ -449,7 +449,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#8b5cf6));display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff;flex-shrink:0;}
 .sb-uname{font-size:.8rem;font-weight:700;color:#fff;}
 .sb-urole{font-size:.62rem;color:rgba(255,255,255,.35);margin-top:1px;}
-.sb-nav{flex:1;padding:10px 0;}
+.sb-nav{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 0;;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.2);padding:12px 16px 4px;}
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;cursor:pointer;color:rgba(255,255,255,.45);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
 .sb-item:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.9);}
@@ -457,13 +457,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;opacity:.7;}
 .sb-item.active .material-symbols-outlined{opacity:1;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:100px;}
-.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);}
+.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);;flex-shrink:0;position:sticky;bottom:0;background:inherit;}
 .sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:rgba(255,255,255,.3);text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
 .sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
 /* ── MAIN ── */
-.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;position:relative;z-index:10;height:100vh;overflow-y:auto;}
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;height:100vh;overflow-y:auto;}
 .topbar{height:64px;padding:0 28px;background:rgba(10,14,26,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
 .topbar-title{font-size:1rem;font-weight:700;color:#fff;letter-spacing:-.02em;}
 .tenant-chip{font-size:.69rem;font-weight:700;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);padding:4px 12px;border-radius:100px;border:1px solid rgba(255,255,255,.12);}
@@ -604,12 +604,12 @@ tr:hover td{background:rgba(255,255,255,.03);}
 
 @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(2,1fr);}.theme-grid{grid-template-columns:1fr;}}
 @media(max-width:768px){
-  .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
-  .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.6);}
+  .sidebar{isolation:isolate;transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);box-shadow:none;height:100dvh!important;min-height:100dvh!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}
+  .sidebar.mobile-open{transform:translateX(0)!important;box-shadow:6px 0 40px rgba(0,0,0,.8)!important;}
   .main{margin-left:0!important;width:100%;}
   .topbar{padding:0 14px;}
   #mob-menu-btn{display:flex!important;}
-  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99;backdrop-filter:blur(2px);}
+  .mob-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:9998;}
   .mob-overlay.open{display:block;}
   .content{padding:14px;}
   .topbar-right .topbar-user-name,.topbar-right .topbar-user-role{display:none;}
@@ -720,6 +720,43 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
     .content { padding: 10px 8px !important; }
     /* Topbar actions - hide less important ones */
     .topbar-actions .hide-sm { display: none !important; }
+}
+
+@media(max-width:768px){
+  .main{z-index:auto!important;position:static!important;}
+  .sidebar{z-index:9999!important;isolation:isolate;}
+  .mob-overlay{z-index:9998!important;}
+  .topbar{z-index:9997!important;position:sticky!important;}
+}
+
+/* iOS/Android sidebar solid background fix */
+@media(max-width:768px){
+  .sidebar{
+    background:#0d1117 !important;
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+    height:100dvh !important;
+    height:-webkit-fill-available !important;
+    min-height:100dvh !important;
+    overflow-y:auto !important;
+    -webkit-overflow-scrolling:touch !important;
+    display:flex !important;
+    flex-direction:column !important;
+  }
+  .sb-nav{
+    flex:1 !important;
+    overflow-y:auto !important;
+    -webkit-overflow-scrolling:touch !important;
+    min-height:0 !important;
+  }
+  .sb-footer{
+    flex-shrink:0 !important;
+    position:sticky !important;
+    bottom:0 !important;
+    background:#0d1117 !important;
+    z-index:1 !important;
+    padding-bottom:max(12px,env(safe-area-inset-bottom)) !important;
+  }
 }
 </style>
 </head>
@@ -2002,8 +2039,25 @@ document.getElementById('logoutModal').addEventListener('click',function(e){if(e
 <div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
 <script>
 function toggleSidebar(){
-  document.querySelector('.sidebar').classList.toggle('mobile-open');
-  document.getElementById('mobOverlay').classList.toggle('open');
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('mobOverlay');
+  if(!sb) return;
+  var isOpen = sb.classList.contains('mobile-open');
+  if(isOpen){
+    sb.classList.remove('mobile-open');
+    if(ov) ov.classList.remove('open');
+    document.body.style.overflow = '';
+    document.body.style.height = '';
+    document.documentElement.style.overflow = '';
+  } else {
+    sb.classList.add('mobile-open');
+    if(ov) ov.classList.add('open');
+    // Lock scroll on both body and html for iOS AND Android
+    document.body.style.overflow = 'hidden';
+    document.body.style.height = '100%';
+    document.documentElement.style.overflow = 'hidden';
+  }
+}
 }
 </script>
 <script>
@@ -2038,6 +2092,24 @@ window.addEventListener('orientationchange', function() { setTimeout(setVH, 200)
         });
     });
 })();
+
+
+});
+
+// Close sidebar on nav tap (mobile)
+document.querySelectorAll('.sb-item, .sb-logout').forEach(function(el){
+  el.addEventListener('click', function(){
+    if(window.innerWidth <= 768){
+      var sb = document.querySelector('.sidebar');
+      var ov = document.getElementById('mobOverlay');
+      if(sb) sb.classList.remove('mobile-open');
+      if(ov) ov.classList.remove('open');
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+      document.documentElement.style.overflow = '';
+    }
+  });
+});
 </script>
 </body>
 </html>
