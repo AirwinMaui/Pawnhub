@@ -25,7 +25,7 @@ try {
 <html class="scroll-smooth" lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
 <title>PawnHub | The Digital Atelier for Modern Pawnshops</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
@@ -83,19 +83,37 @@ tailwind.config = {
 .bg-pawn-shop {
     background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.75)),
         url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVdOMy67RcI3OmEXQ5Ob4N9qbUXkHC8UCa3Ni6E2dPvn8N_9Kg_FuGSOcP4mhYkmmhNphJ8vQukLbFjfnVrv-wy716m8LpTRmRrql1K07LpfXVuqMeCMwQRftqZXZWikKdGhSBaHJEhrAn431mN9EQqELqupcBMhVrkknDFPIyVKW_l8bfki8PfvWSkOTQ129Z5jOMGF5My-stQnfPndc_y1X0jUHBEmlH0AVE04q2vpa87PHKNSxAOHabM4n8c9W6UcgA91Cs-1c');
-    background-attachment: fixed;
+    
     background-size: cover;
     background-position: center;
 }
 section[id] { scroll-margin-top: 80px; }
 #mobile-menu { display: none; }
 #mobile-menu.open { display: flex; }
+
+/* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
+* { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+/* iOS safe area support */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* iOS overflow scroll */
+.overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
+/* Prevent iOS zoom on input focus */
+input, select, textarea { font-size: max(16px, 1rem) !important; }
+/* Mobile sidebar fix */
+@media (max-width: 768px) {
+  .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
+  .main-content  { margin-left: 0 !important; width: 100% !important; }
+}
+/* Smooth scrolling on mobile */
+html { scroll-behavior: smooth; }
 </style>
 </head>
 <body class="bg-pawn-shop text-white font-body">
 
 <!-- NAV -->
-<nav class="fixed top-0 w-full z-50 glass-effect border-none shadow-none">
+<nav class="fixed top-0 w-full z-50 glass-effect border-none shadow-none" style="padding-top: env(safe-area-inset-top);">
   <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
     <a href="home.php" class="flex items-center gap-3">
       <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -130,14 +148,14 @@ section[id] { scroll-margin-top: 80px; }
   </div>
 </nav>
 
-<main class="pt-20">
+<main class="pt-20" style="padding-top: calc(5rem + env(safe-area-inset-top));">
 
 <!-- HERO -->
-<section class="relative min-h-[90vh] flex items-center overflow-hidden px-6">
+<section class="relative min-h-screen md:min-h-[90vh] flex items-center overflow-hidden px-6">
   <div class="max-w-7xl mx-auto w-full relative z-10 grid asymmetric-grid gap-12 items-center">
     <div>
       <span class="inline-block px-4 py-1.5 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold tracking-widest uppercase mb-8 border border-blue-500/30">Next-Gen Pawnshop Management</span>
-      <h1 class="text-5xl md:text-7xl font-bold tracking-tighter text-white mb-8 leading-[1.1]">
+      <h1 class="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tighter text-white mb-8 leading-[1.1]">
         The Future of <br/><span class="text-blue-400">Pawn is Here.</span>
       </h1>
       <p class="text-xl text-white/80 max-w-xl mb-10 leading-relaxed">Empower your pawnshop business with enterprise-grade security, real-time analytics, and multi-branch management.</p>

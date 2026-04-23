@@ -414,7 +414,7 @@ if ($sub_end && $days_left > 0 && $is_paid_plan) {
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
 <title>Subscription — <?= htmlspecialchars($tenant['business_name']) ?></title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -503,6 +503,36 @@ body{background:#0f172a;font-family:'Plus Jakarta Sans',sans-serif;color:#f8fafc
   .content{padding:16px;}
 }
 @media(max-width:600px){.form-grid{grid-template-columns:1fr;}.pay-tabs{flex-direction:column;}.pay-tab{border-right:none;border-bottom:1px solid rgba(255,255,255,.08);}}
+
+/* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
+* { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+/* iOS safe area support */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* iOS overflow scroll */
+.overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
+/* Prevent iOS zoom on input focus */
+input, select, textarea { font-size: max(16px, 1rem) !important; }
+/* Mobile sidebar fix */
+@media (max-width: 768px) {
+  .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
+  .main-content  { margin-left: 0 !important; width: 100% !important; }
+}
+/* Smooth scrolling on mobile */
+html { scroll-behavior: smooth; }
+
+/* Form mobile fixes */
+@media (max-width: 480px) {
+    .panel, .card { 
+        width: 100% !important; 
+        max-width: 100% !important; 
+        margin: 0 !important;
+        border-radius: 0 !important;
+        min-height: 100dvh !important;
+    }
+    .page { padding: 0 !important; align-items: flex-start !important; }
+}
 </style>
 </head>
 <body>

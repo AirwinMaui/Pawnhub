@@ -133,7 +133,7 @@ if (!array_key_exists($selected_plan, $plans)) $selected_plan = 'Starter';
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
 <title>PawnHub — Register Your Pawnshop</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -227,7 +227,7 @@ select.glass-input option {
         url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVdOMy67RcI3OmEXQ5Ob4N9qbUXkHC8UCa3Ni6E2dPvn8N_9Kg_FuGSOcP4mhYkmmhNphJ8vQukLbFjfnVrv-wy716m8LpTRmRrql1K07LpfXVuqMeCMwQRftqZXZWikKdGhSBaHJEhrAn431mN9EQqELqupcBMhVrkknDFPIyVKW_l8bfki8PfvWSkOTQ129Z5jOMGF5My-stQnfPndc_y1X0jUHBEmlH0AVE04q2vpa87PHKNSxAOHabM4n8c9W6UcgA91Cs-1c');
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
+    background-attachment: scroll;
 }
 .file-upload-zone {
     border: 2px dashed rgba(255,255,255,0.25);
@@ -252,6 +252,36 @@ select.glass-input option {
     letter-spacing: 0.09em;
     color: rgba(255,255,255,0.6);
     margin-bottom: 6px;
+}
+
+/* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
+* { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+/* iOS safe area support */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* iOS overflow scroll */
+.overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
+/* Prevent iOS zoom on input focus */
+input, select, textarea { font-size: max(16px, 1rem) !important; }
+/* Mobile sidebar fix */
+@media (max-width: 768px) {
+  .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
+  .main-content  { margin-left: 0 !important; width: 100% !important; }
+}
+/* Smooth scrolling on mobile */
+html { scroll-behavior: smooth; }
+
+/* Form mobile fixes */
+@media (max-width: 480px) {
+    .panel, .card { 
+        width: 100% !important; 
+        max-width: 100% !important; 
+        margin: 0 !important;
+        border-radius: 0 !important;
+        min-height: 100dvh !important;
+    }
+    .page { padding: 0 !important; align-items: flex-start !important; }
 }
 </style>
 </head>

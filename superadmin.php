@@ -993,7 +993,7 @@ try { $audit_actions_list = $pdo->query("SELECT DISTINCT action FROM audit_logs 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
 <title>PawnHub — Super Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
@@ -1102,6 +1102,41 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .content{padding:16px;}
 }
 @media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
+
+/* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
+* { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+/* iOS safe area support */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* iOS overflow scroll */
+.overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
+/* Prevent iOS zoom on input focus */
+input, select, textarea { font-size: max(16px, 1rem) !important; }
+/* Mobile sidebar fix */
+@media (max-width: 768px) {
+  .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
+  .main-content  { margin-left: 0 !important; width: 100% !important; }
+}
+/* Smooth scrolling on mobile */
+html { scroll-behavior: smooth; }
+
+/* iOS 100vh fix — use dynamic viewport height */
+.sidebar {
+    height: 100dvh !important;
+    height: -webkit-fill-available !important;
+}
+/* Mobile overlay backdrop */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+}
+.sidebar-overlay.active { display: block; }
 </style>
 </head>
 <body>
@@ -2547,6 +2582,39 @@ function toggleSidebar(){
   document.querySelector('.sidebar').classList.toggle('mobile-open');
   document.getElementById('mobOverlay').classList.toggle('open');
 }
+</script>
+<script>
+// iOS viewport height fix
+function setVH() {
+    document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', function() { setTimeout(setVH, 200); });
+
+// Sidebar overlay for mobile
+(function() {
+    var sidebar = document.querySelector('.sidebar');
+    var overlay = document.querySelector('.sidebar-overlay');
+    if (!overlay && sidebar) {
+        overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', function() {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+        });
+    }
+    // Patch existing toggle buttons
+    document.querySelectorAll('[onclick*="mobile-open"], [onclick*="sidebar"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (sidebar && overlay) {
+                var isOpen = sidebar.classList.contains('mobile-open');
+                overlay.classList.toggle('active', isOpen);
+            }
+        });
+    });
+})();
 </script>
 </body>
 </html>
