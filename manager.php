@@ -617,6 +617,26 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .topbar{height:60px;padding:0 26px;background:rgba(4,14,9,.8);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
 .topbar-title{font-size:.97rem;font-weight:700;color:#fff;}
 .mgr-chip{font-size:.68rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#059669) 15%,transparent);color:var(--t-accent,#6ee7b7);padding:3px 11px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#059669) 30%,transparent);}
+.topbar-icon{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,.5);transition:all .15s;position:relative;}
+.topbar-icon:hover{background:rgba(255,255,255,.1);color:#fff;}
+.topbar-icon .material-symbols-outlined{font-size:17px;}
+.notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:#ef4444;border-radius:100px;border:2px solid rgba(4,14,9,1);font-size:.6rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
+@keyframes notifPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5);}50%{box-shadow:0 0 0 4px rgba(239,68,68,0);}}
+.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:320px;background:#0e1117;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.7);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
+.notif-panel.open{display:block;}
+@keyframes panelIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.notif-panel-head{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;}
+.notif-panel-title{font-size:.83rem;font-weight:700;color:#fff;}
+.notif-panel-clear{font-size:.7rem;color:rgba(255,255,255,.35);cursor:pointer;background:none;border:none;font-family:inherit;}
+.notif-list{max-height:300px;overflow-y:auto;}
+.notif-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);text-decoration:none;transition:background .15s;}
+.notif-item:hover{background:rgba(255,255,255,.03);}
+.notif-item:last-child{border-bottom:none;}
+.notif-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.notif-icon .material-symbols-outlined{font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;}
+.notif-text-title{font-size:.76rem;font-weight:600;color:#fff;line-height:1.3;margin-bottom:2px;}
+.notif-text-sub{font-size:.67rem;color:rgba(255,255,255,.4);line-height:1.4;}
+.notif-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.25);font-size:.78rem;}
 .content{padding:22px 26px;flex:1;}
 
 .card{background:rgba(255,255,255,.04);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;}
@@ -791,6 +811,32 @@ tr:hover td{background:rgba(255,255,255,.02);}
   </div>
 </aside>
 
+<?php
+// ── Manager Notification queries ──────────────────────────────
+$notifs = [];
+try {
+  if ($tid) {
+    // Overdue tickets
+    $od = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date < CURDATE()");
+    $od->execute([$tid]); $od_c = (int)$od->fetchColumn();
+    if ($od_c > 0) $notifs[] = ['type'=>'danger','icon'=>'receipt_long','title'=>$od_c.' Overdue Ticket'.($od_c>1?'s':''),'sub'=>'Items past maturity date.','link'=>'?page=tickets'];
+    // Expiring in 3 days
+    $exp = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)");
+    $exp->execute([$tid]); $exp_c = (int)$exp->fetchColumn();
+    if ($exp_c > 0) $notifs[] = ['type'=>'warn','icon'=>'hourglass_bottom','title'=>$exp_c.' Ticket'.($exp_c>1?'s':'').' Expiring in 3 Days','sub'=>'Remind customers to redeem or renew.','link'=>'?page=tickets'];
+    // Pending void requests
+    $vr = $pdo->prepare("SELECT COUNT(*) FROM pawn_void_requests WHERE tenant_id=? AND status='pending'");
+    $vr->execute([$tid]); $vr_c = (int)$vr->fetchColumn();
+    if ($vr_c > 0) $notifs[] = ['type'=>'warn','icon'=>'cancel_presentation','title'=>$vr_c.' Pending Void Request'.($vr_c>1?'s':''),'sub'=>'Awaiting your review.','link'=>'?page=void_requests'];
+    // Low stock
+    $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND is_shop_visible=1");
+    $ls->execute([$tid]); $ls_c = (int)$ls->fetchColumn();
+    if ($ls_c > 0) $notifs[] = ['type'=>'warn','icon'=>'inventory_2','title'=>$ls_c.' Item'.($ls_c>1?'s':'').' Low on Stock','sub'=>'Stock at 2 or below in shop.','link'=>'?page=shop_items'];
+  }
+} catch (Throwable $e) {}
+$notif_count = count($notifs);
+?>
+
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
@@ -798,12 +844,35 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <span class="topbar-title"><?=htmlspecialchars($titles[$active_page]??'Dashboard')?></span>
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:8px;">
       <div style="display:flex;align-items:center;gap:7px;background:rgba(5,150,105,.1);border:1px solid rgba(5,150,105,.18);padding:5px 11px;border-radius:100px;">
         <span style="width:8px;height:8px;border-radius:50%;background:var(--t-primary,#059669);display:inline-block;animation:pulse 2s infinite;"></span>
         <span style="font-size:.69rem;color:#6ee7b7;font-weight:600;">Manager</span>
       </div>
       <span style="font-size:.72rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+      <div class="topbar-icon" id="notifBtn" onclick="toggleNotifPanel(event)" style="<?=$notif_count>0?'color:#fff;background:rgba(255,255,255,.08);':''?>">
+        <span class="material-symbols-outlined">notifications</span>
+        <?php if($notif_count>0):?><span class="notif-badge"><?=$notif_count?></span><?php endif;?>
+        <div class="notif-panel" id="notifPanel" onclick="event.stopPropagation()">
+          <div class="notif-panel-head">
+            <span class="notif-panel-title">Notifications<?php if($notif_count>0):?> <span style="background:rgba(239,68,68,.2);color:#fca5a5;font-size:.62rem;padding:1px 6px;border-radius:100px;"><?=$notif_count?></span><?php endif;?></span>
+            <button class="notif-panel-clear" onclick="document.getElementById('notifPanel').classList.remove('open')">Close ✕</button>
+          </div>
+          <div class="notif-list">
+            <?php if(empty($notifs)):?>
+            <div class="notif-empty"><span class="material-symbols-outlined" style="font-size:26px;display:block;margin-bottom:5px;opacity:.3;">check_circle</span>No notifications.</div>
+            <?php else: foreach($notifs as $n):
+              $ic_bg = match($n['type']){'danger'=>'background:rgba(239,68,68,.15);','warn'=>'background:rgba(245,158,11,.15);',default=>'background:rgba(59,130,246,.15);'};
+              $ic_col = match($n['type']){'danger'=>'color:#fca5a5;','warn'=>'color:#fcd34d;',default=>'color:#93c5fd;'};
+            ?>
+            <a href="<?=htmlspecialchars($n['link']??'#')?>" class="notif-item">
+              <div class="notif-icon" style="<?=$ic_bg?>"><span class="material-symbols-outlined" style="<?=$ic_col?>"><?=$n['icon']?></span></div>
+              <div><div class="notif-text-title"><?=$n['title']?></div><div class="notif-text-sub"><?=$n['sub']?></div></div>
+            </a>
+            <?php endforeach; endif;?>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -2285,6 +2354,7 @@ document.getElementById('item_dropdown').addEventListener('mouseout', e => {
   if (opt) opt.style.background = '';
 });
 </script>
+
 <!-- LOGOUT CONFIRMATION MODAL -->
 <div id="logoutModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;">
   <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);animation:logoutIn .22s ease both;">
@@ -2292,38 +2362,39 @@ document.getElementById('item_dropdown').addEventListener('mouseout', e => {
       <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
         <span class="material-symbols-outlined" style="color:#fff;font-size:22px;">logout</span>
       </div>
-      <div>
-        <div style="font-size:1.1rem;font-weight:700;color:#fff;line-height:1.2;">Sign Out</div>
-        <div style="font-size:.75rem;color:rgba(255,255,255,.6);margin-top:2px;">Confirm your action</div>
-      </div>
+      <div><div style="font-size:1.1rem;font-weight:700;color:#fff;">Sign Out</div><div style="font-size:.75rem;color:rgba(255,255,255,.6);margin-top:2px;">Confirm your action</div></div>
     </div>
     <div style="padding:22px 24px 24px;">
       <p style="font-size:.9rem;color:rgba(240,242,247,.65);line-height:1.65;margin-bottom:22px;">Are you sure you want to log out? Any unsaved changes may be lost.</p>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <a id="logoutConfirmBtn" href="#" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#dc2626;color:#fff;font-weight:700;font-size:.9rem;border-radius:12px;text-decoration:none;transition:filter .18s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+        <a id="logoutConfirmBtn" href="#" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#dc2626;color:#fff;font-weight:700;font-size:.9rem;border-radius:12px;text-decoration:none;">
           <span class="material-symbols-outlined" style="font-size:17px;">logout</span>Yes, Log Out
         </a>
-        <button onclick="hideLogoutModal()" style="width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(240,242,247,.6);font-weight:600;font-size:.9rem;border-radius:12px;cursor:pointer;font-family:inherit;transition:all .18s;" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">
-          Cancel
-        </button>
+        <button onclick="hideLogoutModal()" style="width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(240,242,247,.6);font-weight:600;font-size:.9rem;border-radius:12px;cursor:pointer;font-family:inherit;">Cancel</button>
       </div>
     </div>
   </div>
 </div>
 <style>
-@keyframes logoutIn { from { opacity:0;transform:translateY(14px) } to { opacity:1;transform:none } }
-.sb-logout { background:none; border:none; cursor:pointer; font-family:inherit; width:100%; text-align:left; }
+@keyframes logoutIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.sb-logout{background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
 </style>
 <script>
-function showLogoutModal(url) {
-  document.getElementById('logoutConfirmBtn').href = url;
-  const m = document.getElementById('logoutModal');
-  m.style.display = 'flex';
+function toggleNotifPanel(e){
+  e.stopPropagation();
+  document.getElementById('notifPanel').classList.toggle('open');
 }
-function hideLogoutModal() {
-  document.getElementById('logoutModal').style.display = 'none';
+document.addEventListener('click',function(){
+  document.getElementById('notifPanel')?.classList.remove('open');
+});
+function showLogoutModal(url){
+  document.getElementById('logoutConfirmBtn').href=url;
+  document.getElementById('logoutModal').style.display='flex';
 }
-document.getElementById('logoutModal').addEventListener('click', function(e){ if(e.target===this) hideLogoutModal(); });
+function hideLogoutModal(){
+  document.getElementById('logoutModal').style.display='none';
+}
+document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
 </script>
 </body>
 </html>

@@ -471,7 +471,33 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .topbar-icon{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,.5);transition:all .15s;position:relative;}
 .topbar-icon:hover{background:rgba(255,255,255,.1);color:#fff;}
 .topbar-icon .material-symbols-outlined{font-size:18px;}
-.notif-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;background:var(--t-primary,#3b82f6);border-radius:50%;border:2px solid rgba(10,14,26,1);}
+.notif-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;background:#ef4444;border-radius:50%;border:2px solid rgba(10,14,26,1);animation:notifPulse 2s infinite;}
+@keyframes notifPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5);}50%{box-shadow:0 0 0 4px rgba(239,68,68,0);}}
+.notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:#ef4444;border-radius:100px;border:2px solid rgba(10,14,26,1);font-size:.6rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
+/* Notification Panel */
+.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:340px;background:#0e1117;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.7);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
+.notif-panel.open{display:block;}
+@keyframes panelIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.notif-panel-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;}
+.notif-panel-title{font-size:.85rem;font-weight:700;color:#fff;}
+.notif-panel-clear{font-size:.72rem;color:rgba(255,255,255,.35);cursor:pointer;background:none;border:none;font-family:inherit;transition:color .15s;}
+.notif-panel-clear:hover{color:#fff;}
+.notif-list{max-height:320px;overflow-y:auto;}
+.notif-item{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.04);transition:background .15s;cursor:default;}
+.notif-item:hover{background:rgba(255,255,255,.03);}
+.notif-item:last-child{border-bottom:none;}
+.notif-icon{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.notif-icon .material-symbols-outlined{font-size:15px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;}
+.notif-text{flex:1;min-width:0;}
+.notif-text-title{font-size:.78rem;font-weight:600;color:#fff;line-height:1.3;margin-bottom:2px;}
+.notif-text-sub{font-size:.69rem;color:rgba(255,255,255,.4);line-height:1.4;}
+.notif-empty{padding:28px 16px;text-align:center;color:rgba(255,255,255,.25);font-size:.8rem;}
+/* Settings Dropdown */
+.settings-dropdown{position:absolute;top:calc(100% + 10px);right:0;width:200px;background:#0e1117;border:1px solid rgba(255,255,255,.1);border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.6);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
+.settings-dropdown.open{display:block;}
+.settings-dd-item{display:flex;align-items:center;gap:10px;padding:11px 14px;color:rgba(255,255,255,.7);font-size:.83rem;font-weight:500;text-decoration:none;transition:all .15s;cursor:pointer;}
+.settings-dd-item:hover{background:rgba(255,255,255,.07);color:#fff;}
+.settings-dd-item .material-symbols-outlined{font-size:17px;color:rgba(255,255,255,.4);}
 .topbar-user{display:flex;align-items:center;gap:9px;padding-left:12px;border-left:1px solid rgba(255,255,255,.08);}
 .topbar-user-name{font-size:.82rem;font-weight:600;color:#fff;}
 .topbar-user-role{font-size:.67rem;color:rgba(255,255,255,.4);}
@@ -698,11 +724,59 @@ tr:hover td{background:rgba(255,255,255,.03);}
         <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Manager
       </button>
       <?php endif;?>
-      <div class="topbar-icon">
+      <div class="topbar-icon" id="notifBtn" onclick="toggleNotifPanel(event)" style="<?=$notif_count>0?'color:#fff;background:rgba(255,255,255,.08);':''?>">
         <span class="material-symbols-outlined">notifications</span>
-        <span class="notif-dot"></span>
+        <?php if($notif_count>0):?><span class="notif-badge"><?=$notif_count?></span><?php endif;?>
+        <!-- Notification Panel -->
+        <div class="notif-panel" id="notifPanel" onclick="event.stopPropagation()">
+          <div class="notif-panel-head">
+            <span class="notif-panel-title">Notifications <?php if($notif_count>0):?><span style="background:rgba(239,68,68,.2);color:#fca5a5;font-size:.65rem;padding:2px 7px;border-radius:100px;margin-left:4px;"><?=$notif_count?></span><?php endif;?></span>
+            <button class="notif-panel-clear" onclick="document.getElementById('notifPanel').classList.remove('open')">Close ✕</button>
+          </div>
+          <div class="notif-list">
+            <?php if(empty($notifs)):?>
+            <div class="notif-empty">
+              <span class="material-symbols-outlined" style="font-size:28px;display:block;margin-bottom:6px;opacity:.3;">check_circle</span>
+              All caught up! No notifications.
+            </div>
+            <?php else: foreach($notifs as $n):
+              $ic_bg = match($n['type']){
+                'danger' => 'background:rgba(239,68,68,.15);',
+                'warn'   => 'background:rgba(245,158,11,.15);',
+                default  => 'background:rgba(59,130,246,.15);',
+              };
+              $ic_color = match($n['type']){
+                'danger' => 'color:#fca5a5;',
+                'warn'   => 'color:#fcd34d;',
+                default  => 'color:#93c5fd;',
+              };
+            ?>
+            <a href="<?=htmlspecialchars($n['link']??'#')?>" class="notif-item" style="text-decoration:none;">
+              <div class="notif-icon" style="<?=$ic_bg?>">
+                <span class="material-symbols-outlined" style="<?=$ic_color?>"><?=$n['icon']?></span>
+              </div>
+              <div class="notif-text">
+                <div class="notif-text-title"><?=$n['title']?></div>
+                <div class="notif-text-sub"><?=$n['sub']?></div>
+              </div>
+            </a>
+            <?php endforeach; endif; ?>
+          </div>
+        </div>
       </div>
-      <div class="topbar-icon"><span class="material-symbols-outlined">settings</span></div>
+      <div class="topbar-icon" id="settingsBtn" onclick="toggleSettingsDropdown(event)" style="position:relative;">
+        <span class="material-symbols-outlined">settings</span>
+        <div class="settings-dropdown" id="settingsDropdown" onclick="event.stopPropagation()">
+          <?php if($features['theme_branding']):?>
+          <a href="?page=settings" class="settings-dd-item">
+            <span class="material-symbols-outlined">palette</span>Theme &amp; Branding
+          </a>
+          <?php endif;?>
+          <a href="tenant_subscription.php" class="settings-dd-item">
+            <span class="material-symbols-outlined">workspace_premium</span>Subscription
+          </a>
+        </div>
+      </div>
       <div class="topbar-user">
         <div style="text-align:right;">
           <div class="topbar-user-name"><?=htmlspecialchars(explode(' ',$u['name'])[0]??$u['name'])?></div>
@@ -768,6 +842,40 @@ tr:hover td{background:rgba(255,255,255,.03);}
              . '</div>';
       }
   }
+
+  // ── Notification queries ─────────────────────────────────────
+  $notifs = [];
+  try {
+    // 1. Subscription expiring / expired
+    if ($sub_end_ts && $tenant['plan'] !== 'Starter') {
+      $dl = (int)ceil(($sub_end_ts - time()) / 86400);
+      if ($dl < 0)        $notifs[] = ['type'=>'danger', 'icon'=>'credit_card_off', 'title'=>'Subscription Expired', 'sub'=>'Your '.htmlspecialchars($tenant['plan']).' plan expired '.abs($dl).' day(s) ago.', 'link'=>'tenant_subscription.php'];
+      elseif ($dl <= 3)   $notifs[] = ['type'=>'danger', 'icon'=>'warning',         'title'=>'Subscription Expiring Soon', 'sub'=>'Only '.$dl.' day(s) left! Renew to avoid disruption.', 'link'=>'tenant_subscription.php'];
+      elseif ($dl <= 7)   $notifs[] = ['type'=>'warn',   'icon'=>'schedule',         'title'=>'Subscription Expires in '.$dl.' Days', 'sub'=>'Plan expires '.date('M d, Y',$sub_end_ts).'. Renew soon.', 'link'=>'tenant_subscription.php'];
+      elseif ($dl <= 14)  $notifs[] = ['type'=>'info',   'icon'=>'calendar_month',   'title'=>'Subscription Reminder', 'sub'=>$dl.' days left on your '.htmlspecialchars($tenant['plan']).' plan.', 'link'=>'tenant_subscription.php'];
+    }
+    // 2. Overdue pawn tickets (maturity_date passed, still Stored)
+    $od = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date < CURDATE()");
+    $od->execute([$tid]); $od_count = (int)$od->fetchColumn();
+    if ($od_count > 0) $notifs[] = ['type'=>'danger','icon'=>'receipt_long','title'=>$od_count.' Overdue Pawn Ticket'.($od_count>1?'s':''),'sub'=>'These items have passed their maturity date.','link'=>'?page=tickets'];
+    // 3. Tickets expiring within 3 days
+    $exp3 = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)");
+    $exp3->execute([$tid]); $exp3_count = (int)$exp3->fetchColumn();
+    if ($exp3_count > 0) $notifs[] = ['type'=>'warn','icon'=>'hourglass_bottom','title'=>$exp3_count.' Ticket'.($exp3_count>1?'s':'').' Expiring in 3 Days','sub'=>'Remind customers to redeem or renew.','link'=>'?page=tickets'];
+    // 4. Pending void requests
+    $vr = $pdo->prepare("SELECT COUNT(*) FROM pawn_void_requests WHERE tenant_id=? AND status='pending'");
+    $vr->execute([$tid]); $vr_count = (int)$vr->fetchColumn();
+    if ($vr_count > 0) $notifs[] = ['type'=>'warn','icon'=>'cancel_presentation','title'=>$vr_count.' Pending Void Request'.($vr_count>1?'s':''),'sub'=>'Awaiting your approval.','link'=>'?page=tickets'];
+    // 5. Pending applicants
+    $ap = $pdo->prepare("SELECT COUNT(*) FROM tenant_applicants WHERE tenant_id=? AND status='pending'");
+    $ap->execute([$tid]); $ap_count = (int)$ap->fetchColumn();
+    if ($ap_count > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_count.' New Applicant'.($ap_count>1?'s':''),'sub'=>'Online applications awaiting review.','link'=>'?page=applicants'];
+    // 6. Low stock items (qty <= 2)
+    $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND is_shop_visible=1");
+    $ls->execute([$tid]); $ls_count = (int)$ls->fetchColumn();
+    if ($ls_count > 0) $notifs[] = ['type'=>'warn','icon'=>'inventory_2','title'=>$ls_count.' Item'.($ls_count>1?'s':'').' Low on Stock','sub'=>'Stock is at 2 or below in the shop.','link'=>'?page=inventory'];
+  } catch (Throwable $e) { /* fail silently */ }
+  $notif_count = count($notifs);
   ?>
 
   <div class="content">
@@ -1738,6 +1846,7 @@ document.querySelector('input[name="system_name"]')?.addEventListener('input', f
   document.getElementById('prev_sysname').textContent = this.value || 'PawnHub';
 });
 </script>
+
 <!-- LOGOUT CONFIRMATION MODAL -->
 <div id="logoutModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;">
   <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);animation:logoutIn .22s ease both;">
@@ -1753,30 +1862,41 @@ document.querySelector('input[name="system_name"]')?.addEventListener('input', f
     <div style="padding:22px 24px 24px;">
       <p style="font-size:.9rem;color:rgba(240,242,247,.65);line-height:1.65;margin-bottom:22px;">Are you sure you want to log out? Any unsaved changes may be lost.</p>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <a id="logoutConfirmBtn" href="#" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#dc2626;color:#fff;font-weight:700;font-size:.9rem;border-radius:12px;text-decoration:none;transition:filter .18s;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+        <a id="logoutConfirmBtn" href="#" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#dc2626;color:#fff;font-weight:700;font-size:.9rem;border-radius:12px;text-decoration:none;" >
           <span class="material-symbols-outlined" style="font-size:17px;">logout</span>Yes, Log Out
         </a>
-        <button onclick="hideLogoutModal()" style="width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(240,242,247,.6);font-weight:600;font-size:.9rem;border-radius:12px;cursor:pointer;font-family:inherit;transition:all .18s;" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">
-          Cancel
-        </button>
+        <button onclick="hideLogoutModal()" style="width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(240,242,247,.6);font-weight:600;font-size:.9rem;border-radius:12px;cursor:pointer;font-family:inherit;">Cancel</button>
       </div>
     </div>
   </div>
 </div>
 <style>
-@keyframes logoutIn { from { opacity:0;transform:translateY(14px) } to { opacity:1;transform:none } }
-.sb-logout { background:none; border:none; cursor:pointer; font-family:inherit; width:100%; text-align:left; }
+@keyframes logoutIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.sb-logout{background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
 </style>
 <script>
-function showLogoutModal(url) {
-  document.getElementById('logoutConfirmBtn').href = url;
-  const m = document.getElementById('logoutModal');
-  m.style.display = 'flex';
+function toggleNotifPanel(e){
+  e.stopPropagation();
+  document.getElementById('settingsDropdown').classList.remove('open');
+  document.getElementById('notifPanel').classList.toggle('open');
 }
-function hideLogoutModal() {
-  document.getElementById('logoutModal').style.display = 'none';
+function toggleSettingsDropdown(e){
+  e.stopPropagation();
+  document.getElementById('notifPanel').classList.remove('open');
+  document.getElementById('settingsDropdown').classList.toggle('open');
 }
-document.getElementById('logoutModal').addEventListener('click', function(e){ if(e.target===this) hideLogoutModal(); });
+document.addEventListener('click', function(){
+  document.getElementById('notifPanel')?.classList.remove('open');
+  document.getElementById('settingsDropdown')?.classList.remove('open');
+});
+function showLogoutModal(url){
+  document.getElementById('logoutConfirmBtn').href=url;
+  document.getElementById('logoutModal').style.display='flex';
+}
+function hideLogoutModal(){
+  document.getElementById('logoutModal').style.display='none';
+}
+document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
 </script>
 </body>
 </html>

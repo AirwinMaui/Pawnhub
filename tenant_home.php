@@ -1106,17 +1106,7 @@ footer {
       <div class="info-card-val"><?= $biz_phone ?></div>
     </div>
     <?php endif; ?>
-    <div class="info-card qr-card">
-      <div class="info-card-icon"><span class="material-symbols-outlined">qr_code_2</span></div>
-      <div class="info-card-title">Scan to Visit</div>
-      <div class="qr-wrap">
-        <img src="YOUR_QR_CODE_HERE" alt="QR Code" class="qr-img">
-        <div class="qr-label">Scan to open our shop</div>
-        <a href="https://drive.google.com/drive/folders/1dXLJ7C7JWOP1BsUY-C3PQvKPhhR7Pant" target="_blank" rel="noopener noreferrer" class="qr-drive-link">
-          <span class="material-symbols-outlined">folder</span>View Files
-        </a>
-      </div>
-    </div>
+
   </div>
 </section>
 <?php endif; ?>
