@@ -677,22 +677,6 @@ tr:hover td{background:rgba(255,255,255,.03);}
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
     </a>
     <?php endif;?>
-    <?php if($features['theme_branding']):?>
-    <div class="sb-section">Customize</div>
-    <a href="?page=settings" class="sb-item <?=$active_page==='settings'?'active':''?>">
-      <span class="material-symbols-outlined">palette</span>Theme &amp; Branding
-    </a>
-    <?php else:?>
-    <div class="sb-section">Customize</div>
-    <div style="margin:2px 8px;padding:9px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.08);cursor:default;">
-      <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.2);font-size:.82rem;">
-        <span class="material-symbols-outlined" style="font-size:18px;">lock</span>
-        Theme &amp; Branding
-      </div>
-      <div style="font-size:.62rem;color:rgba(255,255,255,.15);margin-top:3px;margin-left:28px;">Upgrade to Pro</div>
-    </div>
-    <?php endif;?>
-
     <?php if($features['data_export']):?>
     <div class="sb-section">Export</div>
     <a href="?page=export" class="sb-item <?=$active_page==='export'?'active':''?>">
@@ -701,9 +685,6 @@ tr:hover td{background:rgba(255,255,255,.03);}
     <?php endif;?>
   </nav>
   <div class="sb-footer">
-    <a href="tenant_subscription.php" class="sb-item <?=$active_page==='subscription'?'active':''?>" style="margin:0 0 6px 0;">
-      <span class="material-symbols-outlined">workspace_premium</span>Subscription
-    </a>
     <?php $logout_url = 'logout.php?role=admin&slug=' . rawurlencode($u['tenant_slug'] ?? ''); ?>
     <button type="button" class="sb-logout" onclick="showLogoutModal('<?= $logout_url ?>')">
       <span class="material-symbols-outlined">logout</span>Sign Out
