@@ -1304,7 +1304,7 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="mob-menu-btn" onclick="toggleSidebar()" style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <span class="topbar-title">
@@ -2703,7 +2703,6 @@ function toggleSidebar(){
     document.documentElement.style.overflow = 'hidden';
   }
 }
-}
 </script>
 <script>
 // iOS viewport height fix
@@ -2738,8 +2737,6 @@ window.addEventListener('orientationchange', function() { setTimeout(setVH, 200)
     });
 })();
 
-
-});
 
 // Close sidebar on nav tap (mobile)
 document.querySelectorAll('.sb-item, .sb-logout').forEach(function(el){

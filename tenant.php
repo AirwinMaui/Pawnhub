@@ -850,7 +850,7 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="mob-menu-btn" onclick="toggleSidebar()" style="width:36px;height:36px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
         <span class="material-symbols-outlined" style="font-size:20px;">menu</span>
       </button>
       <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF','applicants'=>'Online Applications'];echo $titles[$active_page]??'Dashboard';?></span>
@@ -2058,7 +2058,6 @@ function toggleSidebar(){
     document.documentElement.style.overflow = 'hidden';
   }
 }
-}
 </script>
 <script>
 // iOS viewport height fix
@@ -2093,8 +2092,6 @@ window.addEventListener('orientationchange', function() { setTimeout(setVH, 200)
     });
 })();
 
-
-});
 
 // Close sidebar on nav tap (mobile)
 document.querySelectorAll('.sb-item, .sb-logout').forEach(function(el){
