@@ -1211,12 +1211,13 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 }
 
 @media(max-width:768px){
-  .main{position:relative!important;z-index:10!important;filter:none!important;-webkit-filter:none!important;}
+  .main{z-index:auto!important;position:static!important;}
   .sidebar{z-index:9999!important;isolation:isolate;}
   .mob-overlay{z-index:9998!important;}
   .topbar{z-index:9997!important;position:sticky!important;}
 }
 
+/* iOS/Android sidebar solid background fix */
 @media(max-width:768px){
   .sidebar{
     background:#0d1117 !important;
@@ -1245,70 +1246,6 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
     padding-bottom:max(12px,env(safe-area-inset-bottom)) !important;
   }
 }
-
-/* ── Mobile fix: disable backdrop-filter blur on Android/iOS ── */
-@media(max-width:768px){
-  .card,.glass-card,.topbar{
-    backdrop-filter:none !important;
-    -webkit-backdrop-filter:none !important;
-  }
-}
-
-/* ===== SIDEBAR LAYOUT FIX — Desktop + Mobile/iOS/Android ===== */
-/* 1. Desktop: ensure sidebar fills full height and footer is always visible */
-.sidebar {
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100dvh !important;
-    height: -webkit-fill-available !important;
-    min-height: 100dvh !important;
-    overflow: hidden !important; /* prevent double scrollbar */
-    position: fixed !important;
-    left: 0 !important; top: 0 !important; bottom: 0 !important;
-    z-index: 9999 !important;
-}
-.sb-nav {
-    flex: 1 1 0 !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    min-height: 0 !important; /* critical for flex scroll */
-}
-.sb-footer {
-    flex-shrink: 0 !important;
-    position: relative !important; /* NOT sticky — flexbox handles it */
-    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)) !important;
-    border-top: 1px solid rgba(255,255,255,.08) !important;
-    background: inherit !important;
-    z-index: 2 !important;
-}
-/* 2. Mobile: hamburger always visible below 900px */
-@media (max-width: 900px) {
-    :root { --sw: 0px !important; }
-    .main { margin-left: 0 !important; width: 100% !important; max-width: 100vw !important; }
-    #mob-menu-btn { display: flex !important; }
-    .ham { display: flex !important; }
-    .sidebar {
-        transform: translateX(-100%) !important;
-        transition: transform .3s cubic-bezier(.4,0,.2,1) !important;
-        box-shadow: none !important;
-        background-color: #0d1117 !important; /* solid — no blur on mobile */
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
-    .sidebar.mobile-open {
-        transform: translateX(0) !important;
-        box-shadow: 6px 0 40px rgba(0,0,0,.85) !important;
-    }
-}
-/* 3. Mobile overlay */
-.mob-overlay {
-    display: none !important;
-    position: fixed !important; inset: 0 !important;
-    background: rgba(0,0,0,.55) !important;
-    z-index: 9998 !important;
-}
-.mob-overlay.open { display: block !important; }
-
 </style>
 </head>
 <body>
@@ -1367,7 +1304,7 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <span class="topbar-title">
@@ -2746,7 +2683,18 @@ document.getElementById('logoutModal').addEventListener('click', function(e){ if
 
 <div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
 <script>
-// toggleSidebar replaced by unified fix below else {
+function toggleSidebar(){
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('mobOverlay');
+  if(!sb) return;
+  var isOpen = sb.classList.contains('mobile-open');
+  if(isOpen){
+    sb.classList.remove('mobile-open');
+    if(ov) ov.classList.remove('open');
+    document.body.style.overflow = '';
+    document.body.style.height = '';
+    document.documentElement.style.overflow = '';
+  } else {
     sb.classList.add('mobile-open');
     if(ov) ov.classList.add('open');
     // Lock scroll on both body and html for iOS AND Android
@@ -2755,9 +2703,46 @@ document.getElementById('logoutModal').addEventListener('click', function(e){ if
     document.documentElement.style.overflow = 'hidden';
   }
 }
+}
 </script>
 <script>
+// iOS viewport height fix
+function setVH() {
+    document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', function() { setTimeout(setVH, 200); });
 
+// Sidebar overlay for mobile
+(function() {
+    var sidebar = document.querySelector('.sidebar');
+    var overlay = document.querySelector('.sidebar-overlay');
+    if (!overlay && sidebar) {
+        overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', function() {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+        });
+    }
+    // Patch existing toggle buttons
+    document.querySelectorAll('[onclick*="mobile-open"], [onclick*="sidebar"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (sidebar && overlay) {
+                var isOpen = sidebar.classList.contains('mobile-open');
+                overlay.classList.toggle('active', isOpen);
+            }
+        });
+    });
+})();
+
+
+});
+
+// Close sidebar on nav tap (mobile)
+document.querySelectorAll('.sb-item, .sb-logout').forEach(function(el){
   el.addEventListener('click', function(){
     if(window.innerWidth <= 768){
       var sb = document.querySelector('.sidebar');
@@ -2770,49 +2755,6 @@ document.getElementById('logoutModal').addEventListener('click', function(e){ if
     }
   });
 });
-</script>
-
-<script>
-
-/* ===== SIDEBAR JS FIX — works on iOS Safari, Chrome Android, desktop ===== */
-(function(){
-  var BREAKPOINT = 900;
-  function getSidebar(){ return document.querySelector('.sidebar'); }
-  function getOverlay(){ return document.getElementById('mobOverlay'); }
-
-  window.toggleSidebar = function(){
-    var sb = getSidebar(); var ov = getOverlay(); if(!sb) return;
-    var open = sb.classList.contains('mobile-open');
-    if(open){ closeSidebar(); } else { openSidebar(); }
-  };
-  window.openSidebar = function(){
-    var sb = getSidebar(); var ov = getOverlay(); if(!sb) return;
-    sb.classList.add('mobile-open');
-    if(ov) ov.classList.add('open');
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-  };
-  window.closeSidebar = function(){
-    var sb = getSidebar(); var ov = getOverlay(); if(!sb) return;
-    sb.classList.remove('mobile-open');
-    if(ov) ov.classList.remove('open');
-    document.body.style.overflow = '';
-    document.documentElement.style.overflow = '';
-  };
-
-  // Close on ESC
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeSidebar(); });
-
-  // Close sidebar when nav item tapped on mobile
-  document.addEventListener('DOMContentLoaded', function(){
-    document.querySelectorAll('.sb-item, .sb-logout').forEach(function(el){
-      el.addEventListener('click', function(){
-        if(window.innerWidth <= BREAKPOINT) closeSidebar();
-      });
-    });
-  });
-})();
-
 </script>
 </body>
 </html>
