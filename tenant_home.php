@@ -183,11 +183,13 @@ nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   height: var(--nav-h);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 clamp(16px, 4vw, 48px);
+  padding: 0 clamp(14px, 4vw, 48px);
   background: rgba(8,9,12,0.7);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   transition: background .3s;
+  box-sizing: border-box;
 }
 .nav-brand {
   display: flex; align-items: center; gap: 11px;
@@ -714,24 +716,40 @@ footer {
 .item-card[data-cat].hidden { display: none; }
 
 /* ── RESPONSIVE ── */
+/* ===== COMPREHENSIVE MOBILE RESPONSIVE ===== */
 @media (max-width: 768px) {
   .nav-links { display: none; }
+  .nav-signin { padding: 7px 12px; font-size: .8rem; gap: 4px; }
+  .nav-signin .material-symbols-outlined { font-size: 15px; }
+  .nav-name { font-size: 1rem; }
 }
-@media (max-width: 480px) {
-  .hero-stat-divider { display: none; }
+@media (max-width: 500px) {
+  :root { --nav-h: 58px; }
+  /* Hide 'Apply' button text, show icon only */
+  .nav-signin:first-of-type span.material-symbols-outlined { display: inline; }
+  /* Stack buttons tighter */
+  nav > div:last-child { gap: 5px !important; }
+  .nav-signin { padding: 6px 10px; border-radius: 9px; }
+  .nav-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
 }
 @media (max-width: 700px) {
   #app > div { grid-template-columns: 1fr !important; }
   #app > div > div:last-child { display: none; }
-  .hero { min-height: 70vh; }
-  nav { padding: 0 16px; }
-  section { padding: 40px 16px; }
-  footer { padding: 20px 16px; flex-direction: column; gap: 8px; text-align: center; }
-  .cta-banner { padding: 28px 20px; border-radius: 16px; }
+  .hero { min-height: 75vh; }
+  nav { padding: 0 14px; }
+  section { padding: 36px 14px; }
+  footer { padding: 20px 14px; flex-direction: column; gap: 8px; text-align: center; }
+  .cta-banner { padding: 24px 16px; border-radius: 16px; }
 }
 @media (max-width: 480px) {
+  .hero-stat-divider { display: none; }
+  .hero-stats { gap: 12px !important; flex-wrap: wrap; justify-content: center; }
+  .hero-stat { flex: none; min-width: 70px; }
   .hero-actions { flex-direction: column; align-items: stretch; }
   .btn-hero-primary, .btn-hero-secondary { justify-content: center; }
+  .hero-title { font-size: clamp(2rem, 10vw, 3.5rem) !important; }
+  .hero-sub { font-size: .88rem; }
+  .section-title { font-size: 1.5rem !important; }
 }
 
 /* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */

@@ -514,10 +514,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 
 /* ── STATS ── */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
-.stat-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;min-height:130px;}
+.stat-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;min-height:110px;}
 .stat-icon-wrap{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;}
 .stat-icon-wrap .material-symbols-outlined{font-size:20px;}
-.stat-value{font-size:1.7rem;font-weight:800;color:#fff;letter-spacing:-.03em;margin-top:10px;}
+.stat-value{font-size:clamp(1.2rem,4vw,1.7rem);font-weight:800;color:#fff;letter-spacing:-.03em;margin-top:10px;}
 .stat-label{font-size:.68rem;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.07em;margin-top:4px;}
 .stat-badge{font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;}
 
@@ -614,7 +614,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
   .content{padding:14px;}
   .topbar-right .topbar-user-name,.topbar-right .topbar-user-role{display:none;}
 }
-@media(max-width:600px){.stats-grid{grid-template-columns:1fr;}}
+@media(max-width:600px){.stats-grid{grid-template-columns:repeat(2,1fr)!important;}.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
 
 /* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
 * { -webkit-tap-highlight-color: transparent; }
@@ -813,7 +813,7 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="width:36px;height:36px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
         <span class="material-symbols-outlined" style="font-size:20px;">menu</span>
       </button>
       <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF','applicants'=>'Online Applications'];echo $titles[$active_page]??'Dashboard';?></span>

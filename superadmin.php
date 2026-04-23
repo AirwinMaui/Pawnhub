@@ -1101,7 +1101,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .topbar-title{font-size:.88rem;}
   .content{padding:16px;}
 }
-@media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
+@media(max-width:600px){.stats-grid,.summary-grid{grid-template-columns:repeat(2,1fr)!important;}.summary-grid-3{grid-template-columns:repeat(2,1fr)!important;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
 
 /* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
 * { -webkit-tap-highlight-color: transparent; }
@@ -1121,6 +1121,7 @@ input, select, textarea { font-size: max(16px, 1rem) !important; }
 /* Smooth scrolling on mobile */
 html { scroll-behavior: smooth; }
 
+@media(max-width:400px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr!important;}}
 /* iOS 100vh fix — use dynamic viewport height */
 .sidebar {
     height: 100dvh !important;
@@ -1266,7 +1267,7 @@ table { width: 100%; border-collapse: collapse; min-width: 500px; }
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <span class="topbar-title">

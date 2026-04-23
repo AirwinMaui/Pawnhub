@@ -573,7 +573,7 @@ $notif_count = count($notifs);
 <div class="main">
   <header class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:34px;height:34px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
+      <button id="mob-menu-btn" onclick="toggleSidebar()" style="width:34px;height:34px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
         <span class="material-symbols-outlined" style="font-size:18px;">menu</span>
       </button>
       <?php if($tenant): ?><span class="tenant-badge"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
