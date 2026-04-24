@@ -1093,21 +1093,21 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 @media(max-width:768px){
   .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
   .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.5);}
-  .main{margin-left:0!important;width:100%!important;max-width:100vw!important;}
-  .topbar{padding:0 14px;}
+  .main{margin-left:0!important;width:100%;}
+  .topbar{padding:0 16px;}
   #mob-menu-btn{display:flex!important;}
   .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;backdrop-filter:blur(2px);}
   .mob-overlay.open{display:block;}
-  .topbar-title{font-size:.85rem;}
-  .content{padding:12px;}
-  /* Stats: always 2x2 grid on mobile portrait */
-  .stats-grid{grid-template-columns:1fr 1fr!important;gap:10px;}
-  .stat-card{flex-direction:column;align-items:flex-start;gap:8px;padding:14px 12px;}
+  .topbar-title{font-size:.88rem;}
+  .content{padding:14px;}
+  /* Stats: 2 columns, cards show full content (column layout) */
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .stat-card{flex-direction:column;align-items:flex-start;gap:8px;padding:14px;}
   .stat-icon{width:34px;height:34px;}
-  .stat-value{font-size:1.25rem;}
+  .stat-value{font-size:1.3rem;}
   /* two-col: single column on mobile */
   .two-col{grid-template-columns:1fr;}
-  /* Tables: horizontal scroll */
+  /* Tables: wrap only the inner div[overflow-x:auto] — NOT the card itself */
   div[style*="overflow-x:auto"]{-webkit-overflow-scrolling:touch;}
   div[style*="overflow-x:auto"] table{min-width:480px;}
 }
@@ -1186,11 +1186,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </span>
       <span class="super-chip">SUPER ADMIN</span>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <button onclick="document.getElementById('addTenantModal').classList.add('open')" class="btn-sm btn-primary">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Add Tenant + Invite
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <button onclick="document.getElementById('addTenantModal').classList.add('open')" class="btn-sm btn-primary topbar-add-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="btn-add-full">Add Tenant + Invite</span><span class="btn-add-short">+ Add</span>
       </button>
-      <div style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
+      <div class="topbar-date" style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
     </div>
   </header>
 
@@ -2545,6 +2545,15 @@ function updatePlanCard(selected){
 <style>
 @keyframes logoutIn { from { opacity:0;transform:translateY(14px) } to { opacity:1;transform:none } }
 .sb-logout { background:none; border:none; cursor:pointer; font-family:inherit; width:100%; text-align:left; }
+/* Topbar button responsive */
+.btn-add-short { display: none; }
+.topbar-date { display: block; }
+@media(max-width:768px){
+  .btn-add-full { display: none; }
+  .btn-add-short { display: inline; }
+  .topbar-date { display: none; }
+  .topbar-add-btn { padding: 5px 10px !important; font-size: .72rem !important; }
+}
 </style>
 <script>
 function showLogoutModal(url) {

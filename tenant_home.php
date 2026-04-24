@@ -719,18 +719,18 @@ footer {
 /* ===== COMPREHENSIVE MOBILE RESPONSIVE ===== */
 @media (max-width: 768px) {
   .nav-links { display: none; }
-  .nav-signin { padding: 7px 12px; font-size: .8rem; gap: 4px; }
-  .nav-signin .material-symbols-outlined { font-size: 15px; }
+  .nav-signin { padding: 6px 10px; font-size: .78rem; gap: 4px; line-height: 1; }
+  .nav-signin .material-symbols-outlined { font-size: 14px !important; line-height: 1; width: 14px; height: 14px; }
   .nav-name { font-size: 1rem; }
 }
 @media (max-width: 500px) {
-  :root { --nav-h: 58px; }
-  /* Hide 'Apply' button text, show icon only */
+  :root { --nav-h: 56px; }
   .nav-signin:first-of-type span.material-symbols-outlined { display: inline; }
-  /* Stack buttons tighter */
-  nav > div:last-child { gap: 5px !important; }
-  .nav-signin { padding: 6px 10px; border-radius: 9px; }
-  .nav-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
+  nav > div:last-child { gap: 4px !important; }
+  .nav-signin { padding: 5px 9px; border-radius: 9px; font-size: .75rem; }
+  .nav-signin .material-symbols-outlined { font-size: 13px !important; line-height: 1; }
+  .nav-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88rem; }
+  .nav-logo { width: 34px; height: 34px; }
 }
 @media (max-width: 700px) {
   #app > div { grid-template-columns: 1fr !important; }

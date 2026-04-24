@@ -148,7 +148,7 @@ html { scroll-behavior: smooth; }
     </div>
     <div class="flex items-center gap-3">
       <a href="login.php"  class="hidden sm:block text-white font-semibold hover:opacity-80 transition-all px-4 py-2 rounded-xl hover:bg-white/10">Sign In</a>
-      <a href="signup.php" class="bg-blue-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-blue-600 transition-all">Get Started</a>
+      <a href="signup.php" class="bg-blue-500 text-white px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl font-semibold hover:bg-blue-600 transition-all text-sm sm:text-base">Get Started</a>
       <button onclick="document.getElementById('mobile-menu').classList.toggle('open')" class="md:hidden text-white p-2 rounded-lg hover:bg-white/10">
         <span class="material-symbols-outlined">menu</span>
       </button>
