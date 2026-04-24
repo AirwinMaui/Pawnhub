@@ -332,17 +332,22 @@ nav {
 }
 .nav-link:hover { color: var(--text); background: var(--surface-2); }
 .nav-signin {
-  display: flex; align-items: center; gap: 7px;
-  font-size: .88rem; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .82rem; font-weight: 700;
   color: #fff; text-decoration: none;
-  padding: 9px 20px; border-radius: 12px;
-  background: var(--primary);
-  box-shadow: 0 4px 18px color-mix(in srgb, var(--primary) 40%, transparent);
+  padding: 8px 16px; border-radius: 10px;
+  line-height: 1; height: auto; min-height: unset;
   transition: all .2s;
   border: none; cursor: pointer; font-family: inherit;
+  white-space: nowrap; box-sizing: border-box;
 }
 .nav-signin:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.nav-signin .material-symbols-outlined { font-size: 17px; }
+.nav-signin .material-symbols-outlined {
+  font-size: 16px !important;
+  line-height: 1 !important;
+  width: 16px; height: 16px;
+  vertical-align: middle;
+}
 
 /* ── HERO ── */
 .hero {
@@ -704,14 +709,46 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 [data-theme="light"] .info-card-title  { color: rgba(15,17,23,0.50) !important; }
 [data-theme="dark"]  .info-card-val    { color: #f0f2f7 !important; }
 [data-theme="light"] .info-card-val    { color: #0f1117 !important; }
+[data-theme="dark"]  .item-name        { color: #ffffff !important; }
 [data-theme="light"] .item-name        { color: #0f1117 !important; }
+[data-theme="dark"]  .item-price       { color: #ffffff !important; }
 [data-theme="light"] .item-price       { color: #0f1117 !important; }
+[data-theme="dark"]  .item-cond        { color: rgba(240,242,247,0.45) !important; }
 [data-theme="light"] .item-cond        { color: rgba(15,17,23,0.45) !important; }
+[data-theme="dark"]  .item-price-label { color: rgba(240,242,247,0.45) !important; }
 [data-theme="light"] .item-price-label { color: rgba(15,17,23,0.45) !important; }
+[data-theme="dark"]  .item-stock       { color: color-mix(in srgb, var(--accent) 90%, #fff) !important; }
+[data-theme="light"] .item-stock       { color: color-mix(in srgb, var(--accent) 70%, #000) !important; }
+[data-theme="dark"]  .item-cat-badge   { color: rgba(240,242,247,0.7) !important; }
+[data-theme="light"] .item-cat-badge   { color: rgba(15,17,23,0.6) !important; background: rgba(245,246,250,.92) !important; }
 [data-theme="dark"]  .hero-title       { color: #ffffff !important; text-shadow: 0 2px 16px rgba(0,0,0,.5); }
+[data-theme="light"] .hero-title       { color: #0f1117 !important; }
 [data-theme="dark"]  .hero-sub         { color: rgba(240,242,247,0.75) !important; }
 [data-theme="light"] .hero-sub         { color: rgba(15,17,23,0.6) !important; }
+[data-theme="dark"]  .hero-stat-val    { color: #ffffff !important; }
+[data-theme="light"] .hero-stat-val    { color: #0f1117 !important; }
+[data-theme="dark"]  .hero-stat-label  { color: rgba(240,242,247,0.4) !important; }
+[data-theme="light"] .hero-stat-label  { color: rgba(15,17,23,0.4) !important; }
+[data-theme="dark"]  .cat-pill         { color: rgba(240,242,247,0.65) !important; }
 [data-theme="light"] .cat-pill         { color: rgba(15,17,23,0.65) !important; }
+[data-theme="dark"]  .nav-name         { color: #ffffff !important; }
+[data-theme="light"] .nav-name         { color: #0f1117 !important; }
+.has-bg-img .nav-name                  { color: #ffffff !important; }
+.has-bg-img .hero-title                { color: #ffffff !important; text-shadow: 0 2px 16px rgba(0,0,0,.55); }
+.has-bg-img .hero-sub                  { color: rgba(255,255,255,.85) !important; text-shadow: 0 1px 8px rgba(0,0,0,.4); }
+.has-bg-img .hero-stat-val             { color: #ffffff !important; }
+.has-bg-img .hero-stat-label           { color: rgba(255,255,255,.5) !important; }
+[data-theme="dark"]  .featured-card-name  { color: #ffffff !important; }
+[data-theme="light"] .featured-card-name  { color: #0f1117 !important; }
+[data-theme="dark"]  .featured-card-price { color: #ffffff !important; }
+[data-theme="light"] .featured-card-price { color: #0f1117 !important; }
+[data-theme="dark"]  .footer-name      { color: rgba(240,242,247,0.7) !important; }
+[data-theme="light"] .footer-name      { color: rgba(15,17,23,0.7) !important; }
+[data-theme="dark"]  .footer-meta      { color: rgba(240,242,247,0.3) !important; }
+[data-theme="light"] .footer-meta      { color: rgba(15,17,23,0.35) !important; }
+/* Promo card titles always white (dark card bg) */
+[data-theme="light"] .promo-title      { color: #0f1117 !important; }
+[data-theme="dark"]  .promo-title      { color: #ffffff !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -914,8 +951,16 @@ footer {
 /* ===== COMPREHENSIVE MOBILE RESPONSIVE ===== */
 @media (max-width: 768px) {
   .nav-links { display: none; }
-  .nav-signin { padding: 6px 10px; font-size: .78rem; gap: 4px; line-height: 1; }
-  .nav-signin .material-symbols-outlined { font-size: 14px !important; line-height: 1; width: 14px; height: 14px; }
+  .nav-signin {
+    padding: 8px 12px !important;
+    font-size: .78rem !important;
+    gap: 5px !important;
+    line-height: 1 !important;
+    height: auto !important;
+    min-height: unset !important;
+    border-radius: 10px !important;
+  }
+  .nav-signin .material-symbols-outlined { font-size: 14px !important; line-height: 1 !important; width: 14px !important; height: 14px !important; }
   .nav-name { font-size: 1rem; }
   .nav-signin-login {
     background: var(--primary) !important;
@@ -925,10 +970,16 @@ footer {
 }
 @media (max-width: 500px) {
   :root { --nav-h: 56px; }
-  .nav-signin:first-of-type span.material-symbols-outlined { display: inline; }
   nav > div:last-child { gap: 4px !important; }
-  .nav-signin { padding: 5px 9px; border-radius: 9px; font-size: .75rem; }
-  .nav-signin .material-symbols-outlined { font-size: 13px !important; line-height: 1; }
+  .nav-signin {
+    padding: 7px 10px !important;
+    border-radius: 9px !important;
+    font-size: .75rem !important;
+    line-height: 1 !important;
+    height: auto !important;
+    min-height: unset !important;
+  }
+  .nav-signin .material-symbols-outlined { font-size: 13px !important; line-height: 1 !important; width: 13px !important; height: 13px !important; }
   .nav-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88rem; }
   .nav-logo { width: 34px; height: 34px; }
 }
