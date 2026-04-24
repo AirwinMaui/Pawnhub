@@ -1094,32 +1094,18 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
   .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.5);}
   .main{margin-left:0!important;width:100%;}
-  .topbar{padding:0 12px;gap:8px;}
+  .topbar{padding:0 16px;}
   #mob-menu-btn{display:flex!important;}
   .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;backdrop-filter:blur(2px);}
   .mob-overlay.open{display:block;}
-  .topbar-title{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
-  .super-chip{font-size:.62rem;padding:2px 7px;}
-  /* Hide date text on small screens to save topbar space */
-  .topbar-date{display:none!important;}
+  .topbar-title{font-size:.88rem;}
   .content{padding:14px;}
-  /* Stats: 2×2 grid, cards show full content */
-  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
-  .stat-card{flex-direction:column;align-items:flex-start;gap:8px;padding:14px 12px;}
-  .stat-icon{width:34px;height:34px;}
+  /* Tables: horizontal scroll on mobile/tablet */
+  .card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{min-width:500px;}
+  /* Stats: 2 columns on tablet */
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
   .stat-value{font-size:1.25rem;}
-  .stat-sub{font-size:.68rem;}
-  .stat-label{font-size:.65rem;}
-  /* summary grids */
-  .summary-grid{grid-template-columns:repeat(2,1fr);}
-  /* two-col: single column on mobile */
-  .two-col{grid-template-columns:1fr;}
-  /* Tables: wrap only the inner div[overflow-x:auto] — NOT the card itself */
-  div[style*="overflow-x:auto"]{-webkit-overflow-scrolling:touch;}
-  div[style*="overflow-x:auto"] table{min-width:480px;}
-  /* chart */
-  .chart-wrap{height:180px;}
-  .two-col .card{margin-bottom:10px;}
 }
 @media(max-width:600px){
   .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:repeat(2,1fr);}
@@ -1128,14 +1114,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}
   .filter-bar .filter-actions{width:100%;justify-content:flex-start;}
   .content{padding:12px;}
-  .stat-card{padding:12px 10px;}
-  .stat-value{font-size:1.15rem;}
 }
 @media(max-width:400px){
-  .stats-grid{grid-template-columns:1fr 1fr;gap:8px;}
-  .stat-card{padding:10px 8px;gap:6px;}
-  .stat-value{font-size:1.05rem;}
-  .topbar-title{font-size:.78rem;}
+  .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr 1fr;}
+  .super-chip{display:none;}
 }
 </style>
 </head>
@@ -1194,7 +1176,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 <!-- ══ MAIN ══════════════════════════════════════════════════════ -->
 <div class="main">
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden;">
+    <div style="display:flex;align-items:center;gap:10px;">
       <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
@@ -1204,11 +1186,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </span>
       <span class="super-chip">SUPER ADMIN</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;">
       <button onclick="document.getElementById('addTenantModal').classList.add('open')" class="btn-sm btn-primary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Add Tenant + Invite
       </button>
-      <div class="topbar-date" style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
+      <div style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
     </div>
   </header>
 
@@ -1339,10 +1321,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
       <?php endif;?>
 
-      <div class="card">
+      <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
         <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
-        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="font-size:.79rem;min-width:600px;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
+        <?php else:?><table style="font-size:.79rem;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
         <?php foreach($tenants as $t):
           // Subscription expiry display logic
           $sub_end   = $t['subscription_end'] ?? null;
@@ -1416,7 +1398,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             </div>
           </td>
         </tr>
-        <?php endforeach;?></tbody></table></div><?php endif;?>
+        <?php endforeach;?></tbody></table><?php endif;?>
       </div>
 
     <!-- ══ SUBSCRIPTIONS PAGE ═══════════════════════════════════ -->
@@ -1830,7 +1812,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <?php if($report_type==='tenant_activity'):
         $rt=count($report_data);$ru=array_sum(array_column($report_data,'user_count'));$rat=count(array_filter($report_data,fn($r)=>$r['status']==='active'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Tenants</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rat?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num"><?=$ru?></div><div class="summary-lbl">Total Users</div></div></div>
-        <div class="card"><div class="card-hdr"><span class="card-title">🏢 Tenant Activity Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
+        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">🏢 Tenant Activity Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Business</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><?=htmlspecialchars($r['owner_name'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['user_count']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
@@ -1839,7 +1821,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <?php elseif($report_type==='user_registration'):
         $rt=count($report_data);$ra=count(array_filter($report_data,fn($r)=>$r['status']==='approved'));$rp=count(array_filter($report_data,fn($r)=>$r['status']==='pending'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Registrations</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$ra?></div><div class="summary-lbl">Approved</div></div><div class="summary-item"><div class="summary-num" style="color:var(--warning);"><?=$rp?></div><div class="summary-lbl">Pending</div></div></div>
-        <div class="card"><div class="card-hdr"><span class="card-title">👤 User Registration Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
+        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">👤 User Registration Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Tenant</th><th>Status</th><th>Suspended</th><th>Registered</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['fullname'])?></td><td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?=htmlspecialchars($r['username'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']]??'b-gray'?>"><?=ucfirst($r['role'])?></span></td><td style="font-size:.78rem;"><?=htmlspecialchars($r['business_name']??'—')?></td><td><span class="badge <?=$r['status']==='approved'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($r['status'])?></span></td><td><?=$r['is_suspended']?'<span class="badge b-red">Yes</span>':'<span class="badge b-green">No</span>'?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
@@ -1848,7 +1830,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <?php elseif($report_type==='usage_statistics'):
         $rtu=array_sum(array_column($report_data,'total_users'));$rau=array_sum(array_column($report_data,'active_users'));$rsu=array_sum(array_column($report_data,'suspended_users'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rtu?></div><div class="summary-lbl">Total Users</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rau?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num" style="color:var(--danger);"><?=$rsu?></div><div class="summary-lbl">Suspended</div></div></div>
-        <div class="card"><div class="card-hdr"><span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span></div>
+        <div class="card" style="overflow-x:auto;"><div class="card-hdr"><span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['total_users']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td><span class="badge b-green"><?=$r['active_users']?></span></td><td><span class="badge <?=$r['suspended_users']>0?'b-red':'b-gray'?>"><?=$r['suspended_users']?></span></td></tr><?php endforeach;?>
@@ -1904,7 +1886,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
 
       <div class="two-col">
-        <div class="card">
+        <div class="card" style="overflow-x:auto;">
           <div class="card-hdr"><span class="card-title">🏢 Subscription Payments Per Tenant</span></div>
           <?php if(empty($sales_per_tenant)):?><div class="empty-state"><p>No data.</p></div>
           <?php else:?><table><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Renewals</th><th>Amount Paid (₱)</th><th>Avg (₱)</th><th>Last Payment</th></tr></thead><tbody>
@@ -1931,7 +1913,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">📋 Subscription Payment History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
         <?php if(empty($tx_history)):?><div class="empty-state"><p>No subscription payments found for the selected period.</p></div>
         <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Payment Method</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
@@ -2135,7 +2117,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="summary-item"><div class="summary-num" style="font-size:.85rem;color:var(--text-dim);"><?=htmlspecialchars($audit_date_from)?> — <?=htmlspecialchars($audit_date_to)?></div><div class="summary-lbl">Date Range</div></div>
       </div>
 
-      <div class="card">
+      <div class="card" style="overflow-x:auto;">
         <div class="card-hdr"><span class="card-title">📋 Audit Logs</span><span style="font-size:.74rem;color:var(--text-dim);">Showing <?=count($audit_logs)?> of <?=number_format($audit_total)?> entries</span></div>
         <?php if(empty($audit_logs)):?>
           <div class="empty-state">
@@ -2184,7 +2166,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
     <!-- ══ INVITATIONS PAGE ════════════════════════════════════ -->
     <?php elseif($active_page==='invitations'): ?>
-      <div class="card">
+      <div class="card" style="overflow-x:auto;">
         <div class="card-hdr">
           <span class="card-title">📧 Email Invitations</span>
           <span style="font-size:.75rem;color:var(--text-dim);"><?=count($invitations)?> total · <?=$pending_inv?> pending</span>
