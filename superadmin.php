@@ -1037,6 +1037,7 @@ table{width:100%;border-collapse:collapse;}
 th{font-size:.67rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);padding:7px 11px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
 td{padding:10px 11px;font-size:.81rem;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
 tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
+.table-responsive{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px;}
 .badge{display:inline-flex;align-items:center;gap:3px;font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:100px;}
 .b-blue{background:#dbeafe;color:#1d4ed8;} .b-green{background:#dcfce7;color:#15803d;} .b-red{background:#fee2e2;color:#dc2626;} .b-yellow{background:#fef3c7;color:#b45309;} .b-purple{background:#f3e8ff;color:#7c3aed;} .b-gray{background:#f1f5f9;color:#475569;} .b-orange{background:#ffedd5;color:#c2410c;} .b-teal{background:#ccfbf1;color:#0f766e;}
 .plan-ent{background:linear-gradient(135deg,#dbeafe,#ede9fe);color:#4338ca;border:1px solid #c7d2fe;} .plan-pro{background:#fef3c7;color:#b45309;} .plan-starter{background:#f1f5f9;color:#475569;}
@@ -1090,18 +1091,83 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 .page-section{color:#fff;}
 @media(max-width:1200px){.stats-grid,.summary-grid{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr;}}
 @media(max-width:900px){.filter-bar{gap:8px;}.filter-bar .filter-actions{margin-left:0;}}
+
+/* ── TABLET & MOBILE BASE ── */
 @media(max-width:768px){
   .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
   .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.5);}
   .main{margin-left:0!important;width:100%;}
-  .topbar{padding:0 16px;}
+  .topbar{padding:0 12px;gap:6px;flex-wrap:nowrap;}
+  .topbar > div:first-child{min-width:0;flex:1;overflow:hidden;}
+  .topbar > div:last-child{flex-shrink:0;}
   #mob-menu-btn{display:flex!important;}
   .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;backdrop-filter:blur(2px);}
   .mob-overlay.open{display:block;}
-  .topbar-title{font-size:.88rem;}
-  .content{padding:16px;}
+  .topbar-title{font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+  .super-chip{font-size:.6rem;padding:2px 7px;white-space:nowrap;}
+  .content{padding:12px;}
+  .card{padding:14px 12px;}
+
+  /* Cards that have overflow-x:auto inline — let header stay, scroll only table area */
+  div.card[style*="overflow-x"]{overflow-x:visible!important;}
+
+  /* Scroll wrapper: inner divs with overflow-x:auto */
+  div[style*="overflow-x:auto"]{overflow-x:auto!important;-webkit-overflow-scrolling:touch;}
+
+  /* All tables get a minimum width so they don't squish */
+  table{min-width:520px;}
+
+  /* Stats grid tablet: 2 cols */
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .stat-card{padding:12px 14px;gap:10px;}
+  .stat-value{font-size:1.25rem;}
+
+  /* Topbar action button: hide text, icon only on very small */
+  .topbar .btn-sm span.btn-label{display:none;}
+
+  /* Filter bar */
+  .filter-bar{padding:10px 12px;gap:6px;}
+  .filter-bar .filter-group{flex-wrap:wrap;}
+  .filter-input[type="date"]{min-width:110px;}
+  .filter-select{min-width:90px;}
+
+  /* Modal full width on mobile */
+  .modal{width:95vw!important;max-width:95vw!important;margin:8px;}
+
+  /* Summary grids */
+  .summary-grid{grid-template-columns:repeat(2,1fr);}
+  .summary-grid-3{grid-template-columns:repeat(2,1fr);}
 }
-@media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
+
+/* ── SMALL MOBILE (phones) ── */
+@media(max-width:600px){
+  .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr 1fr;}
+  .filter-bar{flex-direction:column;align-items:flex-start;}
+  .filter-bar .filter-group{width:100%;}
+  .filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}
+  .filter-bar .filter-actions{width:100%;justify-content:flex-start;}
+  .content{padding:10px;}
+  .topbar-title{max-width:90px;}
+
+  /* Table scroll on phones — ensure min-width for readability */
+  table{min-width:460px;}
+
+  /* Buttons in table cells: stack if needed */
+  td .btn-sm{margin-bottom:3px;font-size:.68rem;padding:4px 8px;}
+
+  /* Two col always single on phone */
+  .two-col{grid-template-columns:1fr;}
+}
+
+/* ── VERY SMALL (320px phones) ── */
+@media(max-width:400px){
+  .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}
+  .stat-value{font-size:1.1rem;}
+  .content{padding:8px;}
+  .card{padding:12px 10px;}
+  .topbar-title{max-width:70px;font-size:.78rem;}
+  .super-chip{display:none;}
+}
 </style>
 </head>
 <body>
@@ -1304,10 +1370,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
       <?php endif;?>
 
-      <div class="card" style="overflow-x:auto;">
+      <div class="card">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
         <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
-        <?php else:?><table style="font-size:.79rem;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
+        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="font-size:.79rem;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
         <?php foreach($tenants as $t):
           // Subscription expiry display logic
           $sub_end   = $t['subscription_end'] ?? null;
@@ -1381,7 +1447,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             </div>
           </td>
         </tr>
-        <?php endforeach;?></tbody></table><?php endif;?>
+        <?php endforeach;?></tbody></table></div><?php endif;?>
       </div>
 
     <!-- ══ SUBSCRIPTIONS PAGE ═══════════════════════════════════ -->
