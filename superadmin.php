@@ -1099,9 +1099,26 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;backdrop-filter:blur(2px);}
   .mob-overlay.open{display:block;}
   .topbar-title{font-size:.88rem;}
-  .content{padding:16px;}
+  .content{padding:14px;}
+  /* Tables: horizontal scroll on mobile/tablet */
+  .card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table{min-width:500px;}
+  /* Stats: 2 columns on tablet */
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .stat-value{font-size:1.25rem;}
 }
-@media(max-width:600px){.stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr;}.filter-bar{flex-direction:column;align-items:flex-start;}.filter-bar .filter-group{width:100%;}.filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}.filter-bar .filter-actions{width:100%;justify-content:flex-start;}}
+@media(max-width:600px){
+  .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:repeat(2,1fr);}
+  .filter-bar{flex-direction:column;align-items:flex-start;}
+  .filter-bar .filter-group{width:100%;}
+  .filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}
+  .filter-bar .filter-actions{width:100%;justify-content:flex-start;}
+  .content{padding:12px;}
+}
+@media(max-width:400px){
+  .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:1fr 1fr;}
+  .super-chip{display:none;}
+}
 </style>
 </head>
 <body>
