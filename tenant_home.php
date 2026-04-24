@@ -217,37 +217,40 @@ body {
 /* ── BACKGROUND ── */
 .bg-scene {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: #08090c;
 }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
   transition: opacity .4s, filter .4s;
 }
-/* Light mode: subtle, washed-back image */
-:root .bg-scene-img {
-  opacity: .32;
-  filter: saturate(0.7) brightness(1.05);
-  mix-blend-mode: normal;
+/* Light mode: multiply blend so white-bg images fade into page,
+   high brightness lifts dark-bg images so they stay visible */
+:root .bg-scene-img,
+[data-theme="light"] .bg-scene-img {
+  opacity: .55;
+  filter: saturate(0.75) brightness(1.35) contrast(0.9);
+  mix-blend-mode: multiply;
 }
-/* Dark mode: use 'screen' blend so white/light areas of the image
-   become transparent against the dark background instead of appearing
-   as bright washed-out blocks */
+/* Dark mode: screen blend so white pixels become transparent vs dark bg,
+   black-bg images also benefit — black pixels vanish, colors pop */
 [data-theme="dark"] .bg-scene-img {
   opacity: 1;
-  filter: saturate(1.1) brightness(0.88);
+  filter: saturate(1.05) brightness(1.1) contrast(1.05);
   mix-blend-mode: screen;
 }
 .bg-gradient {
   position: absolute; inset: 0;
 }
 /* Light mode gradient */
-:root .bg-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(245,246,250,0.1) 0%, rgba(245,246,250,0.4) 40%, rgba(245,246,250,0.88) 75%, var(--bg) 92%);
+:root .bg-gradient,
+[data-theme="light"] .bg-gradient {
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(245,246,250,0.05) 0%, rgba(245,246,250,0.35) 45%, rgba(245,246,250,0.88) 72%, var(--bg) 90%);
 }
-/* Dark mode gradient — less heavy so screen-blended image stays visible */
+/* Dark mode gradient — light so screen-blended image stays vivid */
 [data-theme="dark"] .bg-gradient {
   background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.15) 40%, rgba(8,9,12,0.65) 75%, #08090c 92%);
+              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.12) 40%, rgba(8,9,12,0.60) 75%, #08090c 92%);
 }
 
 /* ── NAV ── */
