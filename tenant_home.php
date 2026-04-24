@@ -250,6 +250,19 @@ nav {
   transition: background .3s;
   box-sizing: border-box;
 }
+/* When bg image present, nav text is always white for contrast */
+.has-bg-img nav,
+[data-theme="dark"] nav { background: rgba(8,9,12,0.7); border-color: rgba(255,255,255,.08); }
+.has-bg-img .nav-name,
+[data-theme="dark"] .nav-name { color: #fff; }
+.has-bg-img .nav-link,
+[data-theme="dark"] .nav-link { color: rgba(255,255,255,.65); }
+.has-bg-img .nav-link:hover,
+[data-theme="dark"] .nav-link:hover { color: #fff; background: rgba(255,255,255,.08); }
+.has-bg-img .dm-toggle,
+[data-theme="dark"] .dm-toggle { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.15); color: rgba(255,255,255,.7); }
+.has-bg-img .dm-toggle:hover,
+[data-theme="dark"] .dm-toggle:hover { background: rgba(255,255,255,.18); color: #fff; }
 .nav-brand {
   display: flex; align-items: center; gap: 11px;
   text-decoration: none;
@@ -278,7 +291,7 @@ nav {
   padding: 7px 14px; border-radius: 10px;
   transition: all .18s;
 }
-.nav-link:hover { color: #fff; background: var(--surface-2); }
+.nav-link:hover { color: var(--text); background: var(--surface-2); }
 .nav-signin {
   display: flex; align-items: center; gap: 7px;
   font-size: .88rem; font-weight: 700;
@@ -303,11 +316,17 @@ nav {
 .hero-eyebrow {
   display: inline-flex; align-items: center; gap: 7px;
   font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 90%, #fff);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  color: color-mix(in srgb, var(--accent) 90%, #000);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   padding: 5px 14px; border-radius: 100px;
   margin-bottom: 20px;
+}
+/* When bg image is present (dark theme), eyebrow text should be lighter */
+[data-theme="dark"] .hero-eyebrow {
+  color: color-mix(in srgb, var(--accent) 90%, #fff);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .hero-eyebrow .material-symbols-outlined {
   font-size: 13px;
@@ -329,6 +348,14 @@ nav {
   max-width: 480px;
   margin: 0 auto 32px;
 }
+/* Light mode hero text needs better contrast when bg image is present */
+.has-bg-img .hero-title { color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.45); }
+.has-bg-img .hero-sub   { color: rgba(255,255,255,.82); text-shadow: 0 1px 8px rgba(0,0,0,.4); }
+.has-bg-img .hero-eyebrow {
+  color: color-mix(in srgb, var(--accent) 90%, #fff);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
 .hero-actions {
   display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
 }
@@ -343,15 +370,33 @@ nav {
   font-family: inherit;
 }
 .btn-hero-primary:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+/* Secondary hero button — dark bg in light mode for visibility, transparent in dark */
 .btn-hero-secondary {
   display: inline-flex; align-items: center; gap: 8px;
   font-size: .95rem; font-weight: 600;
-  color: var(--text-m); text-decoration: none;
+  color: var(--text); text-decoration: none;
   padding: 13px 24px; border-radius: 14px;
-  background: var(--surface); border: 1px solid var(--border);
+  background: rgba(0,0,0,0.08);
+  border: 1.5px solid rgba(0,0,0,0.18);
   transition: all .22s;
 }
-.btn-hero-secondary:hover { color: #fff; background: var(--surface-2); }
+[data-theme="dark"] .btn-hero-secondary,
+.has-bg-img .btn-hero-secondary {
+  color: rgba(255,255,255,.85);
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.28);
+}
+.btn-hero-secondary:hover {
+  color: var(--text);
+  background: rgba(0,0,0,0.15);
+  border-color: rgba(0,0,0,0.28);
+}
+[data-theme="dark"] .btn-hero-secondary:hover,
+.has-bg-img .btn-hero-secondary:hover {
+  color: #fff;
+  background: rgba(255,255,255,.2);
+}
 .hero-stats {
   display: flex; align-items: center; justify-content: center; gap: 28px;
   margin-top: 36px; flex-wrap: wrap;
@@ -865,7 +910,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 }
 </style>
 </head>
-<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>">
+<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>"<?= $has_bg ? ' class="has-bg-img"' : '' ?>>
 
 <!-- Background -->
 <div class="bg-scene">
@@ -1481,24 +1526,34 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItem();
   const body  = document.body;
   const icon  = document.getElementById('dmIcon');
   const STORE = 'th_<?= addslashes($slug) ?>_dm';
+  const hasBg = <?= $has_bg ? 'true' : 'false' ?>;
 
   function syncIcon() {
     if (!icon) return;
     icon.textContent = body.dataset.theme === 'dark' ? 'light_mode' : 'dark_mode';
   }
 
+  function applyTheme(dark) {
+    body.dataset.theme = dark ? 'dark' : 'light';
+    // has-bg-img controls hero/nav contrast — keep it if bg image exists AND dark mode
+    if (hasBg) {
+      body.classList.toggle('has-bg-img', dark);
+    }
+    syncIcon();
+  }
+
   // On load: check localStorage for saved preference
   const saved = localStorage.getItem(STORE);
   if (saved !== null) {
-    body.dataset.theme = saved === '1' ? 'dark' : 'light';
+    applyTheme(saved === '1');
+  } else {
+    syncIcon();
   }
-  syncIcon();
 
   window.toggleDarkMode = function() {
     const isDark = body.dataset.theme === 'dark';
-    body.dataset.theme = isDark ? 'light' : 'dark';
+    applyTheme(!isDark);
     localStorage.setItem(STORE, isDark ? '0' : '1');
-    syncIcon();
   };
 })();
 </script>
