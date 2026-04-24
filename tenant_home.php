@@ -74,6 +74,9 @@ if ($logo_url && strpos($logo_url,'http') !== 0 && $logo_url[0] !== '/') $logo_u
 
 $biz_name  = htmlspecialchars($tenant['business_name']);
 
+// If no background image is set → default to light mode; user can still toggle
+$has_bg = !empty($bg_url);
+
 // Hero text — customizable by tenant in Theme & Branding settings
 $hero_title    = $theme['hero_title']    ?? '';
 $hero_subtitle = $theme['hero_subtitle'] ?? '';
@@ -133,10 +136,41 @@ foreach ($promos as $p) {
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <style>
+/* ── LIGHT MODE (default when no bg image) ── */
 :root {
   --primary: <?= $primary ?>;
   --secondary: <?= $secondary ?>;
   --accent: <?= $accent ?>;
+  --bg: #f5f6fa;
+  --surface: rgba(0,0,0,0.04);
+  --surface-2: rgba(0,0,0,0.07);
+  --border: rgba(0,0,0,0.09);
+  --text: #0f1117;
+  --text-m: rgba(15,17,23,0.6);
+  --text-dim: rgba(15,17,23,0.35);
+  --radius: 16px;
+  --nav-h: 68px;
+  --nav-bg: rgba(245,246,250,0.85);
+  --footer-bg: rgba(0,0,0,0.03);
+  --modal-bg: #ffffff;
+  --hero-title-color: #0f1117;
+  --section-title-color: #0f1117;
+  --card-bg: #ffffff;
+  --placeholder-bg: linear-gradient(135deg,rgba(0,0,0,.03),rgba(0,0,0,.06));
+  --item-name-color: #0f1117;
+  --item-price-color: #0f1117;
+  --featured-bg-grad: linear-gradient(to top,rgba(245,246,250,.97) 0%,rgba(245,246,250,.4) 60%,transparent 100%);
+  --featured-name-color: #0f1117;
+  --featured-price-color: #0f1117;
+  --info-val-color: #0f1117;
+  --empty-title-color: rgba(15,17,23,.3);
+  --footer-name-color: rgba(15,17,23,.6);
+  --item-cat-badge-bg: rgba(245,246,250,.85);
+  color-scheme: light;
+}
+
+/* ── DARK MODE ── */
+[data-theme="dark"] {
   --bg: #08090c;
   --surface: rgba(255,255,255,0.04);
   --surface-2: rgba(255,255,255,0.07);
@@ -144,8 +178,23 @@ foreach ($promos as $p) {
   --text: #f0f2f7;
   --text-m: rgba(240,242,247,0.6);
   --text-dim: rgba(240,242,247,0.3);
-  --radius: 16px;
-  --nav-h: 68px;
+  --nav-bg: rgba(8,9,12,0.7);
+  --footer-bg: rgba(255,255,255,0.02);
+  --modal-bg: #0e1117;
+  --hero-title-color: #fff;
+  --section-title-color: #fff;
+  --card-bg: transparent;
+  --placeholder-bg: linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.06));
+  --item-name-color: #fff;
+  --item-price-color: #fff;
+  --featured-bg-grad: linear-gradient(to top,rgba(8,9,12,.95) 0%,rgba(8,9,12,.3) 60%,transparent 100%);
+  --featured-name-color: #fff;
+  --featured-price-color: #fff;
+  --info-val-color: #fff;
+  --empty-title-color: rgba(255,255,255,.3);
+  --footer-name-color: rgba(255,255,255,.6);
+  --item-cat-badge-bg: rgba(8,9,12,.75);
+  color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -158,6 +207,7 @@ body {
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background .3s, color .3s;
 }
 
 .material-symbols-outlined {
@@ -175,6 +225,15 @@ body {
 .bg-gradient {
   position: absolute; inset: 0;
   background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, var(--bg) 92%);
+}
+/* Light mode bg gradient */
+:root .bg-gradient {
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(245,246,250,0) 0%, rgba(245,246,250,0.25) 40%, rgba(245,246,250,0.82) 75%, var(--bg) 92%);
+}
+[data-theme="dark"] .bg-gradient {
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
               linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, #08090c 92%);
 }
 
@@ -184,7 +243,7 @@ nav {
   height: var(--nav-h);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 clamp(14px, 4vw, 48px);
-  background: rgba(8,9,12,0.7);
+  background: var(--nav-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -257,7 +316,7 @@ nav {
 .hero-title {
   font-family: 'DM Serif Display', serif;
   font-size: clamp(2.4rem, 6vw, 4.2rem);
-  color: #fff;
+  color: var(--hero-title-color);
   line-height: 1.1;
   letter-spacing: -.03em;
   margin-bottom: 16px;
@@ -300,7 +359,7 @@ nav {
 .hero-stat { text-align: center; }
 .hero-stat-val {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.8rem; color: #fff; line-height: 1;
+  font-size: 1.8rem; color: var(--hero-title-color); line-height: 1;
 }
 .hero-stat-label { font-size: .72rem; color: var(--text-dim); margin-top: 3px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; }
 .hero-stat-divider { width: 1px; height: 36px; background: var(--border); }
@@ -319,7 +378,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .section-title {
   font-family: 'DM Serif Display', serif;
   font-size: clamp(1.5rem, 3.5vw, 2.2rem);
-  color: #fff; line-height: 1.15;
+  color: var(--section-title-color); line-height: 1.15;
 }
 .see-all {
   display: flex; align-items: center; gap: 5px;
@@ -383,7 +442,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .item-img-wrap {
   aspect-ratio: 1 / 1; overflow: hidden;
-  background: rgba(255,255,255,.04);
+  background: var(--surface);
   position: relative;
 }
 .item-img-wrap img {
@@ -394,10 +453,10 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .item-img-placeholder {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, rgba(255,255,255,.03), rgba(255,255,255,.06));
+  background: var(--placeholder-bg);
 }
 .item-img-placeholder .material-symbols-outlined {
-  font-size: 52px; color: rgba(255,255,255,.1);
+  font-size: 52px; color: rgba(128,128,128,.2);
 }
 .item-featured-badge {
   position: absolute; top: 10px; left: 10px;
@@ -422,7 +481,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .item-cat-badge {
   position: absolute; top: 10px; right: 10px;
-  background: rgba(8,9,12,.75);
+  background: var(--item-cat-badge-bg);
   backdrop-filter: blur(8px);
   color: var(--text-m); font-size: .63rem; font-weight: 600;
   padding: 3px 9px; border-radius: 100px;
@@ -430,7 +489,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .item-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; }
 .item-name {
-  font-size: .9rem; font-weight: 700; color: #fff;
+  font-size: .9rem; font-weight: 700; color: var(--item-name-color);
   line-height: 1.35; margin-bottom: 5px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
@@ -444,7 +503,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .item-price {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.25rem; color: #fff;
+  font-size: 1.25rem; color: var(--item-price-color);
 }
 .item-price-label { font-size: .62rem; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-weight: 500; }
 .item-stock {
@@ -479,7 +538,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .featured-card:hover .featured-card-bg img { transform: scale(1.05); opacity: .65; }
 .featured-card-bg-grad {
   position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(8,9,12,.95) 0%, rgba(8,9,12,.3) 60%, transparent 100%);
+  background: var(--featured-bg-grad);
 }
 .featured-card-body {
   position: relative; z-index: 2; padding: 18px 18px 18px;
@@ -492,11 +551,11 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .featured-card-name {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.2rem; color: #fff; line-height: 1.25;
+  font-size: 1.2rem; color: var(--featured-name-color); line-height: 1.25;
   margin-bottom: 8px;
 }
 .featured-card-price {
-  font-size: 1rem; font-weight: 700; color: #fff;
+  font-size: 1rem; font-weight: 700; color: var(--featured-price-color);
 }
 .featured-star {
   position: absolute; top: 14px; right: 14px; z-index: 2;
@@ -527,7 +586,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 .info-card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px; }
-.info-card-val { font-size: 1rem; font-weight: 600; color: #fff; line-height: 1.5; }
+.info-card-val { font-size: 1rem; font-weight: 600; color: var(--info-val-color); line-height: 1.5; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -548,7 +607,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .qr-drive-link {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: .8rem; font-weight: 600;
-  color: #fff; text-decoration: none;
+  color: var(--text); text-decoration: none;
   padding: 8px 16px; border-radius: 10px;
   background: color-mix(in srgb, var(--primary) 20%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
@@ -597,13 +656,13 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .empty-shop .material-symbols-outlined {
   font-size: 64px; display: block; margin-bottom: 16px; opacity: .25;
 }
-.empty-shop-title { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: rgba(255,255,255,.3); margin-bottom: 8px; }
+.empty-shop-title { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--empty-title-color); margin-bottom: 8px; }
 .empty-shop-sub { font-size: .85rem; }
 
 /* ── FOOTER ── */
 footer {
   position: relative; z-index: 10;
-  background: rgba(255,255,255,.02);
+  background: var(--footer-bg);
   border-top: 1px solid var(--border);
   padding: 28px clamp(16px,5vw,64px);
   display: flex; align-items: center; justify-content: space-between;
@@ -618,7 +677,7 @@ footer {
 }
 .footer-logo img { width: 100%; height: 100%; object-fit: cover; }
 .footer-logo svg { width: 16px; height: 16px; }
-.footer-name { font-weight: 700; color: rgba(255,255,255,.6); font-size: .88rem; }
+.footer-name { font-weight: 700; color: var(--footer-name-color); font-size: .88rem; }
 .footer-meta { font-size: .74rem; color: var(--text-dim); }
 .footer-signin {
   display: inline-flex; align-items: center; gap: 6px;
@@ -639,13 +698,24 @@ footer {
 }
 .modal-overlay.open { display: flex; }
 .modal-box {
-  background: #0e1117;
+  background: var(--modal-bg);
   border: 1px solid var(--border);
   border-radius: 22px; width: 100%; max-width: 440px;
   box-shadow: 0 24px 80px rgba(0,0,0,.7);
   animation: mIn .25s ease both; overflow: hidden;
 }
 @keyframes mIn { from { opacity:0; transform: translateY(16px) } to { opacity:1; transform:none } }
+
+/* ── DARK MODE TOGGLE BUTTON ── */
+.dm-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  cursor: pointer; transition: all .2s; color: var(--text-m);
+  flex-shrink: 0;
+}
+.dm-toggle:hover { background: var(--surface-2); color: var(--text); }
+.dm-toggle .material-symbols-outlined { font-size: 19px; }
 .modal-head {
   background: linear-gradient(135deg, var(--secondary), var(--primary));
   padding: 28px 28px 24px;
@@ -795,7 +865,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 }
 </style>
 </head>
-<body>
+<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>">
 
 <!-- Background -->
 <div class="bg-scene">
@@ -834,6 +904,9 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   </div>
 
   <div style="display:flex;align-items:center;gap:8px;">
+    <button class="dm-toggle" onclick="toggleDarkMode()" id="dmBtn" title="Toggle dark mode">
+      <span class="material-symbols-outlined" id="dmIcon">dark_mode</span>
+    </button>
     <a href="<?= htmlspecialchars($register_url) ?>" class="nav-signin" style="background:color-mix(in srgb,var(--accent) 80%,#000);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 35%,transparent);">
       <span class="material-symbols-outlined">person_add</span>Apply
     </a>
@@ -1402,6 +1475,32 @@ function escHtml(str) {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItem(); });
+
+// ── Dark Mode Toggle ────────────────────────────────────────
+(function() {
+  const body  = document.body;
+  const icon  = document.getElementById('dmIcon');
+  const STORE = 'th_<?= addslashes($slug) ?>_dm';
+
+  function syncIcon() {
+    if (!icon) return;
+    icon.textContent = body.dataset.theme === 'dark' ? 'light_mode' : 'dark_mode';
+  }
+
+  // On load: check localStorage for saved preference
+  const saved = localStorage.getItem(STORE);
+  if (saved !== null) {
+    body.dataset.theme = saved === '1' ? 'dark' : 'light';
+  }
+  syncIcon();
+
+  window.toggleDarkMode = function() {
+    const isDark = body.dataset.theme === 'dark';
+    body.dataset.theme = isDark ? 'light' : 'dark';
+    localStorage.setItem(STORE, isDark ? '0' : '1');
+    syncIcon();
+  };
+})();
 </script>
 </body>
 </html>
