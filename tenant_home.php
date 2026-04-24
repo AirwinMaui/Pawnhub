@@ -648,6 +648,18 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   border: 1px solid var(--border);
   border-radius: 20px; padding: 24px;
 }
+[data-theme="light"] .info-card {
+  background: rgba(255,255,255,0.72);
+  border-color: rgba(0,0,0,0.10);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+[data-theme="dark"] .info-card {
+  background: rgba(15,17,23,0.65);
+  border-color: rgba(255,255,255,0.10);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
 .info-card-icon {
   width: 44px; height: 44px; border-radius: 12px;
   background: color-mix(in srgb, var(--primary) 15%, transparent);
@@ -661,6 +673,15 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .info-card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px; }
 .info-card-val { font-size: 1rem; font-weight: 600; color: var(--info-val-color); line-height: 1.5; }
+/* Force visible text on info cards regardless of theme */
+[data-theme="dark"] .info-card-title,
+[data-theme="dark"] .section-label { color: rgba(240,242,247,0.5) !important; }
+[data-theme="dark"] .info-card-val,
+[data-theme="dark"] .section-title { color: #f0f2f7 !important; }
+[data-theme="light"] .info-card-title,
+[data-theme="light"] .section-label { color: rgba(15,17,23,0.45) !important; }
+[data-theme="light"] .info-card-val,
+[data-theme="light"] .section-title { color: #0f1117 !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -866,6 +887,12 @@ footer {
   .nav-signin { padding: 6px 10px; font-size: .78rem; gap: 4px; line-height: 1; }
   .nav-signin .material-symbols-outlined { font-size: 14px !important; line-height: 1; width: 14px; height: 14px; }
   .nav-name { font-size: 1rem; }
+  /* Sign In button: same solid pill style as Apply on mobile */
+  .nav-signin-login {
+    background: var(--primary) !important;
+    box-shadow: 0 4px 18px color-mix(in srgb, var(--primary) 35%, transparent) !important;
+    color: #fff !important;
+  }
 }
 @media (max-width: 500px) {
   :root { --nav-h: 56px; }
@@ -984,7 +1011,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <a href="<?= htmlspecialchars($register_url) ?>" class="nav-signin" style="background:color-mix(in srgb,var(--accent) 80%,#000);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 35%,transparent);">
       <span class="material-symbols-outlined">person_add</span>Apply
     </a>
-    <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin">
+    <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin nav-signin-login" style="background:var(--primary);box-shadow:0 4px 18px color-mix(in srgb,var(--primary) 35%,transparent);">
       <span class="material-symbols-outlined">login</span>Sign In
     </a>
   </div>
