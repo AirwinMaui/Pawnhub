@@ -121,7 +121,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
 .topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;}
 .topnav-right{display:flex;align-items:center;gap:14px;}
 .topnav-right span{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.7);}
-.topnav-right .ico{font-size:22px;color:#fff;cursor:pointer;padding:7px;border-radius:50%;transition:background .2s;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
+.topnav-right .ico{font-size:22px;color:#fff;cursor:pointer;padding:7px;border-radius:50%;transition:background .2s;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;line-height:1;width:36px;height:36px;display:flex;align-items:center;justify-content:center;}
 .topnav-right .ico:hover{background:rgba(255,255,255,.12);}
 .page{position:relative;z-index:10;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 24px 100px;}
 .card{width:100%;max-width:520px;background:rgba(255,255,255,0.78);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.35);border-radius:16px;box-shadow:0 20px 40px rgba(30,58,138,0.1);padding:40px 44px;}
@@ -178,7 +178,9 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
   .grid2{grid-template-columns:1fr;}
   .footer-bar nav{display:none;}
   .topnav-right span{display:none;}
-  .topnav{padding:16px 16px;}
+  .topnav{padding:14px 16px;}
+  .topnav-brand{font-size:1.1rem;}
+  .topnav-right .ico{font-size:18px !important;width:30px;height:30px;padding:5px;}
   .page{padding:80px 12px 80px;}
   .bento-row{grid-template-columns:repeat(3,1fr);}
 }
@@ -196,6 +198,13 @@ html { -webkit-text-size-adjust: 100%; }
 .overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
 /* Prevent iOS zoom on input focus */
 input, select, textarea { font-size: max(16px, 1rem) !important; }
+/* Android Material Symbols fix - prevent large icon rendering */
+.material-symbols-outlined,
+[class*="material-symbols"],
+.ico, .ms, .ms-ico, .ms-inline {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20 !important;
+  line-height: 1 !important;
+}
 /* Mobile sidebar fix */
 @media (max-width: 768px) {
   .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
