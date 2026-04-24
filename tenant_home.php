@@ -279,8 +279,9 @@ nav {
 .nav-name {
   font-family: 'DM Serif Display', serif;
   font-size: 1.2rem;
-  color: #fff;
+  color: var(--text);
   letter-spacing: -.01em;
+  font-weight: 700;
 }
 .nav-links {
   display: flex; align-items: center; gap: 6px;
@@ -371,31 +372,43 @@ nav {
 }
 .btn-hero-primary:hover { transform: translateY(-2px); filter: brightness(1.1); }
 
-/* Secondary hero button — dark bg in light mode for visibility, transparent in dark */
+/* Accent-colored solid button — always readable regardless of bg */
+.btn-hero-accent {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: .95rem; font-weight: 700;
+  color: #fff; text-decoration: none;
+  padding: 13px 28px; border-radius: 14px;
+  background: var(--accent);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: all .22s;
+  font-family: inherit;
+}
+.btn-hero-accent:hover { transform: translateY(-2px); filter: brightness(1.08); }
+
+/* Secondary hero button — always solid dark in light mode, white-glass in dark */
 .btn-hero-secondary {
   display: inline-flex; align-items: center; gap: 8px;
-  font-size: .95rem; font-weight: 600;
+  font-size: .95rem; font-weight: 700;
   color: var(--text); text-decoration: none;
   padding: 13px 24px; border-radius: 14px;
-  background: rgba(0,0,0,0.08);
+  background: rgba(0,0,0,0.09);
   border: 1.5px solid rgba(0,0,0,0.18);
   transition: all .22s;
 }
 [data-theme="dark"] .btn-hero-secondary,
 .has-bg-img .btn-hero-secondary {
-  color: rgba(255,255,255,.85);
-  background: rgba(255,255,255,.12);
-  border-color: rgba(255,255,255,.28);
+  color: #fff;
+  background: rgba(255,255,255,.14);
+  border-color: rgba(255,255,255,.3);
 }
 .btn-hero-secondary:hover {
-  color: var(--text);
-  background: rgba(0,0,0,0.15);
-  border-color: rgba(0,0,0,0.28);
+  background: rgba(0,0,0,0.16);
+  border-color: rgba(0,0,0,0.32);
 }
 [data-theme="dark"] .btn-hero-secondary:hover,
 .has-bg-img .btn-hero-secondary:hover {
   color: #fff;
-  background: rgba(255,255,255,.2);
+  background: rgba(255,255,255,.22);
 }
 .hero-stats {
   display: flex; align-items: center; justify-content: center; gap: 28px;
@@ -861,7 +874,7 @@ footer {
   .hero-stats { gap: 12px !important; flex-wrap: wrap; justify-content: center; }
   .hero-stat { flex: none; min-width: 70px; }
   .hero-actions { flex-direction: column; align-items: stretch; }
-  .btn-hero-primary, .btn-hero-secondary { justify-content: center; }
+  .btn-hero-primary, .btn-hero-accent, .btn-hero-secondary { justify-content: center; }
   .hero-title { font-size: clamp(2rem, 10vw, 3.5rem) !important; }
   .hero-sub { font-size: .88rem; }
   .section-title { font-size: 1.5rem !important; }
@@ -981,7 +994,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         <span class="material-symbols-outlined">shopping_bag</span>Browse Items
       </a>
       <?php endif; ?>
-      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-secondary" style="color:color-mix(in srgb,var(--accent) 90%,#fff);border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);">
+      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-accent">
         <span class="material-symbols-outlined">person_add</span>Join Our Team
       </a>
       <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-secondary">
