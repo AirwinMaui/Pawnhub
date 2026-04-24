@@ -220,34 +220,34 @@ body {
 }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
-  opacity: .82; filter: saturate(0.9) brightness(0.82);
   transition: opacity .4s, filter .4s;
 }
-/* Light mode: image is dimmed and washed out so text stays readable */
-:root .bg-scene-img,
-[data-theme="light"] .bg-scene-img {
-  opacity: .28;
-  filter: saturate(0.6) brightness(1.1);
+/* Light mode: subtle, washed-back image */
+:root .bg-scene-img {
+  opacity: .32;
+  filter: saturate(0.7) brightness(1.05);
+  mix-blend-mode: normal;
 }
-/* Dark mode: image is vivid and full */
+/* Dark mode: use 'screen' blend so white/light areas of the image
+   become transparent against the dark background instead of appearing
+   as bright washed-out blocks */
 [data-theme="dark"] .bg-scene-img {
-  opacity: .82;
-  filter: saturate(0.9) brightness(0.82);
+  opacity: 1;
+  filter: saturate(1.1) brightness(0.88);
+  mix-blend-mode: screen;
 }
 .bg-gradient {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, var(--bg) 92%);
 }
-/* Light mode bg gradient */
-:root .bg-gradient,
-[data-theme="light"] .bg-gradient {
+/* Light mode gradient */
+:root .bg-gradient {
   background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(245,246,250,0.15) 0%, rgba(245,246,250,0.45) 40%, rgba(245,246,250,0.92) 75%, var(--bg) 92%);
+              linear-gradient(to bottom, rgba(245,246,250,0.1) 0%, rgba(245,246,250,0.4) 40%, rgba(245,246,250,0.88) 75%, var(--bg) 92%);
 }
+/* Dark mode gradient — less heavy so screen-blended image stays visible */
 [data-theme="dark"] .bg-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, #08090c 92%);
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
+              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.15) 40%, rgba(8,9,12,0.65) 75%, #08090c 92%);
 }
 
 /* ── NAV ── */
@@ -936,7 +936,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 }
 </style>
 </head>
-<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>" class="<?= $has_bg ? 'has-bg-img' : '' ?>">
+<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>"<?= $has_bg ? ' class="has-bg-img"' : '' ?>>
 
 <!-- Background -->
 <div class="bg-scene">
@@ -1561,10 +1561,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItem();
 
   function applyTheme(dark) {
     body.dataset.theme = dark ? 'dark' : 'light';
-    // has-bg-img must stay on whenever a bg image exists so nav/hero contrast
-    // rules always apply — the CSS itself handles light vs dark image opacity
+    // has-bg-img controls hero/nav contrast — keep it if bg image exists AND dark mode
     if (hasBg) {
-      body.classList.add('has-bg-img');
+      body.classList.toggle('has-bg-img', dark);
     }
     syncIcon();
   }
