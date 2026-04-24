@@ -212,16 +212,18 @@ nav {
 .nav-back {
   display: flex; align-items: center; gap: 6px; font-size: .83rem; font-weight: 600;
   color: var(--text-m); text-decoration: none; padding: 7px 14px; border-radius: 10px;
-  border: 1px solid var(--border); background: var(--glass); transition: all .18s;
+  border: 1px solid var(--border); background: var(--glass); transition: all .18s; line-height: 1;
 }
 .nav-back:hover { color: #fff; background: var(--glass2); }
+.nav-back .ms { font-size: 15px !important; line-height: 1; }
 .nav-signin {
   display: flex; align-items: center; gap: 6px; font-size: .83rem; font-weight: 700;
-  color: #fff; text-decoration: none; padding: 8px 18px; border-radius: 10px;
-  background: var(--primary); transition: all .2s;
+  color: #fff; text-decoration: none; padding: 7px 14px; border-radius: 10px;
+  background: var(--primary); transition: all .2s; line-height: 1;
   box-shadow: 0 3px 14px color-mix(in srgb, var(--primary) 35%, transparent);
 }
 .nav-signin:hover { filter: brightness(1.1); }
+.nav-signin .ms { font-size: 15px !important; line-height: 1; }
 
 /* ── PAGE LAYOUT ── */
 .page-wrap {
@@ -438,8 +440,13 @@ nav {
   .card-head { padding: 20px 16px 18px; }
   .role-grid { grid-template-columns: 1fr 1fr; }
   .page-wrap { padding: 76px 12px 40px; }
-  nav { padding: 0 12px; }
-  .nav-name { font-size: .92rem; }
+  nav { padding: 0 12px; height: 58px; }
+  .nav-name { font-size: .88rem; }
+  .nav-logo { width: 32px; height: 32px; }
+  .nav-signin { padding: 6px 10px; font-size: .78rem; }
+  .nav-signin .ms { font-size: 14px !important; }
+  .nav-back { padding: 6px 10px; font-size: .78rem; }
+  .nav-back .ms { font-size: 14px !important; }
 }
 @media (max-width: 360px) {
   .role-grid { grid-template-columns: 1fr; }
@@ -447,33 +454,17 @@ nav {
 
 /* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
 * { -webkit-tap-highlight-color: transparent; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 /* iOS safe area support */
 .safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 /* iOS overflow scroll */
 .overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
-/* Prevent iOS zoom on input focus */
-input, select, textarea { font-size: max(16px, 1rem) !important; }
-/* Mobile sidebar fix */
-@media (max-width: 768px) {
-  .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
-  .main-content  { margin-left: 0 !important; width: 100% !important; }
-}
-/* Smooth scrolling on mobile */
-html { scroll-behavior: smooth; }
-
-/* Form mobile fixes */
-@media (max-width: 480px) {
-    .panel, .card { 
-        width: 100% !important; 
-        max-width: 100% !important; 
-        margin: 0 !important;
-        border-radius: 0 !important;
-        min-height: 100dvh !important;
-    }
-    .page { padding: 0 !important; align-items: flex-start !important; }
-}
+/* Prevent iOS zoom on input focus — inputs only, not buttons */
+input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select, textarea { font-size: max(16px, 1em) !important; }
+/* Android Material Symbols fix — prevent huge icon rendering */
+.ms { line-height: 1 !important; font-size: inherit; }
 </style>
 </head>
 <body>
