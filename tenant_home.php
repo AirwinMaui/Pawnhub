@@ -217,7 +217,11 @@ body {
 /* ── BACKGROUND ── */
 .bg-scene {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  /* Dark base so screen-blend works for white-bg images in dark mode */
+  /* White base for light mode so multiply-blend white images merge cleanly;
+     dark base for dark mode so screen-blend works correctly */
+  background: #f5f6fa;
+}
+[data-theme="dark"] .bg-scene {
   background: #08090c;
 }
 .bg-scene-img {
@@ -225,37 +229,50 @@ body {
   transition: opacity .4s, filter .4s;
 }
 /*
- * LIGHT MODE: multiply blend — white pixels of image fade into light page bg,
- * brightness boost lifts dark-bg images so they stay visible too.
+ * LIGHT MODE: multiply blend on a WHITE base page.
+ *   • White-bg image  → white × white = white → fully invisible ✓
+ *   • Black-bg image  → black × white = black → stays visible ✓
+ *   • Colorful image  → colors preserved but softer ✓
  */
 :root .bg-scene-img,
 [data-theme="light"] .bg-scene-img {
-  opacity: .55;
-  filter: saturate(0.75) brightness(1.35) contrast(0.9);
+  opacity: 1;
+  filter: saturate(0.85) brightness(1.0);
   mix-blend-mode: multiply;
 }
 /*
- * DARK MODE: screen blend — white/light pixels become transparent against
- * dark bg, black pixels vanish → colors pop for both white & dark bg images.
+ * DARK MODE: screen blend on a BLACK base page.
+ *   • White-bg image  → white screen black = white → visible ✓
+ *   • Black-bg image  → black screen black = black → transparent → colors pop ✓
  */
 [data-theme="dark"] .bg-scene-img {
   opacity: 1;
-  filter: saturate(1.05) brightness(1.1) contrast(1.05);
+  filter: saturate(1.05) brightness(1.05);
   mix-blend-mode: screen;
 }
 .bg-gradient {
   position: absolute; inset: 0;
 }
-/* Light mode gradient — lighter so image still bleeds through */
+/* Light mode: white wash gradient so text stays readable over image */
 :root .bg-gradient,
 [data-theme="light"] .bg-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(245,246,250,0.05) 0%, rgba(245,246,250,0.35) 45%, rgba(245,246,250,0.88) 72%, var(--bg) 90%);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
+    linear-gradient(to bottom,
+      rgba(245,246,250,0.10) 0%,
+      rgba(245,246,250,0.45) 40%,
+      rgba(245,246,250,0.88) 68%,
+      var(--bg) 88%);
 }
-/* Dark mode gradient — kept light so screen-blended image stays vivid */
+/* Dark mode: light gradient so screen-blended image stays vivid */
 [data-theme="dark"] .bg-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.12) 40%, rgba(8,9,12,0.60) 75%, #08090c 92%);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
+    linear-gradient(to bottom,
+      rgba(8,9,12,0.0)  0%,
+      rgba(8,9,12,0.12) 40%,
+      rgba(8,9,12,0.60) 75%,
+      #08090c 92%);
 }
 
 /* ── NAV ── */
@@ -653,15 +670,14 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   border: 1px solid var(--border);
   border-radius: 20px; padding: 24px;
 }
-/* Frosted glass cards so text stays readable over any bg image */
 [data-theme="light"] .info-card {
-  background: rgba(255,255,255,0.78);
-  border-color: rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.82);
+  border-color: rgba(0,0,0,0.09);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
 [data-theme="dark"] .info-card {
-  background: rgba(12,14,20,0.72);
+  background: rgba(10,12,18,0.72);
   border-color: rgba(255,255,255,0.10);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -679,29 +695,23 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .info-card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px; }
 .info-card-val { font-size: 1rem; font-weight: 600; color: var(--info-val-color); line-height: 1.5; }
-/* ── FORCE READABLE TEXT IN ALL MODES ── */
-/* Section titles & labels */
-[data-theme="dark"] .section-title  { color: #f0f2f7 !important; }
-[data-theme="light"] .section-title { color: #0f1117 !important; }
-[data-theme="dark"] .section-label  { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
-[data-theme="light"] .section-label { color: color-mix(in srgb, var(--primary) 80%, #000) !important; }
-/* Info card text */
-[data-theme="dark"] .info-card-title  { color: rgba(240,242,247,0.55) !important; }
-[data-theme="light"] .info-card-title { color: rgba(15,17,23,0.50) !important; }
-[data-theme="dark"] .info-card-val    { color: #f0f2f7 !important; }
-[data-theme="light"] .info-card-val   { color: #0f1117 !important; }
-/* Item cards */
-[data-theme="light"] .item-name       { color: #0f1117 !important; }
-[data-theme="light"] .item-price      { color: #0f1117 !important; }
-[data-theme="light"] .item-cond       { color: rgba(15,17,23,0.45) !important; }
+/* ── FORCE READABLE TEXT IN ALL THEMES ── */
+[data-theme="dark"]  .section-title    { color: #f0f2f7 !important; }
+[data-theme="light"] .section-title    { color: #0f1117 !important; }
+[data-theme="dark"]  .section-label    { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
+[data-theme="light"] .section-label    { color: color-mix(in srgb, var(--primary) 80%, #000) !important; }
+[data-theme="dark"]  .info-card-title  { color: rgba(240,242,247,0.55) !important; }
+[data-theme="light"] .info-card-title  { color: rgba(15,17,23,0.50) !important; }
+[data-theme="dark"]  .info-card-val    { color: #f0f2f7 !important; }
+[data-theme="light"] .info-card-val    { color: #0f1117 !important; }
+[data-theme="light"] .item-name        { color: #0f1117 !important; }
+[data-theme="light"] .item-price       { color: #0f1117 !important; }
+[data-theme="light"] .item-cond        { color: rgba(15,17,23,0.45) !important; }
 [data-theme="light"] .item-price-label { color: rgba(15,17,23,0.45) !important; }
-/* Hero text */
-[data-theme="light"]:not(.has-bg-img) .hero-title { color: #0f1117 !important; }
-[data-theme="light"]:not(.has-bg-img) .hero-sub   { color: rgba(15,17,23,0.6) !important; }
-[data-theme="dark"] .hero-title  { color: #ffffff !important; }
-[data-theme="dark"] .hero-sub    { color: rgba(240,242,247,0.7) !important; }
-/* Cat pills text in light mode */
-[data-theme="light"] .cat-pill   { color: rgba(15,17,23,0.65) !important; }
+[data-theme="dark"]  .hero-title       { color: #ffffff !important; text-shadow: 0 2px 16px rgba(0,0,0,.5); }
+[data-theme="dark"]  .hero-sub         { color: rgba(240,242,247,0.75) !important; }
+[data-theme="light"] .hero-sub         { color: rgba(15,17,23,0.6) !important; }
+[data-theme="light"] .cat-pill         { color: rgba(15,17,23,0.65) !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -907,7 +917,6 @@ footer {
   .nav-signin { padding: 6px 10px; font-size: .78rem; gap: 4px; line-height: 1; }
   .nav-signin .material-symbols-outlined { font-size: 14px !important; line-height: 1; width: 14px; height: 14px; }
   .nav-name { font-size: 1rem; }
-  /* Android/iOS: both Apply & Sign In show as equal solid pill buttons */
   .nav-signin-login {
     background: var(--primary) !important;
     box-shadow: 0 4px 18px color-mix(in srgb, var(--primary) 35%, transparent) !important;
@@ -1611,9 +1620,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItem();
 
   function applyTheme(dark) {
     body.dataset.theme = dark ? 'dark' : 'light';
-    // has-bg-img must stay on body whenever a bg image exists —
-    // CSS blend modes handle light vs dark image appearance,
-    // but nav/hero contrast rules always need this class present.
     if (hasBg) {
       body.classList.add('has-bg-img');
     }
