@@ -269,14 +269,14 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
 .nav-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .nav-logo-text { font-size: 1.15rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-.nav-back { display: flex; align-items: center; gap: 6px; text-decoration: none; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); padding: 7px 14px; border-radius: 10px; transition: all .18s; }
+.nav-back { display: flex; align-items: center; gap: 6px; text-decoration: none; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); padding: 6px 12px; border-radius: 10px; transition: all .18s; line-height: 1; }
 .nav-back:hover { color: #fff; background: rgba(255,255,255,0.18); }
-.nav-back .material-symbols-outlined { font-size: 16px; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+.nav-back .material-symbols-outlined { font-size: 15px !important; font-variation-settings: 'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20; line-height: 1; width: 15px; height: 15px; display: flex; align-items: center; }
 .page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; padding-left: 16px; padding-right: 16px; }
 .panel { width: 100%; max-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0; }
 .card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
 .card-icon { margin-bottom: 12px; }
-.material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
+.material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; line-height: 1; }
 .card-title { font-size: 1.7rem; font-weight: 800; color: #111827; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 5px; }
 .card-sub { font-size: 0.81rem; color: #64748b; line-height: 1.5; margin-bottom: 20px; }
 .tenant-badge { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent); border-radius: 8px; padding: 5px 10px; font-size: 0.72rem; font-weight: 700; color: var(--primary); margin-bottom: 14px; }
@@ -314,10 +314,12 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .btxt { font-size: 0.63rem; font-weight: 600; color: rgba(255,255,255,0.82); text-transform: uppercase; letter-spacing: 0.1em; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.35} }
 @media (max-width: 560px) {
-  .nav { padding: 0 16px; }
+  .nav { padding: 0 16px; height: 56px; }
   .card { padding: 22px 18px 20px; }
   .card-title { font-size: 1.5rem; }
   .badge { display: none; }
+  .nav-logo-text { font-size: 1rem; }
+  .nav-logo-icon { width: 28px; height: 28px; }
 }
 
 /* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
@@ -328,26 +330,16 @@ html { -webkit-text-size-adjust: 100%; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 /* iOS overflow scroll */
 .overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
-/* Prevent iOS zoom on input focus */
-input, select, textarea { font-size: max(16px, 1rem) !important; }
-/* Mobile sidebar fix */
-@media (max-width: 768px) {
-  .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
-  .main-content  { margin-left: 0 !important; width: 100% !important; }
-}
+/* Prevent iOS zoom on input focus — only for actual inputs, not buttons */
+input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]),
+select, textarea { font-size: max(16px, 1em) !important; }
 /* Smooth scrolling on mobile */
 html { scroll-behavior: smooth; }
-
-/* Form mobile fixes */
-@media (max-width: 480px) {
-    .panel, .card { 
-        width: 100% !important; 
-        max-width: 100% !important; 
-        margin: 0 !important;
-        border-radius: 0 !important;
-        min-height: 100dvh !important;
-    }
-    .page { padding: 0 !important; align-items: flex-start !important; }
+/* Android Material Symbols fix */
+.material-symbols-outlined { line-height: 1 !important; }
+@media (max-width: 560px) {
+  .nav-back { padding: 5px 10px; font-size: 0.75rem; }
+  .nav-back .material-symbols-outlined { font-size: 14px !important; }
 }
 </style>
 </head>
