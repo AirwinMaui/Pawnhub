@@ -221,6 +221,18 @@ body {
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
   opacity: .82; filter: saturate(0.9) brightness(0.82);
+  transition: opacity .4s, filter .4s;
+}
+/* Light mode: image is dimmed and washed out so text stays readable */
+:root .bg-scene-img,
+[data-theme="light"] .bg-scene-img {
+  opacity: .28;
+  filter: saturate(0.6) brightness(1.1);
+}
+/* Dark mode: image is vivid and full */
+[data-theme="dark"] .bg-scene-img {
+  opacity: .82;
+  filter: saturate(0.9) brightness(0.82);
 }
 .bg-gradient {
   position: absolute; inset: 0;
@@ -228,9 +240,10 @@ body {
               linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, var(--bg) 92%);
 }
 /* Light mode bg gradient */
-:root .bg-gradient {
+:root .bg-gradient,
+[data-theme="light"] .bg-gradient {
   background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(245,246,250,0) 0%, rgba(245,246,250,0.25) 40%, rgba(245,246,250,0.82) 75%, var(--bg) 92%);
+              linear-gradient(to bottom, rgba(245,246,250,0.15) 0%, rgba(245,246,250,0.45) 40%, rgba(245,246,250,0.92) 75%, var(--bg) 92%);
 }
 [data-theme="dark"] .bg-gradient {
   background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
@@ -923,7 +936,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 }
 </style>
 </head>
-<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>"<?= $has_bg ? ' class="has-bg-img"' : '' ?>>
+<body data-theme="<?= $has_bg ? 'dark' : 'light' ?>" class="<?= $has_bg ? 'has-bg-img' : '' ?>">
 
 <!-- Background -->
 <div class="bg-scene">
@@ -1548,9 +1561,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItem();
 
   function applyTheme(dark) {
     body.dataset.theme = dark ? 'dark' : 'light';
-    // has-bg-img controls hero/nav contrast — keep it if bg image exists AND dark mode
+    // has-bg-img must stay on whenever a bg image exists so nav/hero contrast
+    // rules always apply — the CSS itself handles light vs dark image opacity
     if (hasBg) {
-      body.classList.toggle('has-bg-img', dark);
+      body.classList.add('has-bg-img');
     }
     syncIcon();
   }
