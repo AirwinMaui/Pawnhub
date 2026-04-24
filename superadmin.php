@@ -1094,22 +1094,32 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
   .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,.5);}
   .main{margin-left:0!important;width:100%;}
-  .topbar{padding:0 16px;}
+  .topbar{padding:0 12px;gap:8px;}
   #mob-menu-btn{display:flex!important;}
   .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;backdrop-filter:blur(2px);}
   .mob-overlay.open{display:block;}
-  .topbar-title{font-size:.88rem;}
+  .topbar-title{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+  .super-chip{font-size:.62rem;padding:2px 7px;}
+  /* Hide date text on small screens to save topbar space */
+  .topbar-date{display:none!important;}
   .content{padding:14px;}
-  /* Stats: 2 columns, cards show full content (column layout) */
-  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
-  .stat-card{flex-direction:column;align-items:flex-start;gap:8px;padding:14px;}
+  /* Stats: 2×2 grid, cards show full content */
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
+  .stat-card{flex-direction:column;align-items:flex-start;gap:8px;padding:14px 12px;}
   .stat-icon{width:34px;height:34px;}
-  .stat-value{font-size:1.3rem;}
+  .stat-value{font-size:1.25rem;}
+  .stat-sub{font-size:.68rem;}
+  .stat-label{font-size:.65rem;}
+  /* summary grids */
+  .summary-grid{grid-template-columns:repeat(2,1fr);}
   /* two-col: single column on mobile */
   .two-col{grid-template-columns:1fr;}
   /* Tables: wrap only the inner div[overflow-x:auto] — NOT the card itself */
   div[style*="overflow-x:auto"]{-webkit-overflow-scrolling:touch;}
   div[style*="overflow-x:auto"] table{min-width:480px;}
+  /* chart */
+  .chart-wrap{height:180px;}
+  .two-col .card{margin-bottom:10px;}
 }
 @media(max-width:600px){
   .stats-grid,.summary-grid,.summary-grid-3{grid-template-columns:repeat(2,1fr);}
@@ -1118,6 +1128,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   .filter-bar .filter-group .filter-input,.filter-bar .filter-group .filter-select{width:100%;}
   .filter-bar .filter-actions{width:100%;justify-content:flex-start;}
   .content{padding:12px;}
+  .stat-card{padding:12px 10px;}
+  .stat-value{font-size:1.15rem;}
+}
+@media(max-width:400px){
+  .stats-grid{grid-template-columns:1fr 1fr;gap:8px;}
+  .stat-card{padding:10px 8px;gap:6px;}
+  .stat-value{font-size:1.05rem;}
+  .topbar-title{font-size:.78rem;}
 }
 </style>
 </head>
@@ -1176,7 +1194,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 <!-- ══ MAIN ══════════════════════════════════════════════════════ -->
 <div class="main">
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden;">
       <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
@@ -1186,11 +1204,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </span>
       <span class="super-chip">SUPER ADMIN</span>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
       <button onclick="document.getElementById('addTenantModal').classList.add('open')" class="btn-sm btn-primary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Add Tenant + Invite
       </button>
-      <div style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
+      <div class="topbar-date" style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
     </div>
   </header>
 
