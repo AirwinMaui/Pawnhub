@@ -217,24 +217,62 @@ body {
 /* ── BACKGROUND ── */
 .bg-scene {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  /* White base for light mode so multiply-blend white images merge cleanly;
+     dark base for dark mode so screen-blend works correctly */
+  background: #f5f6fa;
+}
+[data-theme="dark"] .bg-scene {
+  background: #08090c;
 }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
-  opacity: .82; filter: saturate(0.9) brightness(0.82);
+  transition: opacity .4s, filter .4s;
+}
+/*
+ * LIGHT MODE: multiply blend on a WHITE base page.
+ *   • White-bg image  → white × white = white → fully invisible ✓
+ *   • Black-bg image  → black × white = black → stays visible ✓
+ *   • Colorful image  → colors preserved but softer ✓
+ */
+:root .bg-scene-img,
+[data-theme="light"] .bg-scene-img {
+  opacity: 1;
+  filter: saturate(0.85) brightness(1.0);
+  mix-blend-mode: multiply;
+}
+/*
+ * DARK MODE: screen blend on a BLACK base page.
+ *   • White-bg image  → white screen black = white → visible ✓
+ *   • Black-bg image  → black screen black = black → transparent → colors pop ✓
+ */
+[data-theme="dark"] .bg-scene-img {
+  opacity: 1;
+  filter: saturate(1.05) brightness(1.05);
+  mix-blend-mode: screen;
 }
 .bg-gradient {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, var(--bg) 92%);
 }
-/* Light mode bg gradient */
-:root .bg-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(245,246,250,0) 0%, rgba(245,246,250,0.25) 40%, rgba(245,246,250,0.82) 75%, var(--bg) 92%);
+/* Light mode: white wash gradient so text stays readable over image */
+:root .bg-gradient,
+[data-theme="light"] .bg-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
+    linear-gradient(to bottom,
+      rgba(245,246,250,0.10) 0%,
+      rgba(245,246,250,0.45) 40%,
+      rgba(245,246,250,0.88) 68%,
+      var(--bg) 88%);
 }
+/* Dark mode: light gradient so screen-blended image stays vivid */
 [data-theme="dark"] .bg-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
-              linear-gradient(to bottom, rgba(8,9,12,0.0) 0%, rgba(8,9,12,0.25) 40%, rgba(8,9,12,0.72) 75%, #08090c 92%);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
+    linear-gradient(to bottom,
+      rgba(8,9,12,0.0)  0%,
+      rgba(8,9,12,0.12) 40%,
+      rgba(8,9,12,0.60) 75%,
+      #08090c 92%);
 }
 
 /* ── NAV ── */
@@ -632,6 +670,18 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   border: 1px solid var(--border);
   border-radius: 20px; padding: 24px;
 }
+[data-theme="light"] .info-card {
+  background: rgba(255,255,255,0.82);
+  border-color: rgba(0,0,0,0.09);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+[data-theme="dark"] .info-card {
+  background: rgba(10,12,18,0.72);
+  border-color: rgba(255,255,255,0.10);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
 .info-card-icon {
   width: 44px; height: 44px; border-radius: 12px;
   background: color-mix(in srgb, var(--primary) 15%, transparent);
@@ -645,6 +695,23 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .info-card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px; }
 .info-card-val { font-size: 1rem; font-weight: 600; color: var(--info-val-color); line-height: 1.5; }
+/* ── FORCE READABLE TEXT IN ALL THEMES ── */
+[data-theme="dark"]  .section-title    { color: #f0f2f7 !important; }
+[data-theme="light"] .section-title    { color: #0f1117 !important; }
+[data-theme="dark"]  .section-label    { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
+[data-theme="light"] .section-label    { color: color-mix(in srgb, var(--primary) 80%, #000) !important; }
+[data-theme="dark"]  .info-card-title  { color: rgba(240,242,247,0.55) !important; }
+[data-theme="light"] .info-card-title  { color: rgba(15,17,23,0.50) !important; }
+[data-theme="dark"]  .info-card-val    { color: #f0f2f7 !important; }
+[data-theme="light"] .info-card-val    { color: #0f1117 !important; }
+[data-theme="light"] .item-name        { color: #0f1117 !important; }
+[data-theme="light"] .item-price       { color: #0f1117 !important; }
+[data-theme="light"] .item-cond        { color: rgba(15,17,23,0.45) !important; }
+[data-theme="light"] .item-price-label { color: rgba(15,17,23,0.45) !important; }
+[data-theme="dark"]  .hero-title       { color: #ffffff !important; text-shadow: 0 2px 16px rgba(0,0,0,.5); }
+[data-theme="dark"]  .hero-sub         { color: rgba(240,242,247,0.75) !important; }
+[data-theme="light"] .hero-sub         { color: rgba(15,17,23,0.6) !important; }
+[data-theme="light"] .cat-pill         { color: rgba(15,17,23,0.65) !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -850,21 +917,20 @@ footer {
   .nav-signin { padding: 6px 10px; font-size: .78rem; gap: 4px; line-height: 1; }
   .nav-signin .material-symbols-outlined { font-size: 14px !important; line-height: 1; width: 14px; height: 14px; }
   .nav-name { font-size: 1rem; }
-  /* Sign In: solid primary pill same as Apply */
   .nav-signin-login {
     background: var(--primary) !important;
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 35%, transparent) !important;
+    box-shadow: 0 4px 18px color-mix(in srgb, var(--primary) 35%, transparent) !important;
     color: #fff !important;
   }
 }
 @media (max-width: 500px) {
   :root { --nav-h: 56px; }
+  .nav-signin:first-of-type span.material-symbols-outlined { display: inline; }
   nav > div:last-child { gap: 4px !important; }
-  /* Both buttons: icon only on very small screens to fit nav */
-  .nav-signin { padding: 7px 10px; border-radius: 10px; font-size: 0; gap: 0; min-width: 36px; justify-content: center; }
-  .nav-signin .material-symbols-outlined { font-size: 17px !important; line-height: 1; width: auto; height: auto; }
-  .nav-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
-  .nav-logo { width: 32px; height: 32px; }
+  .nav-signin { padding: 5px 9px; border-radius: 9px; font-size: .75rem; }
+  .nav-signin .material-symbols-outlined { font-size: 13px !important; line-height: 1; }
+  .nav-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88rem; }
+  .nav-logo { width: 34px; height: 34px; }
 }
 @media (max-width: 700px) {
   #app > div { grid-template-columns: 1fr !important; }
@@ -1554,7 +1620,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItem();
 
   function applyTheme(dark) {
     body.dataset.theme = dark ? 'dark' : 'light';
-    if (hasBg) { body.classList.add('has-bg-img'); }
+    if (hasBg) {
+      body.classList.add('has-bg-img');
+    }
     syncIcon();
   }
 
