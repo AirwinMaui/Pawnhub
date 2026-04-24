@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $slug_row->execute([$tid]);
                 $slug_row          = $slug_row->fetch();
                 $slug              = $slug_row['slug'] ?? '';
-                $biz_name_for_mail = $slug_row['business_name'] ?: 'PawnHub';
+                $biz_name_for_mail = $slug_row['business_name'] ?: $inv['business_name'] ?: 'your branch';
 
                 try {
                     require_once __DIR__ . '/mailer.php';
@@ -156,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $trow = $pdo->prepare("SELECT slug, business_name FROM tenants WHERE id=? LIMIT 1");
             $trow->execute([$tid]); $trow = $trow->fetch();
             $tenant_slug     = $trow['slug'] ?? '';
-            $tenant_biz_name = $trow['business_name'] ?? 'PawnHub';
+            $tenant_biz_name = $trow['business_name'] ?? '';
 
             // Check if username or email already exists in users table
             $dup = $pdo->prepare("SELECT id FROM users WHERE (username=? OR email=?) AND tenant_id=? LIMIT 1");

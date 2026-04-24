@@ -108,7 +108,7 @@ if ($success) {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
-<title>PawnHub — Complete Your Registration</title>
+<title><?= htmlspecialchars($inv['business_name'] ?? 'PawnHub') ?> — Complete Your Registration</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <style>
@@ -118,7 +118,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;background:#f9f9fb;color:#1
 .bg-fixed img{width:100%;height:100%;object-fit:cover;display:block;}
 .bg-fixed-ov{position:absolute;inset:0;background:rgba(0,35,111,0.22);backdrop-filter:brightness(0.75);}
 .topnav{position:fixed;top:0;left:0;width:100%;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:22px 32px;}
-.topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;}
+.topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .topnav-right{display:flex;align-items:center;gap:14px;}
 .topnav-right span{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.7);}
 .topnav-right .ico{font-size:22px;color:#fff;cursor:pointer;padding:7px;border-radius:50%;transition:background .2s;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;line-height:1;width:36px;height:36px;display:flex;align-items:center;justify-content:center;}
@@ -385,7 +385,7 @@ html { scroll-behavior: smooth; }
 
 <!-- Footer -->
 <footer class="footer-bar">
-  <span>© <?= date('Y') ?> PawnHub. All rights reserved.</span>
+  <span>© <?= date('Y') ?> <?= htmlspecialchars($inv['business_name'] ?? 'PawnHub') ?>. All rights reserved.</span>
   <nav>
     <a href="#">Privacy Policy</a>
     <a href="#">Terms of Service</a>

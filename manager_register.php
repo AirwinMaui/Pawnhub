@@ -157,7 +157,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;position:
 .bg-fixed-ov{position:absolute;inset:0;background:rgba(0,35,111,0.22);backdrop-filter:brightness(0.75);}
 /* Nav */
 .topnav{position:fixed;top:0;left:0;width:100%;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:22px 32px;}
-.topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;}
+.topnav-brand{font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-.04em;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .topnav-right{display:flex;align-items:center;gap:14px;}
 .topnav-right span{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.7);}
 /* Page */
@@ -234,7 +234,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;position:
 
 <!-- Top Nav -->
 <header class="topnav">
-  <div class="topnav-brand">PawnHub</div>
+  <div class="topnav-brand"><?= $biz_name ?></div>
   <div class="topnav-right">
     <span>Security Protocol Active</span>
   </div>
@@ -379,7 +379,7 @@ body{font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;position:
 </main>
 
 <footer class="footer-bar">
-  <span>© <?= date('Y') ?> PawnHub. All rights reserved.</span>
+  <span>© <?= date('Y') ?> <?= htmlspecialchars($biz_name) ?>. All rights reserved.</span>
   <nav>
     <a href="#">Privacy Policy</a>
     <a href="#">Terms of Service</a>
