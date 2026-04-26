@@ -869,6 +869,30 @@ tr:hover td{background:rgba(255,255,255,.03);}
     $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND is_shop_visible=1");
     $ls->execute([$tid]); $ls_count = (int)$ls->fetchColumn();
     if ($ls_count > 0) $notifs[] = ['type'=>'warn','icon'=>'inventory_2','title'=>$ls_count.' Item'.($ls_count>1?'s':'').' Low on Stock','sub'=>'Stock is at 2 or below in the shop.','link'=>'?page=inventory'];
+    // 7. New pawn tickets created today
+    $nt = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
+    $nt->execute([$tid]); $nt_count = (int)$nt->fetchColumn();
+    if ($nt_count > 0) $notifs[] = ['type'=>'info','icon'=>'confirmation_number','title'=>$nt_count.' New Pawn Ticket'.($nt_count>1?'s':'').' Today','sub'=>'New loan'.($nt_count>1?'s':'').' created today in your branch.','link'=>'?page=tickets'];
+    // 8. Renewals processed today
+    $rn = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Renewed' AND DATE(updated_at)=CURDATE()");
+    $rn->execute([$tid]); $rn_count = (int)$rn->fetchColumn();
+    if ($rn_count > 0) $notifs[] = ['type'=>'info','icon'=>'autorenew','title'=>$rn_count.' Renewal'.($rn_count>1?'s':'').' Today','sub'=>$rn_count.' ticket'.($rn_count>1?'s were':' was').' renewed today.','link'=>'?page=tickets'];
+    // 9. Redemptions processed today
+    $rd = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Redeemed' AND DATE(updated_at)=CURDATE()");
+    $rd->execute([$tid]); $rd_count = (int)$rd->fetchColumn();
+    if ($rd_count > 0) $notifs[] = ['type'=>'info','icon'=>'payments','title'=>$rd_count.' Redemption'.($rd_count>1?'s':'').' Today','sub'=>$rd_count.' item'.($rd_count>1?'s were':' was').' redeemed today.','link'=>'?page=tickets'];
+    // 10. New customers registered today
+    $nc = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
+    $nc->execute([$tid]); $nc_count = (int)$nc->fetchColumn();
+    if ($nc_count > 0) $notifs[] = ['type'=>'info','icon'=>'person_add','title'=>$nc_count.' New Customer'.($nc_count>1?'s':'').' Today','sub'=>'New customer'.($nc_count>1?'s':'').' registered today.','link'=>'?page=customers'];
+    // 11. New managers/staff approved today
+    $nm = $pdo->prepare("SELECT COUNT(*) FROM users WHERE tenant_id=? AND status='approved' AND DATE(updated_at)=CURDATE()");
+    $nm->execute([$tid]); $nm_count = (int)$nm->fetchColumn();
+    if ($nm_count > 0) $notifs[] = ['type'=>'info','icon'=>'badge','title'=>$nm_count.' Team Member'.($nm_count>1?'s':'').' Approved Today','sub'=>'New staff member'.($nm_count>1?'s':'').' joined your team.','link'=>'?page=managers'];
+    // 12. Forfeited tickets today
+    $ft = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Forfeited' AND DATE(updated_at)=CURDATE()");
+    $ft->execute([$tid]); $ft_count = (int)$ft->fetchColumn();
+    if ($ft_count > 0) $notifs[] = ['type'=>'danger','icon'=>'gavel','title'=>$ft_count.' Forfeited Ticket'.($ft_count>1?'s':'').' Today','sub'=>$ft_count.' item'.($ft_count>1?'s were':' was').' forfeited today.','link'=>'?page=tickets'];
   } catch (Throwable $e) { /* fail silently */ }
   $notif_count = count($notifs);
   ?>
