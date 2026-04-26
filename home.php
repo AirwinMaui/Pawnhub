@@ -85,7 +85,6 @@ tailwind.config = {
     background: #0a0f1e;
     min-height: 100vh;
 }
-/* Pseudo-element background — works on ALL browsers including iOS Safari */
 .bg-pawn-shop::before {
     content: '';
     position: fixed;
@@ -96,7 +95,6 @@ tailwind.config = {
     background-position: center;
     z-index: -2;
 }
-/* Dark overlay on top of background image */
 .bg-pawn-shop::after {
     content: '';
     position: fixed;
@@ -112,19 +110,14 @@ section[id] { scroll-margin-top: 80px; }
 /* ===== MOBILE / iOS COMPATIBILITY FIXES ===== */
 * { -webkit-tap-highlight-color: transparent; }
 html { -webkit-text-size-adjust: 100%; }
-/* iOS safe area support */
 .safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
-/* iOS overflow scroll */
 .overflow-y-auto, .overflow-auto { -webkit-overflow-scrolling: touch; }
-/* Prevent iOS zoom on input focus */
 input, select, textarea { font-size: max(16px, 1rem) !important; }
-/* Mobile sidebar fix */
 @media (max-width: 768px) {
   .sidebar-fixed { position: fixed !important; z-index: 50; height: 100dvh; }
   .main-content  { margin-left: 0 !important; width: 100% !important; }
 }
-/* Smooth scrolling on mobile */
 html { scroll-behavior: smooth; }
 </style>
 </head>
@@ -410,6 +403,22 @@ html { scroll-behavior: smooth; }
     </div>
 
   </div>
+
+  <!-- PayMongo payment methods banner -->
+  <div class="max-w-5xl mx-auto px-6 mt-10">
+    <div class="glass-dark rounded-2xl px-8 py-5 flex flex-col sm:flex-row items-center justify-center gap-4 border border-white/10">
+      <div class="flex items-center gap-2 text-white/50 text-sm font-medium">
+        <span class="material-symbols-outlined text-blue-400 text-xl" style="font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">lock</span>
+        Secure payments powered by <span class="text-white font-bold ml-1">PayMongo</span>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap justify-center">
+        <span class="px-3 py-1 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-xs font-bold">💳 Credit Card</span>
+        <span class="px-3 py-1 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-xs font-bold">💳 Debit Card</span>
+        <span class="px-3 py-1 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-xs font-bold">📱 GCash</span>
+        <span class="px-3 py-1 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-xs font-bold">📱 Maya</span>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- CTA -->
@@ -419,12 +428,12 @@ html { scroll-behavior: smooth; }
       <span class="material-symbols-outlined text-blue-400 text-3xl">rocket_launch</span>
     </div>
     <h2 class="text-4xl md:text-5xl font-extrabold tracking-tighter text-white mb-6">Ready to Transform Your Pawnshop?</h2>
-    <p class="text-lg text-white/70 mb-10 max-w-2xl mx-auto leading-relaxed">Join <?php echo number_format($total_tenants); ?> active pawnshops already using PawnHub. Start your free Starter plan today — no credit card required.</p>
+    <p class="text-lg text-white/70 mb-10 max-w-2xl mx-auto leading-relaxed">Join <?php echo number_format($total_tenants); ?> active pawnshops already using PawnHub. Subscribe securely via GCash, Credit/Debit Card, or Maya.</p>
     <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
       <a href="signup.php" class="w-full sm:w-auto px-10 py-4 bg-blue-500 text-white rounded-2xl font-bold text-lg shadow-2xl hover:bg-blue-600 transition-all text-center">Get Started for Free</a>
       <a href="login.php"  class="w-full sm:w-auto px-10 py-4 glass-effect text-white rounded-2xl font-bold text-lg transition-all hover:bg-white/20 text-center border border-white/20">Sign In to Dashboard</a>
     </div>
-    <p class="text-white/30 text-sm mt-6">✓ Free Starter Plan &nbsp; ✓ No Setup Fee &nbsp; ✓ BSP Compliant</p>
+    <p class="text-white/30 text-sm mt-6">✓ Secure Payment via PayMongo &nbsp; ✓ GCash · Card · Maya &nbsp; ✓ BSP Compliant</p>
   </div>
 </section>
 
