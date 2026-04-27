@@ -60,12 +60,14 @@ $secondary = $theme['secondary_color'] ?? '#1e3a8a';
 $accent    = $theme['accent_color']    ?? $tenant['accent_color']    ?? '#10b981';
 $logo_url  = $theme['logo_url']        ?? $tenant['logo_url']        ?? '';
 $sys_name  = $theme['system_name']     ?? $tenant['business_name'];
-// Shop background: query shop_bg_url directly from DB, fallback to bg_image_url
+// Shop background + access_code from tenant_settings
 try {
-    $sbq = $pdo->prepare("SELECT shop_bg_url FROM tenant_settings WHERE tenant_id=? LIMIT 1");
+    $sbq = $pdo->prepare("SELECT shop_bg_url, access_code FROM tenant_settings WHERE tenant_id=? LIMIT 1");
     $sbq->execute([$tid]);
-    $shop_bg_raw = $sbq->fetchColumn() ?: '';
-} catch (Throwable $e) { $shop_bg_raw = ''; }
+    $ts_row = $sbq->fetch() ?: [];
+    $shop_bg_raw  = $ts_row['shop_bg_url']  ?? '';
+    $access_code  = $ts_row['access_code']  ?? '';
+} catch (Throwable $e) { $shop_bg_raw = ''; $access_code = ''; }
 if (!$shop_bg_raw) $shop_bg_raw = $tenant['bg_image_url'] ?? '';
 $bg_url = $shop_bg_raw;
 // Normalize local upload paths (fix old records without leading slash)
@@ -1502,6 +1504,38 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
           <span class="material-symbols-outlined" style="font-size:15px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
           <span style="font-size:.78rem;color:rgba(240,242,247,.45);">Free · No credit card required</span>
         </div>
+
+        <?php if(!empty($access_code)): ?>
+        <!-- Access Code -->
+        <div style="display:inline-flex;align-items:center;gap:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 18px;margin-top:4px;">
+          <div>
+            <div style="font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(240,242,247,.35);margin-bottom:3px;">Branch Access Code</div>
+            <div style="display:flex;align-items:center;gap:9px;">
+              <span id="accessCodeText" style="font-size:1.15rem;font-weight:800;letter-spacing:.18em;color:#fff;font-family:monospace;"><?= htmlspecialchars($access_code) ?></span>
+              <button onclick="copyAccessCode()" title="Copy code" style="width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);transition:all .18s;flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,.18)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.6)'">
+                <span class="material-symbols-outlined" id="copyIcon" style="font-size:14px;">content_copy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <script>
+        function copyAccessCode() {
+          const code = document.getElementById('accessCodeText').textContent.trim();
+          const icon = document.getElementById('copyIcon');
+          navigator.clipboard.writeText(code).then(() => {
+            icon.textContent = 'check';
+            icon.style.color = '#6ee7b7';
+            setTimeout(() => { icon.textContent = 'content_copy'; icon.style.color = ''; }, 2000);
+          }).catch(() => {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            icon.textContent = 'check'; icon.style.color = '#6ee7b7';
+            setTimeout(() => { icon.textContent = 'content_copy'; icon.style.color = ''; }, 2000);
+          });
+        }
+        </script>
+        <?php endif; ?>
       </div>
     </div>
 
