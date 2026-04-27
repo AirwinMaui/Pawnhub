@@ -11,12 +11,7 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
-function write_pawn_update(PDO $pdo, $tenant_id, string $ticket_no, string $event_type, string $message): void {
-    try {
-        $pdo->prepare("INSERT INTO pawn_updates (tenant_id, ticket_no, event_type, message, created_at) VALUES (?,?,?,?,NOW())")
-            ->execute([$tenant_id, $ticket_no, $event_type, $message]);
-    } catch (Throwable $e) {}
-}
+
 
 if (empty($_SESSION['user'])) {
     header('Location: /'); exit;
