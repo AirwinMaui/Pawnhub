@@ -1047,10 +1047,15 @@ $notif_count = count($notifs);
         <!-- Item photos submitted by customer -->
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
           <?php
+            function normalize_photo_path(string $p): string {
+                if (!$p) return '';
+                if (strpos($p, 'http') === 0) return $p; // already full URL
+                return '/' . ltrim($p, '/');             // add leading slash for relative paths
+            }
             $photos = [
-              'Front Photo'  => $mr['front_photo_path']  ?? '',
-              'Back Photo'   => $mr['back_photo_path']   ?? '',
-              'Detail Photo' => $mr['detail_photo_path'] ?? '',
+              'Front Photo'  => normalize_photo_path($mr['front_photo_path']  ?? ''),
+              'Back Photo'   => normalize_photo_path($mr['back_photo_path']   ?? ''),
+              'Detail Photo' => normalize_photo_path($mr['detail_photo_path'] ?? ''),
             ];
             foreach($photos as $plabel => $ppath): if(empty($ppath)) continue;
           ?>
