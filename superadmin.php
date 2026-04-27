@@ -1814,27 +1814,27 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Tenants</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rat?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num"><?=$ru?></div><div class="summary-lbl">Total Users</div></div></div>
         <div class="card"><div class="card-hdr"><span class="card-title">🏢 Tenant Activity Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
-        <?php else:?><table><thead><tr><th>#</th><th>Business</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr></thead><tbody>
-        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><?=htmlspecialchars($r['owner_name'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['user_count']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
-        </tbody><tfoot><tr style="background:#f8fafc;"><td colspan="7" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=$ru?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'admin_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'staff_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'cashier_count'))?></td><td></td></tr></tfoot></table><?php endif;?></div>
+        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="min-width:700px;"><thead><tr><th>#</th><th>Business</th><th>Owner</th><th>Email</th><th>Plan</th><th>Status</th><th>Branches</th><th>Users</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Registered</th></tr></thead><tbody>
+        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><?=htmlspecialchars($r['owner_name'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['user_count']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td style="font-size:.73rem;color:var(--text-dim);white-space:nowrap;"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
+        </tbody><tfoot><tr style="background:#f8fafc;"><td colspan="7" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=$ru?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'admin_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'staff_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'cashier_count'))?></td><td></td></tr></tfoot></table></div><?php endif;?></div>
 
       <?php elseif($report_type==='user_registration'):
         $rt=count($report_data);$ra=count(array_filter($report_data,fn($r)=>$r['status']==='approved'));$rp=count(array_filter($report_data,fn($r)=>$r['status']==='pending'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rt?></div><div class="summary-lbl">Registrations</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$ra?></div><div class="summary-lbl">Approved</div></div><div class="summary-item"><div class="summary-num" style="color:var(--warning);"><?=$rp?></div><div class="summary-lbl">Pending</div></div></div>
         <div class="card"><div class="card-hdr"><span class="card-title">👤 User Registration Report</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($filter_date_from)?> — <?=htmlspecialchars($filter_date_to)?></span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
-        <?php else:?><table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Tenant</th><th>Status</th><th>Suspended</th><th>Registered</th></tr></thead><tbody>
-        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['fullname'])?></td><td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?=htmlspecialchars($r['username'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']]??'b-gray'?>"><?=ucfirst($r['role'])?></span></td><td style="font-size:.78rem;"><?=htmlspecialchars($r['business_name']??'—')?></td><td><span class="badge <?=$r['status']==='approved'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($r['status'])?></span></td><td><?=$r['is_suspended']?'<span class="badge b-red">Yes</span>':'<span class="badge b-green">No</span>'?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
-        </tbody></table><?php endif;?></div>
+        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="min-width:650px;"><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Tenant</th><th>Status</th><th>Suspended</th><th>Registered</th></tr></thead><tbody>
+        <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['fullname'])?></td><td style="font-family:monospace;font-size:.77rem;color:var(--blue-acc);"><?=htmlspecialchars($r['username'])?></td><td style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($r['email'])?></td><td><span class="badge <?=['admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$r['role']]??'b-gray'?>"><?=ucfirst($r['role'])?></span></td><td style="font-size:.78rem;"><?=htmlspecialchars($r['business_name']??'—')?></td><td><span class="badge <?=$r['status']==='approved'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($r['status'])?></span></td><td><?=$r['is_suspended']?'<span class="badge b-red">Yes</span>':'<span class="badge b-green">No</span>'?></td><td style="font-size:.73rem;color:var(--text-dim);white-space:nowrap;"><?=date('M d, Y',strtotime($r['created_at']))?></td></tr><?php endforeach;?>
+        </tbody></table></div><?php endif;?></div>
 
       <?php elseif($report_type==='usage_statistics'):
         $rtu=array_sum(array_column($report_data,'total_users'));$rau=array_sum(array_column($report_data,'active_users'));$rsu=array_sum(array_column($report_data,'suspended_users'));?>
         <div class="summary-grid-3"><div class="summary-item"><div class="summary-num"><?=$rtu?></div><div class="summary-lbl">Total Users</div></div><div class="summary-item"><div class="summary-num" style="color:var(--success);"><?=$rau?></div><div class="summary-lbl">Active</div></div><div class="summary-item"><div class="summary-num" style="color:var(--danger);"><?=$rsu?></div><div class="summary-lbl">Suspended</div></div></div>
         <div class="card"><div class="card-hdr"><span class="card-title">📊 Usage Statistics — User Breakdown per Tenant</span></div>
         <?php if(empty($report_data)):?><div class="empty-state"><p>No data found.</p></div>
-        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr></thead><tbody>
+        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="min-width:620px;"><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Status</th><th>Branches</th><th>Total</th><th>Admins</th><th>Staff</th><th>Cashiers</th><th>Active</th><th>Suspended</th></tr></thead><tbody>
         <?php foreach($report_data as $i=>$r):?><tr><td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td><span class="badge <?=$r['status']==='active'?'b-green':($r['status']==='pending'?'b-yellow':'b-red')?>"><span class="b-dot"></span><?=ucfirst($r['status'])?></span></td><td><?=$r['branches']?></td><td style="font-weight:700;"><?=$r['total_users']?></td><td><?=$r['admin_count']?></td><td><?=$r['staff_count']?></td><td><?=$r['cashier_count']?></td><td><span class="badge b-green"><?=$r['active_users']?></span></td><td><span class="badge <?=$r['suspended_users']>0?'b-red':'b-gray'?>"><?=$r['suspended_users']?></span></td></tr><?php endforeach;?>
-        </tbody><tfoot><tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=$rtu?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'admin_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'staff_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'cashier_count'))?></td><td style="font-weight:800;color:var(--success);"><?=$rau?></td><td style="font-weight:800;color:var(--danger);"><?=$rsu?></td></tr></tfoot></table><?php endif;?></div>
+        </tbody><tfoot><tr style="background:#f8fafc;"><td colspan="5" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=$rtu?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'admin_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'staff_count'))?></td><td style="font-weight:800;"><?=array_sum(array_column($report_data,'cashier_count'))?></td><td style="font-weight:800;color:var(--success);"><?=$rau?></td><td style="font-weight:800;color:var(--danger);"><?=$rsu?></td></tr></tfoot></table></div><?php endif;?></div>
       <?php endif;?>
 
     <!-- ══ SALES REPORT ═════════════════════════════════════════ -->
@@ -1882,19 +1882,81 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <?php else:?><div class="chart-wrap" style="height:260px;"><canvas id="salesTrendChart"></canvas></div>
         <script>
         new Chart(document.getElementById('salesTrendChart'),{type:'line',data:{labels:<?=json_encode($sales_chart_labels)?>,datasets:[{label:'Subscription Revenue (₱)',data:<?=json_encode(array_map('floatval',$sales_chart_data))?>,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2.5,tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#2563eb'},{label:'Renewals',data:<?=json_encode(array_map('intval',array_column($sales_data,'tx_count')))?>,borderColor:'#10b981',backgroundColor:'transparent',borderWidth:2,tension:0.4,pointRadius:3,pointBackgroundColor:'#10b981',yAxisID:'y2'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:11},boxWidth:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94a3b8'}},y:{grid:{color:'#f1f5f9'},ticks:{font:{size:10},color:'#94a3b8'},beginAtZero:true,title:{display:true,text:'Revenue (₱)',font:{size:10},color:'#94a3b8'}},y2:{position:'right',grid:{display:false},ticks:{font:{size:10},color:'#10b981'},beginAtZero:true,title:{display:true,text:'Renewals',font:{size:10},color:'#10b981'}}}}});
-        </script><?php endif;?>
+        </script>
+        <!-- ── Period Breakdown Table ─────────────────────────── -->
+        <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">
+          <div style="font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);margin-bottom:10px;">
+            <?php if($sales_period==='daily'):?>📅 Daily Breakdown
+            <?php elseif($sales_period==='weekly'):?>📅 Weekly Breakdown
+            <?php else:?>📅 Monthly Breakdown<?php endif;?>
+          </div>
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <table style="min-width:420px;">
+            <thead>
+              <tr>
+                <?php if($sales_period==='daily'):?>
+                  <th>#</th><th>Date</th><th style="text-align:right;">Revenue (₱)</th><th style="text-align:right;">Renewals</th>
+                <?php elseif($sales_period==='weekly'):?>
+                  <th>#</th><th>Week</th><th style="text-align:right;">Revenue (₱)</th><th style="text-align:right;">Renewals</th>
+                <?php else:?>
+                  <th>#</th><th>Month</th><th style="text-align:right;">Revenue (₱)</th><th style="text-align:right;">Renewals</th>
+                <?php endif;?>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach($sales_data as $si=>$sd):?>
+            <tr>
+              <td style="color:var(--text-dim);font-size:.73rem;"><?=$si+1?></td>
+              <td style="font-weight:600;font-size:.82rem;">
+                <?php if($sales_period==='daily'):?>
+                  <?=date('M d, Y (D)',strtotime($sd['period_label']))?>
+                <?php elseif($sales_period==='weekly'):?>
+                  <?php
+                    // Convert "2026-W04" to a readable date range
+                    $wparts = explode('-W', $sd['period_label']);
+                    if(count($wparts)===2){
+                      $wdate = new DateTime();
+                      $wdate->setISODate((int)$wparts[0],(int)$wparts[1]);
+                      $wend  = clone $wdate; $wend->modify('+6 days');
+                      echo htmlspecialchars($sd['period_label']).' <span style="color:var(--text-dim);font-size:.72rem;font-weight:400;">('.$wdate->format('M d').'–'.$wend->format('M d, Y').')</span>';
+                    } else { echo htmlspecialchars($sd['period_label']); }
+                  ?>
+                <?php else:?>
+                  <?=htmlspecialchars($sd['period_label'])?>
+                <?php endif;?>
+              </td>
+              <td style="text-align:right;font-weight:700;color:var(--success);">₱<?=number_format((float)$sd['revenue'],2)?></td>
+              <td style="text-align:right;font-weight:600;color:var(--blue-acc);"><?=number_format((int)$sd['tx_count'])?></td>
+            </tr>
+            <?php endforeach;?>
+            </tbody>
+            <tfoot>
+              <tr style="background:#f8fafc;">
+                <td colspan="2" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTAL</td>
+                <td style="text-align:right;font-weight:800;color:var(--success);">₱<?=number_format(array_sum(array_column($sales_data,'revenue')),2)?></td>
+                <td style="text-align:right;font-weight:800;color:var(--blue-acc);"><?=number_format(array_sum(array_column($sales_data,'tx_count')))?></td>
+              </tr>
+            </tfoot>
+          </table>
+          </div>
+        </div>
+        <?php endif;?>
       </div>
 
       <div class="two-col">
         <div class="card">
           <div class="card-hdr"><span class="card-title">🏢 Subscription Payments Per Tenant</span></div>
           <?php if(empty($sales_per_tenant)):?><div class="empty-state"><p>No data.</p></div>
-          <?php else:?><table><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Renewals</th><th>Amount Paid (₱)</th><th>Avg (₱)</th><th>Last Payment</th></tr></thead><tbody>
+          <?php else:?>
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <table style="min-width:520px;"><thead><tr><th>Rank</th><th>Tenant</th><th>Plan</th><th>Renewals</th><th>Amount Paid (₱)</th><th>Avg (₱)</th><th>Last Payment</th></tr></thead><tbody>
           <?php foreach($sales_per_tenant as $i=>$r):?>
           <tr><td><span class="badge <?=$i===0?'rank-1':($i===1?'rank-2':($i===2?'rank-3':'b-gray'))?>">#<?=$i+1?></span></td><td style="font-weight:600;"><?=htmlspecialchars($r['business_name'])?></td><td><span class="badge <?=$r['plan']==='Enterprise'?'plan-ent':($r['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$r['plan']?></span></td><td style="font-weight:700;"><?=number_format($r['tx_count'])?></td><td style="font-weight:700;color:var(--success);">₱<?=number_format($r['revenue'],2)?></td><td>₱<?=number_format($r['avg_tx'],2)?></td><td style="font-size:.73rem;color:var(--text-dim);"><?=$r['last_tx']?date('M d, Y',strtotime($r['last_tx'])):'—'?></td></tr>
           <?php endforeach;?></tbody>
           <tfoot><tr style="background:#f8fafc;"><td colspan="3" style="font-weight:700;font-size:.78rem;color:var(--text-m);">TOTALS</td><td style="font-weight:800;"><?=number_format(array_sum(array_column($sales_per_tenant,'tx_count')))?></td><td style="font-weight:800;color:var(--success);">₱<?=number_format(array_sum(array_column($sales_per_tenant,'revenue')),2)?></td><td colspan="2"></td></tr></tfoot>
-          </table><?php endif;?>
+          </table>
+          </div>
+          <?php endif;?>
         </div>
         <div class="card">
           <div class="card-hdr"><span class="card-title">🏆 Top Paying Tenants</span></div>
@@ -1916,7 +1978,9 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <div class="card">
         <div class="card-hdr"><span class="card-title">📋 Subscription Payment History (Latest 100)</span><span style="font-size:.74rem;color:var(--text-dim);"><?=htmlspecialchars($sales_date_from)?> — <?=htmlspecialchars($sales_date_to)?></span></div>
         <?php if(empty($tx_history)):?><div class="empty-state"><p>No subscription payments found for the selected period.</p></div>
-        <?php else:?><table><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Payment Method</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
+        <?php else:?>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table style="min-width:600px;"><thead><tr><th>#</th><th>Tenant</th><th>Plan</th><th>Billing Cycle</th><th>Payment Method</th><th>Amount Paid (₱)</th><th>Date Approved</th></tr></thead><tbody>
         <?php foreach($tx_history as $i=>$tx):?>
         <tr>
           <td style="color:var(--text-dim);font-size:.73rem;"><?=$i+1?></td>
@@ -1925,9 +1989,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td style="font-size:.78rem;"><?=ucfirst($tx['billing_cycle']??'—')?></td>
           <td style="font-size:.77rem;"><?php $pm_=$tx['payment_method']??'';if(str_starts_with($pm_,'PayMongo')):?><span style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:6px;padding:2px 8px;font-weight:700;font-size:.7rem;">⚡ <?=htmlspecialchars($pm_)?></span><?php elseif($pm_):?><span style="color:var(--text-m);"><?=htmlspecialchars($pm_)?></span><?php if($tx['payment_reference']??''):?><div style="font-size:.68rem;color:var(--text-dim);">Ref: <?=htmlspecialchars($tx['payment_reference'])?></div><?php endif;?><?php else:?>—<?php endif;?></td>
           <td style="font-weight:700;color:var(--success);">₱<?=number_format($tx['amount']??0,2)?></td>
-          <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td>
+          <td style="font-size:.73rem;color:var(--text-dim);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($tx['created_at']))?></td>
         </tr>
-        <?php endforeach;?></tbody></table><?php endif;?>
+        <?php endforeach;?></tbody></table>
+        </div>
+        <?php endif;?>
       </div>
 
     <!-- ══ SETTINGS PAGE ═══════════════════════════════════════ -->
@@ -2125,8 +2191,9 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             <p>No audit log entries found for the selected filters.</p>
           </div>
         <?php else:?>
-          <table>
-            <thead><tr><th>Date & Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Entity</th><th>Message</th></tr></thead>
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <table style="min-width:700px;">
+            <thead><tr><th style="white-space:nowrap;">Date & Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Entity</th><th style="min-width:220px;max-width:340px;">Message</th></tr></thead>
             <tbody>
             <?php foreach($audit_logs as $log):
               $av=strtoupper($log['action']??'');
@@ -2137,18 +2204,21 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
               elseif(str_contains($av,'CREATE')||str_contains($av,'ADD')) $ac='act-create';
               elseif(str_contains($av,'UPDATE')||str_contains($av,'EDIT')) $ac='act-update';
               else $ac='act-other';
+              $msg_full = htmlspecialchars($log['message']??'—');
+              $msg_short = mb_strlen($log['message']??'') > 80 ? htmlspecialchars(mb_substr($log['message'],0,80)).'…' : $msg_full;
             ?>
             <tr>
               <td style="font-size:.73rem;color:var(--text-dim);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($log['created_at']))?></td>
-              <td style="font-weight:600;font-size:.79rem;"><?=htmlspecialchars($log['actor_username']??'—')?></td>
-              <td><span class="badge <?=['super_admin'=>'b-purple','admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$log['actor_role']??'']??'b-gray'?>"><?=ucwords(str_replace('_',' ',$log['actor_role']??'—'))?></span></td>
-              <td><span class="badge <?=$ac?>" style="font-size:.65rem;letter-spacing:.03em;"><?=htmlspecialchars($log['action']??'—')?></span></td>
-              <td style="font-size:.74rem;"><?php if(!empty($log['entity_type'])):?><span style="color:var(--text-dim);"><?=htmlspecialchars(ucfirst($log['entity_type']))?></span><?php if(!empty($log['entity_id'])):?> <span class="ticket-tag">#<?=htmlspecialchars($log['entity_id'])?></span><?php endif;?><?php else:?>—<?php endif;?></td>
-              <td style="font-size:.77rem;color:var(--text-m);max-width:280px;"><?=htmlspecialchars($log['message']??'—')?></td>
+              <td style="font-weight:600;font-size:.79rem;white-space:nowrap;"><?=htmlspecialchars($log['actor_username']??'—')?></td>
+              <td style="white-space:nowrap;"><span class="badge <?=['super_admin'=>'b-purple','admin'=>'b-blue','staff'=>'b-green','cashier'=>'b-yellow'][$log['actor_role']??'']??'b-gray'?>"><?=ucwords(str_replace('_',' ',$log['actor_role']??'—'))?></span></td>
+              <td style="white-space:nowrap;"><span class="badge <?=$ac?>" style="font-size:.65rem;letter-spacing:.03em;"><?=htmlspecialchars($log['action']??'—')?></span></td>
+              <td style="font-size:.74rem;white-space:nowrap;"><?php if(!empty($log['entity_type'])):?><span style="color:var(--text-dim);"><?=htmlspecialchars(ucfirst($log['entity_type']))?></span><?php if(!empty($log['entity_id'])):?> <span class="ticket-tag">#<?=htmlspecialchars($log['entity_id'])?></span><?php endif;?><?php else:?>—<?php endif;?></td>
+              <td style="font-size:.77rem;color:var(--text-m);max-width:340px;word-break:break-word;overflow-wrap:anywhere;" title="<?=$msg_full?>"><?=$msg_short?></td>
             </tr>
             <?php endforeach;?>
             </tbody>
           </table>
+          </div>
           <?php if($audit_total_pages>1):
             $bu="?page=audit_logs&audit_from=".urlencode($audit_date_from)."&audit_to=".urlencode($audit_date_to)."&audit_action=".urlencode($audit_action)."&audit_actor=".urlencode($audit_actor);?>
           <div class="pagination">
