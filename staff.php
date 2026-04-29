@@ -242,8 +242,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $req_id = (int)trim($_POST['request_id'] ?? 0);
 
         if ($req_id > 0) {
-            // 'approved' = offer was sent; staff finalizes after customer agrees in-branch/app
-            $preq = $pdo->prepare("SELECT * FROM pawn_requests WHERE id=? AND tenant_id=? AND status='approved' LIMIT 1");
+            // 'approved' = offer sent; 'customer_accepted' = customer confirmed via app
+            $preq = $pdo->prepare("SELECT * FROM pawn_requests WHERE id=? AND tenant_id=? AND status IN ('approved','customer_accepted') LIMIT 1");
             $preq->execute([$req_id, $tid]);
             $pr = $preq->fetch();
 
@@ -359,12 +359,12 @@ try {
         FROM pawn_requests pr
         LEFT JOIN mobile_customers mc ON mc.id = pr.customer_id
         WHERE pr.tenant_id = ?
-        ORDER BY FIELD(pr.status,'pending','approved','rejected','cancelled') DESC, pr.created_at DESC
+        ORDER BY FIELD(pr.status,'customer_accepted','pending','approved','rejected','cancelled') DESC, pr.created_at DESC
         LIMIT 100
     ");
     $mrq->execute([$tid]);
     $mobile_requests = $mrq->fetchAll();
-    $mobile_req_pending_count = count(array_filter($mobile_requests, fn($r) => $r['status'] === 'pending'));
+    $mobile_req_pending_count = count(array_filter($mobile_requests, fn($r) => in_array($r['status'], ['pending', 'customer_accepted'])));
 } catch (Throwable $e) { $mobile_requests = []; $mobile_req_pending_count = 0; }
 
 $business_name = $tenant['business_name'] ?? 'My Branch';
@@ -401,7 +401,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
   backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
   border-right:1px solid rgba(255,255,255,.06);
   display:flex;flex-direction:column;
-  position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
+  position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;overflow-x:hidden;
 }
 .sb-brand{padding:22px 18px 14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:11px;}
 .sb-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#1e3a8a));border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 4px 14px rgba(37,99,235,.35);}
@@ -428,7 +428,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-item.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600;}
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;}
 
-.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);}
+.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);position:sticky;bottom:0;background:rgba(8,11,18,.97);z-index:101;}
 .sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:rgba(255,255,255,.3);text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
 .sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
@@ -510,7 +510,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 .empty-state .material-symbols-outlined{font-size:46px;display:block;margin:0 auto 14px;opacity:.3;}
 .empty-state p{font-size:.82rem;}
 
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9990;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
 .modal-overlay.open{display:flex;}
 .modal{background:#0a0d14;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:580px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.7);animation:mIn .25s ease both;}
 @keyframes mIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
@@ -990,10 +990,11 @@ $notif_count = count($notifs);
 
     <?php
       $status_groups = [
-        'pending'   => ['label'=>'Pending Review',    'color'=>'#f59e0b','bg'=>'rgba(245,158,11,.1)','border'=>'rgba(245,158,11,.2)'],
-        'approved'  => ['label'=>'Offer Sent',        'color'=>'#3b82f6','bg'=>'rgba(59,130,246,.1)','border'=>'rgba(59,130,246,.2)'],
-        'rejected'  => ['label'=>'Rejected',          'color'=>'#ef4444','bg'=>'rgba(239,68,68,.08)','border'=>'rgba(239,68,68,.15)'],
-        'cancelled' => ['label'=>'Finalized / Pawned','color'=>'#6ee7b7','bg'=>'rgba(16,185,129,.06)','border'=>'rgba(16,185,129,.12)'],
+        'pending'           => ['label'=>'Pending Review',      'color'=>'#f59e0b','bg'=>'rgba(245,158,11,.1)','border'=>'rgba(245,158,11,.2)'],
+        'approved'          => ['label'=>'Offer Sent',          'color'=>'#3b82f6','bg'=>'rgba(59,130,246,.1)','border'=>'rgba(59,130,246,.2)'],
+        'customer_accepted' => ['label'=>'Customer Accepted ✓', 'color'=>'#10b981','bg'=>'rgba(16,185,129,.1)','border'=>'rgba(16,185,129,.25)'],
+        'rejected'          => ['label'=>'Rejected',            'color'=>'#ef4444','bg'=>'rgba(239,68,68,.08)','border'=>'rgba(239,68,68,.15)'],
+        'cancelled'         => ['label'=>'Finalized / Pawned',  'color'=>'#6ee7b7','bg'=>'rgba(16,185,129,.06)','border'=>'rgba(16,185,129,.12)'],
       ];
 
       foreach ($status_groups as $sg_key => $sg):
@@ -1108,21 +1109,34 @@ $notif_count = count($notifs);
         </button>
 
         <?php elseif($mr['status'] === 'approved'): ?>
-        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-          <span class="material-symbols-outlined" style="color:#6ee7b7;font-size:20px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
-          <span style="font-size:.82rem;color:#6ee7b7;font-weight:600;">Offer sent! Once the customer confirms in-branch, finalize below to issue the pawn ticket.</span>
+        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+          <span class="material-symbols-outlined" style="color:#93c5fd;font-size:20px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">schedule</span>
+          <span style="font-size:.82rem;color:#93c5fd;font-weight:600;">⏳ Offer sent — waiting for customer to accept or decline in the app.</span>
+        </div>
+        <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
+          style="background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.18);border-radius:8px;padding:7px 14px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;">
+          Cancel / Reject
+        </button>
+
+        <?php elseif($mr['status'] === 'customer_accepted'): ?>
+        <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:12px;padding:14px 18px;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <span class="material-symbols-outlined" style="color:#6ee7b7;font-size:22px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
+            <span style="font-size:.9rem;color:#6ee7b7;font-weight:700;">Customer accepted the offer!</span>
+          </div>
+          <p style="font-size:.78rem;color:rgba(110,231,183,.7);margin-left:32px;">The customer confirmed via the app. Issue the pawn ticket below to complete the transaction.</p>
         </div>
         <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">
-          <form method="POST" onsubmit="return confirm('Finalize this request and issue pawn ticket?');" style="display:inline;">
+          <form method="POST" onsubmit="return confirm('Issue pawn ticket for this request?');" style="display:inline;">
             <input type="hidden" name="action" value="finalize_pawn_request">
             <input type="hidden" name="request_id" value="<?=(int)$mr['id']?>">
-            <button type="submit" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;padding:9px 20px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">
-              <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">add_card</span> Issue Pawn Ticket
+            <button type="submit" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(16,185,129,.35);">
+              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;">add_card</span> Issue Pawn Ticket
             </button>
           </form>
           <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
             style="background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.18);border-radius:8px;padding:7px 14px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;">
-            Cancel / Reject
+            Reject Anyway
           </button>
         </div>
 
@@ -1263,8 +1277,8 @@ function toggleNotifPanel(e){
   e.stopPropagation();
   document.getElementById('notifPanel').classList.toggle('open');
 }
-document.addEventListener('click',function(){
-  document.getElementById('notifPanel')?.classList.remove('open');
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#notifPanel')&&!e.target.closest('#notifBtn')){document.getElementById('notifPanel')?.classList.remove('open');}
 });
 function showLogoutModal(url){
   document.getElementById('logoutConfirmBtn').href=url;
