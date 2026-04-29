@@ -11,8 +11,6 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
-
-
 if (empty($_SESSION['user'])) {
     header('Location: /'); exit;
 }
@@ -192,153 +190,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $active_page = 'tickets';
         }
     }
-
-    // ── Mobile Pawn Request: Staff verifies item & sends loan offer ──────────
-    if ($_POST['action'] === 'send_offer') {
-        $req_id        = (int)trim($_POST['request_id']   ?? 0);
-        $offer_amount  = floatval($_POST['offer_amount']  ?? 0);
-        $interest_rate = floatval($_POST['interest_rate'] ?? 0.02);
-        $appraisal     = floatval($_POST['appraisal']     ?? 0);
-        $remarks       = trim($_POST['staff_notes']       ?? '');
-        $claim_term    = trim($_POST['claim_term']        ?? '1-15');
-
-        if ($req_id > 0 && $offer_amount > 0) {
-            $preq = $pdo->prepare("SELECT * FROM pawn_requests WHERE id=? AND tenant_id=? AND status='pending' LIMIT 1");
-            $preq->execute([$req_id, $tid]);
-            $pr = $preq->fetch();
-
-            if ($pr) {
-                $pdo->prepare("UPDATE pawn_requests SET
-                    offer_amount    = ?,
-                    interest_rate   = ?,
-                    appraisal_value = ?,
-                    remarks         = ?,
-                    claim_term      = ?,
-                    staff_id        = ?,
-                    status          = 'approved',
-                    updated_at      = NOW()
-                  WHERE id = ? AND tenant_id = ?")
-                  ->execute([$offer_amount, $interest_rate, $appraisal, $remarks, $claim_term, $u['id'], $req_id, $tid]);
-
-                write_pawn_update($pdo, $tid, $pr['request_no'], 'OFFER_SENT',
-                    "Staff has reviewed your item and is offering a loan of ₱" . number_format($offer_amount, 2) .
-                    " at " . ($interest_rate * 100) . "% interest. Please open the app to accept or decline.");
-
-                write_audit($pdo, $u['id'], $u['username'], 'staff', 'MOBILE_OFFER_SENT', 'pawn_request', (string)$req_id,
-                    "Sent offer ₱{$offer_amount} for request #{$req_id} ({$pr['request_no']})", $tid);
-
-                $success_msg = "Offer of ₱" . number_format($offer_amount, 2) . " sent to customer successfully.";
-            } else {
-                $error_msg = 'Request not found or already processed.';
-            }
-        } else {
-            $error_msg = 'Please enter a valid offer amount.';
-        }
-        $active_page = 'mobile_requests';
-    }
-
-    // ── Mobile Pawn Request: Staff finalizes → convert to pawn ticket ────────
-    if ($_POST['action'] === 'finalize_pawn_request') {
-        $req_id = (int)trim($_POST['request_id'] ?? 0);
-
-        if ($req_id > 0) {
-            // 'approved' = offer sent; 'customer_accepted' = customer confirmed via app
-            $preq = $pdo->prepare("SELECT * FROM pawn_requests WHERE id=? AND tenant_id=? AND status IN ('approved','customer_accepted') LIMIT 1");
-            $preq->execute([$req_id, $tid]);
-            $pr = $preq->fetch();
-
-            if ($pr) {
-                $ticket_no       = 'TP-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid()), 0, 6));
-                $loan_amount     = (float)($pr['offer_amount']    ?? 0);
-                $interest_rate   = (float)($pr['interest_rate']   ?? 0.02);
-                $appraisal       = (float)($pr['appraisal_value'] ?? 0);
-                $claim_term      = $pr['claim_term'] ?? '1-15';
-                $interest_amount = round($loan_amount * $interest_rate, 2);
-                $total_redeem    = $loan_amount + $interest_amount;
-                $term_days       = match($claim_term) {
-                    '1-15'=>15,'16-30'=>30,'2m'=>60,'3m'=>90,'4m'=>120, default=>30
-                };
-                $pawn_date     = date('Y-m-d');
-                $maturity_date = date('Y-m-d', strtotime("+{$term_days} days"));
-                $expiry_date   = date('Y-m-d', strtotime("+".($term_days+90)." days"));
-
-                // Fetch mobile customer details
-                $mc = null;
-                if (!empty($pr['customer_id'])) {
-                    $mcs = $pdo->prepare("SELECT * FROM mobile_customers WHERE id=? LIMIT 1");
-                    $mcs->execute([$pr['customer_id']]);
-                    $mc = $mcs->fetch();
-                }
-                $customer_name  = $mc['full_name']      ?? $pr['customer_name']  ?? 'Mobile Customer';
-                $contact_number = $mc['contact_number'] ?? $pr['contact_number'] ?? '';
-                $email          = $mc['email']          ?? '';
-                $address        = $mc['address']        ?? '';
-                $birthdate      = $mc['birthdate']      ?? null;
-
-                $pdo->prepare("INSERT INTO pawn_transactions
-                    (tenant_id,ticket_no,customer_name,contact_number,email,address,birthdate,
-                     gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,
-                     valid_id_type,valid_id_number,
-                     item_category,item_description,item_condition,item_weight,item_karat,serial_number,
-                     appraisal_value,loan_amount,interest_rate,claim_term,interest_amount,total_redeem,
-                     pawn_date,maturity_date,expiry_date,status,created_by,assigned_staff_id)
-                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?)")
-                  ->execute([
-                    $tid,$ticket_no,$customer_name,$contact_number,$email,$address,$birthdate,
-                    '','Filipino','','','','','',
-                    '','',
-                    $pr['item_category'],$pr['item_description'],$pr['item_condition']??'Good',
-                    0,'',$pr['serial_number']??'',
-                    $appraisal,$loan_amount,$interest_rate,$claim_term,$interest_amount,$total_redeem,
-                    $pawn_date,$maturity_date,$expiry_date,$u['id'],$u['id']
-                  ]);
-
-                $inv_id = (int)$pdo->lastInsertId();
-                // Use front_photo_path as the item photo
-                $item_photo = $pr['front_photo_path'] ?? null;
-                $pdo->prepare("INSERT INTO item_inventory (tenant_id,pawn_id,ticket_no,item_name,item_category,serial_no,condition_notes,appraisal_value,loan_amount,item_photo_path,status) VALUES (?,?,?,?,?,?,?,?,?,?,'pawned')")
-                  ->execute([$tid,$inv_id,$ticket_no,$pr['item_description'],$pr['item_category'],$pr['serial_number']??'',$pr['item_condition']??'Good',$appraisal,$loan_amount,$item_photo]);
-
-                // Mark pawn_request as cancelled (closed/finalized) and store ticket_no
-                $pdo->prepare("UPDATE pawn_requests SET status='cancelled', ticket_no=?, updated_at=NOW() WHERE id=?")
-                  ->execute([$ticket_no, $req_id]);
-
-                write_pawn_update($pdo, $tid, $ticket_no, 'PAWNED',
-                    "Your item has been successfully pawned. Ticket #{$ticket_no} — Loan: ₱" . number_format($loan_amount, 2) . ". Maturity: {$maturity_date}.");
-
-                write_audit($pdo, $u['id'], $u['username'], 'staff', 'PAWN_CREATE', 'pawn_transaction', $ticket_no,
-                    "Finalized mobile request #{$req_id} → ticket {$ticket_no}", $tid);
-
-                $success_msg = "Pawn ticket {$ticket_no} created from mobile request!";
-            } else {
-                $error_msg = 'Request not found or offer not yet sent.';
-            }
-        }
-        $active_page = 'mobile_requests';
-    }
-
-    // ── Mobile Pawn Request: Reject ───────────────────────────────────────────
-    if ($_POST['action'] === 'decline_request') {
-        $req_id = (int)trim($_POST['request_id'] ?? 0);
-        $reason = trim($_POST['decline_reason'] ?? '');
-        if ($req_id > 0) {
-            $preq = $pdo->prepare("SELECT * FROM pawn_requests WHERE id=? AND tenant_id=? LIMIT 1");
-            $preq->execute([$req_id, $tid]);
-            $pr = $preq->fetch();
-            if ($pr && in_array($pr['status'], ['pending','approved'])) {
-                $pdo->prepare("UPDATE pawn_requests SET status='rejected', remarks=?, staff_id=?, updated_at=NOW() WHERE id=?")
-                  ->execute([$reason ?: $pr['remarks'], $u['id'], $req_id]);
-                write_pawn_update($pdo, $tid, $pr['request_no'], 'REJECTED',
-                    "Unfortunately, your pawn request has been declined." . ($reason ? " Reason: {$reason}" : ''));
-                write_audit($pdo, $u['id'], $u['username'], 'staff', 'MOBILE_REQUEST_REJECTED', 'pawn_request', (string)$req_id,
-                    "Rejected mobile request #{$req_id}", $tid);
-                $success_msg = 'Request rejected and customer notified.';
-            } else {
-                $error_msg = 'Request not found or already finalized.';
-            }
-        }
-        $active_page = 'mobile_requests';
-    }
 }
 
 $today = date('Y-m-d');
@@ -349,24 +200,6 @@ $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=?
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
 $customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
 $my_void_reqs = $pdo->prepare("SELECT * FROM pawn_void_requests WHERE tenant_id=? AND requested_by=? ORDER BY requested_at DESC"); $my_void_reqs->execute([$tid,$u['id']]); $my_void_reqs=$my_void_reqs->fetchAll();
-
-// Mobile pawn requests
-$mobile_requests = [];
-$mobile_req_pending_count = 0;
-try {
-    $mrq = $pdo->prepare("
-        SELECT pr.*, mc.full_name AS mc_name, mc.contact_number AS mc_contact, mc.email AS mc_email
-        FROM pawn_requests pr
-        LEFT JOIN mobile_customers mc ON mc.id = pr.customer_id
-        WHERE pr.tenant_id = ?
-        ORDER BY FIELD(pr.status,'customer_accepted','pending','approved','rejected','cancelled') DESC, pr.created_at DESC
-        LIMIT 100
-    ");
-    $mrq->execute([$tid]);
-    $mobile_requests = $mrq->fetchAll();
-    $mobile_req_pending_count = count(array_filter($mobile_requests, fn($r) => in_array($r['status'], ['pending', 'customer_accepted'])));
-} catch (Throwable $e) { $mobile_requests = []; $mobile_req_pending_count = 0; }
-
 $business_name = $tenant['business_name'] ?? 'My Branch';
 ?>
 <!DOCTYPE html>
@@ -597,14 +430,6 @@ $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-161153273
     <a href="?page=register_customer" class="sb-item <?=$active_page==='register_customer'?'active':''?>">
       <span class="material-symbols-outlined">person_add</span>Register Customer
     </a>
-    <div class="sb-section">Mobile App</div>
-    <a href="?page=mobile_requests" class="sb-item <?=$active_page==='mobile_requests'?'active':''?>" style="position:relative;">
-      <span class="material-symbols-outlined">smartphone</span>Mobile Requests
-      <?php if($mobile_req_pending_count > 0): ?>
-        <span style="margin-left:auto;background:#ef4444;color:#fff;font-size:.58rem;font-weight:800;padding:1px 6px;border-radius:100px;min-width:18px;text-align:center;"><?=$mobile_req_pending_count?></span>
-      <?php endif; ?>
-    </a>
-    <div class="sb-section">Records</div>
     <a href="?page=void_requests" class="sb-item <?=$active_page==='void_requests'?'active':''?>">
       <span class="material-symbols-outlined">cancel_presentation</span>My Void Requests
     </a>
@@ -634,8 +459,6 @@ try {
     $vr = $pdo->prepare("SELECT COUNT(*) FROM pawn_void_requests WHERE requested_by=? AND status='pending'");
     $vr->execute([$u['id']]); $vr_c = (int)$vr->fetchColumn();
     if ($vr_c > 0) $notifs[] = ['type'=>'info','icon'=>'cancel_presentation','title'=>$vr_c.' Void Request'.($vr_c>1?'s':'').' Pending','sub'=>'Waiting for admin approval.','link'=>'?page=void_requests'];
-    // Mobile pawn requests pending verification
-    if ($mobile_req_pending_count > 0) $notifs[] = ['type'=>'warn','icon'=>'smartphone','title'=>$mobile_req_pending_count.' Mobile Request'.($mobile_req_pending_count>1?'s':'').' Awaiting Review','sub'=>'Customers submitted items from the app.','link'=>'?page=mobile_requests'];
   }
 } catch (Throwable $e) {}
 $notif_count = count($notifs);
@@ -972,187 +795,6 @@ $notif_count = count($notifs);
       <tr><td><span class="ticket-tag"><?=htmlspecialchars($v['ticket_no'])?></span></td><td style="max-width:200px;font-size:.78rem;"><?=htmlspecialchars($v['reason'])?></td><td><span class="badge <?=$v['status']==='approved'?'b-green':($v['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($v['status'])?></span></td><td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y h:i A',strtotime($v['requested_at']))?></td><td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=$v['decided_at']?date('M d, Y h:i A',strtotime($v['decided_at'])):'—'?></td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
-
-  <?php elseif($active_page==='mobile_requests'): ?>
-    <div class="page-hdr">
-      <div>
-        <h2>Mobile Pawn Requests</h2>
-        <p><?=count($mobile_requests)?> total · <?=$mobile_req_pending_count?> pending review</p>
-      </div>
-    </div>
-
-    <?php if(empty($mobile_requests)): ?>
-      <div class="empty-state">
-        <span class="material-symbols-outlined">smartphone</span>
-        <p>No mobile requests yet. Customers submit pawn requests via the app.</p>
-      </div>
-    <?php else: ?>
-
-    <?php
-      $status_groups = [
-        'pending'           => ['label'=>'Pending Review',      'color'=>'#f59e0b','bg'=>'rgba(245,158,11,.1)','border'=>'rgba(245,158,11,.2)'],
-        'approved'          => ['label'=>'Offer Sent',          'color'=>'#3b82f6','bg'=>'rgba(59,130,246,.1)','border'=>'rgba(59,130,246,.2)'],
-        'customer_accepted' => ['label'=>'Customer Accepted ✓', 'color'=>'#10b981','bg'=>'rgba(16,185,129,.1)','border'=>'rgba(16,185,129,.25)'],
-        'rejected'          => ['label'=>'Rejected',            'color'=>'#ef4444','bg'=>'rgba(239,68,68,.08)','border'=>'rgba(239,68,68,.15)'],
-        'cancelled'         => ['label'=>'Finalized / Pawned',  'color'=>'#6ee7b7','bg'=>'rgba(16,185,129,.06)','border'=>'rgba(16,185,129,.12)'],
-      ];
-
-      foreach ($status_groups as $sg_key => $sg):
-        $group_items = array_filter($mobile_requests, fn($r) => $r['status'] === $sg_key);
-        if(empty($group_items)) continue;
-    ?>
-    <div style="margin-bottom:28px;">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;">
-        <span style="font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:<?=$sg['color']?>;background:<?=$sg['bg']?>;border:1px solid <?=$sg['border']?>;padding:3px 11px;border-radius:100px;"><?=$sg['label']?></span>
-        <span style="font-size:.7rem;color:rgba(255,255,255,.3);"><?=count($group_items)?> request<?=count($group_items)>1?'s':''?></span>
-      </div>
-
-      <?php foreach($group_items as $mr): ?>
-      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;margin-bottom:12px;">
-
-        <!-- Header row -->
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-          <div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-              <span style="font-size:.72rem;font-weight:700;letter-spacing:.06em;background:rgba(255,255,255,.07);padding:2px 9px;border-radius:6px;color:rgba(255,255,255,.5);font-family:monospace;"><?=htmlspecialchars($mr['request_no']??'—')?></span>
-              <span style="font-size:.7rem;font-weight:700;color:<?=$sg['color']?>;background:<?=$sg['bg']?>;border:1px solid <?=$sg['border']?>;padding:2px 8px;border-radius:100px;"><?=ucfirst(str_replace('_',' ',$mr['status']))?></span>
-            </div>
-            <div style="font-size:.95rem;font-weight:700;color:#fff;"><?=htmlspecialchars($mr['mc_name'] ?? $mr['customer_name'] ?? 'Customer')?></div>
-            <div style="font-size:.75rem;color:rgba(255,255,255,.4);margin-top:2px;">
-              <?=htmlspecialchars($mr['mc_contact'] ?? $mr['contact_number'] ?? '')?><?php if(!empty($mr['mc_email'])): ?> · <?=htmlspecialchars($mr['mc_email'])?><?php endif; ?>
-            </div>
-          </div>
-          <div style="text-align:right;font-size:.7rem;color:rgba(255,255,255,.3);"><?=date('M d, Y h:i A', strtotime($mr['created_at']))?></div>
-        </div>
-
-        <!-- Item details -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px;">
-          <?php
-            $item_fields = [
-              'Item'        => $mr['item_description'] ?? '—',
-              'Category'    => $mr['item_category']    ?? '—',
-              'Condition'   => $mr['item_condition']   ?? '—',
-              'Serial No.'  => $mr['serial_number']    ?? '—',
-            ];
-            if(!empty($mr['item_weight'])) $item_fields['Weight'] = $mr['item_weight'].'g';
-            if(!empty($mr['item_karat']))  $item_fields['Karat']  = $mr['item_karat'];
-          ?>
-          <?php foreach($item_fields as $lbl => $val): ?>
-          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 13px;">
-            <div style="font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:3px;"><?=$lbl?></div>
-            <div style="font-size:.83rem;font-weight:600;color:#fff;"><?=htmlspecialchars($val)?></div>
-          </div>
-          <?php endforeach; ?>
-        </div>
-
-        <!-- Item photos submitted by customer -->
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-          <?php
-            function normalize_photo_path(string $p): string {
-                if (!$p) return '';
-                if (strpos($p, 'http') === 0) return $p; // already full URL
-                return '/' . ltrim($p, '/');             // add leading slash for relative paths
-            }
-            $photos = [
-              'Front Photo'  => normalize_photo_path($mr['front_photo_path']  ?? ''),
-              'Back Photo'   => normalize_photo_path($mr['back_photo_path']   ?? ''),
-              'Detail Photo' => normalize_photo_path($mr['detail_photo_path'] ?? ''),
-            ];
-            foreach($photos as $plabel => $ppath): if(empty($ppath)) continue;
-          ?>
-          <div>
-            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.3);margin-bottom:5px;"><?=$plabel?></div>
-            <a href="<?=htmlspecialchars($ppath)?>" target="_blank">
-              <img src="<?=htmlspecialchars($ppath)?>" style="height:90px;width:120px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.1);" onerror="this.style.display='none'">
-            </a>
-          </div>
-          <?php endforeach; ?>
-        </div>
-
-        <!-- Offer details if already sent -->
-        <?php if(in_array($mr['status'],['approved','cancelled']) && !empty($mr['offer_amount'])): ?>
-        <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
-          <div>
-            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(147,197,253,.5);margin-bottom:2px;">Offer Amount</div>
-            <div style="font-size:1.1rem;font-weight:800;color:#93c5fd;">₱<?=number_format((float)$mr['offer_amount'],2)?></div>
-          </div>
-          <div>
-            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(147,197,253,.5);margin-bottom:2px;">Interest Rate</div>
-            <div style="font-size:.88rem;font-weight:700;color:#93c5fd;"><?=number_format((float)$mr['interest_rate']*100,0)?>%</div>
-          </div>
-          <div>
-            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(147,197,253,.5);margin-bottom:2px;">Appraisal</div>
-            <div style="font-size:.88rem;font-weight:700;color:#93c5fd;">₱<?=number_format((float)$mr['appraisal_value'],2)?></div>
-          </div>
-          <div>
-            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(147,197,253,.5);margin-bottom:2px;">Claim Term</div>
-            <div style="font-size:.88rem;font-weight:700;color:#93c5fd;"><?=htmlspecialchars($mr['claim_term']??'—')?></div>
-          </div>
-          <?php if(!empty($mr['remarks'])): ?>
-          <div style="flex-basis:100%;">
-            <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(147,197,253,.5);margin-bottom:2px;">Remarks / Notes</div>
-            <div style="font-size:.8rem;color:rgba(255,255,255,.5);"><?=htmlspecialchars($mr['remarks'])?></div>
-          </div>
-          <?php endif; ?>
-        </div>
-        <?php endif; ?>
-
-        <!-- Action buttons -->
-        <?php if($mr['status'] === 'pending'): ?>
-        <button onclick="openOfferModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>', '<?=htmlspecialchars(addslashes($mr['mc_name']??$mr['customer_name']??'Customer'))?>')"
-          style="background:linear-gradient(135deg,var(--t-primary,#2563eb),var(--t-secondary,#1d4ed8));color:#fff;border:none;border-radius:10px;padding:9px 18px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;margin-right:8px;">
-          <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">local_offer</span> Send Loan Offer
-        </button>
-        <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
-          style="background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:9px 18px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">
-          <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">cancel</span> Reject
-        </button>
-
-        <?php elseif($mr['status'] === 'approved'): ?>
-        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-          <span class="material-symbols-outlined" style="color:#93c5fd;font-size:20px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">schedule</span>
-          <span style="font-size:.82rem;color:#93c5fd;font-weight:600;">⏳ Offer sent — waiting for customer to accept or decline in the app.</span>
-        </div>
-        <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
-          style="background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.18);border-radius:8px;padding:7px 14px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;">
-          Cancel / Reject
-        </button>
-
-        <?php elseif($mr['status'] === 'customer_accepted'): ?>
-        <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:12px;padding:14px 18px;margin-bottom:14px;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-            <span class="material-symbols-outlined" style="color:#6ee7b7;font-size:22px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
-            <span style="font-size:.9rem;color:#6ee7b7;font-weight:700;">Customer accepted the offer!</span>
-          </div>
-          <p style="font-size:.78rem;color:rgba(110,231,183,.7);margin-left:32px;">The customer confirmed via the app. Issue the pawn ticket below to complete the transaction.</p>
-        </div>
-        <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">
-          <form method="POST" onsubmit="return confirm('Issue pawn ticket for this request?');" style="display:inline;">
-            <input type="hidden" name="action" value="finalize_pawn_request">
-            <input type="hidden" name="request_id" value="<?=(int)$mr['id']?>">
-            <button type="submit" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(16,185,129,.35);">
-              <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;">add_card</span> Issue Pawn Ticket
-            </button>
-          </form>
-          <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
-            style="background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.18);border-radius:8px;padding:7px 14px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;">
-            Reject Anyway
-          </button>
-        </div>
-
-        <?php elseif($mr['status'] === 'cancelled'): ?>
-        <div style="font-size:.78rem;color:rgba(110,231,183,.6);">✅ Pawn ticket issued: <span style="font-family:monospace;font-weight:700;"><?=htmlspecialchars($mr['ticket_no']??'—')?></span></div>
-
-        <?php elseif($mr['status'] === 'rejected'): ?>
-        <div style="font-size:.78rem;color:rgba(252,165,165,.6);">❌ Rejected<?= !empty($mr['remarks']) ? ' — ' . htmlspecialchars($mr['remarks']) : '' ?></div>
-        <?php endif; ?>
-
-      </div>
-      <?php endforeach; ?>
-    </div>
-    <?php endforeach; ?>
-    <?php endif; ?>
-
   <?php endif;?>
   </div>
 </div>
@@ -1232,10 +874,10 @@ function previewId(input) {
     reader.readAsDataURL(input.files[0]);
   }
 }
-function openVoid(tn){const m=document.getElementById('voidModal');if(!m)return;document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;m.classList.add('open');}
-document.getElementById('voidModal')?.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+function openVoid(tn){document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;document.getElementById('voidModal').classList.add('open');}
+document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
-function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;const da=document.getElementById('d_a');const dl=document.getElementById('d_l');const di=document.getElementById('d_i');const dt=document.getElementById('d_t');if(da)da.textContent='₱'+a.toFixed(2);if(dl)dl.textContent='₱'+l.toFixed(2);if(di)di.textContent='₱'+i.toFixed(2);if(dt)dt.textContent='₱'+(l+i).toFixed(2);}
+function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
 function toggleGoldFields() {
   const cat = document.getElementById('item_category')?.value || '';
   const isGold = (cat === 'Gold');
@@ -1287,7 +929,7 @@ function showLogoutModal(url){
 function hideLogoutModal(){
   document.getElementById('logoutModal').style.display='none';
 }
-document.getElementById('logoutModal')?.addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
+document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
 </script>
 <div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
 <script>
@@ -1295,142 +937,6 @@ function toggleSidebar(){
   document.querySelector('.sidebar').classList.toggle('mobile-open');
   document.getElementById('mobOverlay').classList.toggle('open');
 }
-</script>
-
-<!-- ── SEND LOAN OFFER MODAL ──────────────────────────────── -->
-<div class="modal-overlay" id="offerModal">
-  <div class="modal" style="width:520px;">
-    <div class="mhdr">
-      <div class="mtitle">Send Loan Offer</div>
-      <button class="mclose" onclick="document.getElementById('offerModal').classList.remove('open')"><span class="material-symbols-outlined">close</span></button>
-    </div>
-    <div class="mbody">
-      <div id="offerModalInfo" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:11px 14px;margin-bottom:16px;">
-        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.3);margin-bottom:3px;">Customer</div>
-        <div id="offerModalCustomer" style="font-size:.9rem;font-weight:700;color:#fff;"></div>
-        <div id="offerModalRef" style="font-size:.72rem;color:rgba(255,255,255,.35);font-family:monospace;margin-top:2px;"></div>
-      </div>
-      <form method="POST" id="offerForm">
-        <input type="hidden" name="action" value="send_offer">
-        <input type="hidden" name="request_id" id="offer_request_id">
-        <div class="form-grid2">
-          <div class="fgroup">
-            <label class="flabel">Appraisal Value (₱) *</label>
-            <input type="number" name="appraisal" id="offer_appraisal" class="finput" placeholder="0.00" step="0.01" required oninput="calcOfferSummary()">
-          </div>
-          <div class="fgroup">
-            <label class="flabel">Loan Offer Amount (₱) *</label>
-            <input type="number" name="offer_amount" id="offer_amount" class="finput" placeholder="0.00" step="0.01" required oninput="calcOfferSummary()">
-          </div>
-          <div class="fgroup">
-            <label class="flabel">Interest Rate</label>
-            <select name="interest_rate" id="offer_irate" class="finput" onchange="calcOfferSummary()">
-              <option value="0.02">2%</option>
-              <option value="0.04">4%</option>
-              <option value="0.10">10%</option>
-              <option value="0.16">16%</option>
-              <option value="0.22">22%</option>
-            </select>
-          </div>
-          <div class="fgroup">
-            <label class="flabel">Claim Term</label>
-            <select name="claim_term" class="finput">
-              <option value="1-15">1–15 days</option>
-              <option value="16-30">16–30 days</option>
-              <option value="2m">2 months</option>
-              <option value="3m">3 months</option>
-              <option value="4m">4 months</option>
-            </select>
-          </div>
-          <div class="fgroup" style="grid-column:1/-1;">
-            <label class="flabel">Staff Notes <span style="font-weight:400;color:rgba(255,255,255,.3)">(visible to customer)</span></label>
-            <textarea name="staff_notes" class="finput" rows="2" placeholder="e.g. Item is in good condition, offer based on current gold rate…" style="resize:vertical;"></textarea>
-          </div>
-        </div>
-        <!-- Offer summary -->
-        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px 14px;font-size:.8rem;margin-bottom:14px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:rgba(110,231,183,.7);">Appraisal</span><span id="os_a" style="font-weight:700;color:#6ee7b7;">₱0.00</span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:rgba(110,231,183,.7);">Loan Offer</span><span id="os_l" style="font-weight:700;color:#6ee7b7;">₱0.00</span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:rgba(110,231,183,.7);">Interest</span><span id="os_i" style="font-weight:700;color:#6ee7b7;">₱0.00</span></div>
-          <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(16,185,129,.2);padding-top:7px;margin-top:5px;">
-            <span style="color:#6ee7b7;font-weight:700;">Total to Redeem</span>
-            <span id="os_t" style="font-weight:800;color:#6ee7b7;font-size:.92rem;">₱0.00</span>
-          </div>
-        </div>
-        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.18);border-radius:10px;padding:10px 13px;font-size:.76rem;color:#93c5fd;margin-bottom:14px;">
-          📱 Once you send this offer, the customer will receive a notification in the app. They can then <strong>Accept</strong> or <strong>Decline</strong> the offer. If accepted, you'll finalize the pawn ticket here.
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:9px;">
-          <button type="button" class="btn-xs" onclick="document.getElementById('offerModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-xs btn-primary-xs">Send Offer to Customer</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- ── DECLINE REQUEST MODAL ─────────────────────────────── -->
-<div class="modal-overlay" id="declineModal">
-  <div class="modal" style="width:440px;">
-    <div class="mhdr">
-      <div class="mtitle">Decline Request</div>
-      <button class="mclose" onclick="document.getElementById('declineModal').classList.remove('open')"><span class="material-symbols-outlined">close</span></button>
-    </div>
-    <div class="mbody">
-      <form method="POST">
-        <input type="hidden" name="action" value="decline_request">
-        <input type="hidden" name="request_id" id="decline_request_id">
-        <div class="fgroup">
-          <label class="flabel">Reference No.</label>
-          <input type="text" id="decline_ref_display" class="finput" readonly style="opacity:.6;font-family:monospace;">
-        </div>
-        <div class="fgroup">
-          <label class="flabel">Reason for Declining <span style="font-weight:400;color:rgba(255,255,255,.3)">(optional)</span></label>
-          <textarea name="decline_reason" class="finput" rows="3" placeholder="e.g. Item condition does not meet requirements…" style="resize:vertical;"></textarea>
-        </div>
-        <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.18);border-radius:10px;padding:10px 13px;font-size:.76rem;color:#fca5a5;margin-bottom:14px;">
-          ⚠️ The customer will be notified that their request has been declined.
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:9px;">
-          <button type="button" class="btn-xs" onclick="document.getElementById('declineModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-xs btn-danger-xs">Decline Request</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<script>
-function openOfferModal(reqId, refNo, customerName) {
-  const m = document.getElementById('offerModal');
-  if (!m) return;
-  document.getElementById('offer_request_id').value = reqId;
-  document.getElementById('offerModalCustomer').textContent = customerName;
-  document.getElementById('offerModalRef').textContent = refNo;
-  document.getElementById('offer_appraisal').value = '';
-  document.getElementById('offer_amount').value = '';
-  calcOfferSummary();
-  m.classList.add('open');
-}
-function calcOfferSummary() {
-  const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
-  const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
-  const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
-  const i = l * r;
-  const sa = document.getElementById('os_a'); if(sa) sa.textContent = '₱' + a.toFixed(2);
-  const sl = document.getElementById('os_l'); if(sl) sl.textContent = '₱' + l.toFixed(2);
-  const si = document.getElementById('os_i'); if(si) si.textContent = '₱' + i.toFixed(2);
-  const st = document.getElementById('os_t'); if(st) st.textContent = '₱' + (l + i).toFixed(2);
-}
-function openDeclineModal(reqId, reqNo) {
-  const m = document.getElementById('declineModal');
-  if (!m) return;
-  document.getElementById('decline_request_id').value = reqId;
-  document.getElementById('decline_ref_display').value = reqNo;
-  m.classList.add('open');
-}
-document.getElementById('offerModal')?.addEventListener('click',  function(e){if(e.target===this)this.classList.remove('open');});
-document.getElementById('declineModal')?.addEventListener('click', function(e){if(e.target===this)this.classList.remove('open');});
 </script>
 </body>
 </html>
