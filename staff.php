@@ -11,6 +11,15 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
+if (!function_exists('write_pawn_update')) {
+    function write_pawn_update(PDO $pdo, $tenant_id, string $ticket_no, string $update_type, string $message): void {
+        try {
+            $pdo->prepare("INSERT INTO pawn_updates (ticket_no, update_type, message, created_at, is_read) VALUES (?, ?, ?, NOW(), 0)")
+                ->execute([$ticket_no, $update_type, $message]);
+        } catch (Throwable $e) {}
+    }
+}
+
 
 
 if (empty($_SESSION['user'])) {
@@ -540,6 +549,33 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <?php
 $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1600&auto=format&fit=crop&q=60');
 ?>
+<script>
+// Modal functions defined early so buttons can call them at any point
+function openOfferModal(reqId, refNo, customerName) {
+  document.getElementById('offer_request_id').value = reqId;
+  document.getElementById('offerModalCustomer').textContent = customerName;
+  document.getElementById('offerModalRef').textContent = refNo;
+  document.getElementById('offer_appraisal').value = '';
+  document.getElementById('offer_amount').value = '';
+  calcOfferSummary();
+  document.getElementById('offerModal').classList.add('open');
+}
+function calcOfferSummary() {
+  const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
+  const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
+  const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
+  const i = l * r;
+  document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
+  document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
+  document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
+  document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
+}
+function openDeclineModal(reqId, reqNo) {
+  document.getElementById('decline_request_id').value = reqId;
+  document.getElementById('decline_ref_display').value = reqNo;
+  document.getElementById('declineModal').classList.add('open');
+}
+</script>
 <div class="bg-scene">
   <img src="<?= $staffBg ?>" alt="">
   <div class="bg-overlay"></div>
@@ -1177,6 +1213,77 @@ $notif_count = count($notifs);
   </div>
 </div>
 
+<script>
+function searchCustomers(val) {
+  const dropdown = document.getElementById('cust_dropdown');
+  const opts = document.querySelectorAll('.cust-opt');
+  if (val.length < 1) { dropdown.style.display = 'none'; return; }
+  const q = val.toLowerCase();
+  let any = false;
+  opts.forEach(o => {
+    const name = o.dataset.name.toLowerCase();
+    const contact = o.dataset.contact;
+    // Match if any word in name starts with query, or contact includes query
+    const words = name.split(/[\s,]+/);
+    const match = words.some(w => w.startsWith(q)) || contact.includes(q);
+    o.style.display = match ? 'block' : 'none';
+    if (match) any = true;
+  });
+  dropdown.style.display = any ? 'block' : 'none';
+  document.getElementById('selected_customer_id').value = '';
+}
+
+function selectCustomer(el) {
+  document.getElementById('cust_name_input').value    = el.dataset.name;
+  document.getElementById('cust_contact').value       = el.dataset.contact;
+  document.getElementById('cust_email').value         = el.dataset.email;
+  document.getElementById('cust_birthdate').value     = el.dataset.birthdate;
+  document.getElementById('cust_address').value       = el.dataset.address;
+  document.getElementById('selected_customer_id').value = el.dataset.id;
+
+  // Set ID type dropdown
+  const idSel = document.getElementById('cust_id_type');
+  for (let o of idSel.options) {
+    if (o.value === el.dataset.id_type || o.text === el.dataset.id_type) {
+      o.selected = true; break;
+    }
+  }
+  document.getElementById('cust_id_number').value = el.dataset.id_number;
+  document.getElementById('cust_dropdown').style.display = 'none';
+}
+
+function previewItemPhoto(input) {
+  const preview = document.getElementById('item_photo_preview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+function previewId(input) {
+  const preview = document.getElementById('id_preview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+function openVoid(tn){document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;document.getElementById('voidModal').classList.add('open');}
+document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
+function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
+function toggleGoldFields() {
+  const cat = document.getElementById('item_category')?.value || '';
+  const isGold = (cat === 'Gold');
+  document.getElementById('gold_weight_wrap').style.display = isGold ? '' : 'none';
+  document.getElementById('gold_karat_wrap').style.display  = isGold ? '' : 'none';
+  if (!isGold) {
+    document.getElementById('item_weight').value = '';
+    document.getElementById('item_karat').value  = '';
+  }
+}
+</script>
+
 <!-- LOGOUT CONFIRMATION MODAL -->
 <div id="logoutModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;">
   <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);animation:logoutIn .22s ease both;">
@@ -1201,6 +1308,30 @@ $notif_count = count($notifs);
 @keyframes logoutIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 .sb-logout{background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
 </style>
+<script>
+function toggleNotifPanel(e){
+  e.stopPropagation();
+  document.getElementById('notifPanel').classList.toggle('open');
+}
+document.addEventListener('click',function(){
+  document.getElementById('notifPanel')?.classList.remove('open');
+});
+function showLogoutModal(url){
+  document.getElementById('logoutConfirmBtn').href=url;
+  document.getElementById('logoutModal').style.display='flex';
+}
+function hideLogoutModal(){
+  document.getElementById('logoutModal').style.display='none';
+}
+document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
+</script>
+<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
+<script>
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('mobile-open');
+  document.getElementById('mobOverlay').classList.toggle('open');
+}
+</script>
 
 <!-- ── SEND LOAN OFFER MODAL ──────────────────────────────── -->
 <div class="modal-overlay" id="offerModal">
@@ -1305,167 +1436,9 @@ $notif_count = count($notifs);
   </div>
 </div>
 
-<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
-
-<!-- ── ALL JS IN ONE PLACE, RUNS AFTER DOM IS READY ──────── -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-
-  // ── Sidebar toggle ──────────────────────────────────────
-  window.toggleSidebar = function() {
-    document.querySelector('.sidebar').classList.toggle('mobile-open');
-    document.getElementById('mobOverlay').classList.toggle('open');
-  };
-
-  // ── Notification panel ──────────────────────────────────
-  window.toggleNotifPanel = function(e) {
-    e.stopPropagation();
-    document.getElementById('notifPanel')?.classList.toggle('open');
-  };
-  document.addEventListener('click', function() {
-    document.getElementById('notifPanel')?.classList.remove('open');
-  });
-
-  // ── Logout modal ────────────────────────────────────────
-  window.showLogoutModal = function(url) {
-    document.getElementById('logoutConfirmBtn').href = url;
-    document.getElementById('logoutModal').style.display = 'flex';
-  };
-  window.hideLogoutModal = function() {
-    document.getElementById('logoutModal').style.display = 'none';
-  };
-  var lm = document.getElementById('logoutModal');
-  if (lm) lm.addEventListener('click', function(e) { if (e.target === this) hideLogoutModal(); });
-
-  // ── Offer modal ─────────────────────────────────────────
-  window.openOfferModal = function(reqId, refNo, customerName) {
-    document.getElementById('offer_request_id').value = reqId;
-    document.getElementById('offerModalCustomer').textContent = customerName;
-    document.getElementById('offerModalRef').textContent = refNo;
-    document.getElementById('offer_appraisal').value = '';
-    document.getElementById('offer_amount').value = '';
-    calcOfferSummary();
-    document.getElementById('offerModal').classList.add('open');
-  };
-  window.calcOfferSummary = function() {
-    const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
-    const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
-    const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
-    const i = l * r;
-    document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
-    document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
-    document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
-    document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
-  };
-  var om = document.getElementById('offerModal');
-  if (om) om.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('open'); });
-
-  // ── Decline modal ───────────────────────────────────────
-  window.openDeclineModal = function(reqId, reqNo) {
-    document.getElementById('decline_request_id').value = reqId;
-    document.getElementById('decline_ref_display').value = reqNo;
-    document.getElementById('declineModal').classList.add('open');
-  };
-  var dm = document.getElementById('declineModal');
-  if (dm) dm.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('open'); });
-
-  // ── Void modal ──────────────────────────────────────────
-  window.openVoid = function(tn) {
-    document.getElementById('void_ticket_no').value = tn;
-    document.getElementById('void_display').value = tn;
-    document.getElementById('voidModal').classList.add('open');
-  };
-  var vm = document.getElementById('voidModal');
-  if (vm) vm.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('open'); });
-
-  // ── Ticket / loan calculators ───────────────────────────
-  window.calcLoan = function() {
-    const a = parseFloat(document.getElementById('appraisal')?.value) || 0;
-    const lf = document.getElementById('loan_amt');
-    if (lf && !lf.value) lf.value = (a * 0.70).toFixed(2);
-    calcSummary();
-  };
-  window.calcSummary = function() {
-    const a = parseFloat(document.getElementById('appraisal')?.value)  || 0;
-    const l = parseFloat(document.getElementById('loan_amt')?.value)   || 0;
-    const r = parseFloat(document.getElementById('irate')?.value)      || 0.02;
-    const i = l * r;
-    const da = document.getElementById('d_a'); if (da) da.textContent = '₱' + a.toFixed(2);
-    const dl = document.getElementById('d_l'); if (dl) dl.textContent = '₱' + l.toFixed(2);
-    const di = document.getElementById('d_i'); if (di) di.textContent = '₱' + i.toFixed(2);
-    const dt = document.getElementById('d_t'); if (dt) dt.textContent = '₱' + (l + i).toFixed(2);
-  };
-
-  // ── Gold field toggle ───────────────────────────────────
-  window.toggleGoldFields = function() {
-    const cat = document.getElementById('item_category')?.value || '';
-    const isGold = (cat === 'Gold');
-    const ww = document.getElementById('gold_weight_wrap');
-    const kw = document.getElementById('gold_karat_wrap');
-    if (ww) ww.style.display = isGold ? '' : 'none';
-    if (kw) kw.style.display = isGold ? '' : 'none';
-    if (!isGold) {
-      const iw = document.getElementById('item_weight'); if (iw) iw.value = '';
-      const ik = document.getElementById('item_karat');  if (ik) ik.value = '';
-    }
-  };
-
-  // ── Customer search / select ────────────────────────────
-  window.searchCustomers = function(val) {
-    const dropdown = document.getElementById('cust_dropdown');
-    if (!dropdown) return;
-    const opts = document.querySelectorAll('.cust-opt');
-    if (val.length < 1) { dropdown.style.display = 'none'; return; }
-    const q = val.toLowerCase();
-    let any = false;
-    opts.forEach(o => {
-      const name = o.dataset.name.toLowerCase();
-      const contact = o.dataset.contact;
-      const words = name.split(/[\s,]+/);
-      const match = words.some(w => w.startsWith(q)) || contact.includes(q);
-      o.style.display = match ? 'block' : 'none';
-      if (match) any = true;
-    });
-    dropdown.style.display = any ? 'block' : 'none';
-    const sci = document.getElementById('selected_customer_id');
-    if (sci) sci.value = '';
-  };
-  window.selectCustomer = function(el) {
-    const set = (id, val) => { const e = document.getElementById(id); if (e) e.value = val; };
-    set('cust_name_input', el.dataset.name);
-    set('cust_contact',    el.dataset.contact);
-    set('cust_email',      el.dataset.email);
-    set('cust_birthdate',  el.dataset.birthdate);
-    set('cust_address',    el.dataset.address);
-    set('selected_customer_id', el.dataset.id);
-    const idSel = document.getElementById('cust_id_type');
-    if (idSel) {
-      for (let o of idSel.options) {
-        if (o.value === el.dataset.id_type || o.text === el.dataset.id_type) { o.selected = true; break; }
-      }
-    }
-    set('cust_id_number', el.dataset.id_number);
-    const dd = document.getElementById('cust_dropdown');
-    if (dd) dd.style.display = 'none';
-  };
-
-  // ── Photo previews ──────────────────────────────────────
-  window.previewItemPhoto = function(input) {
-    const preview = document.getElementById('item_photo_preview');
-    if (!preview || !input.files || !input.files[0]) return;
-    const reader = new FileReader();
-    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
-    reader.readAsDataURL(input.files[0]);
-  };
-  window.previewId = function(input) {
-    const preview = document.getElementById('id_preview');
-    if (!preview || !input.files || !input.files[0]) return;
-    const reader = new FileReader();
-    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
-    reader.readAsDataURL(input.files[0]);
-  };
-
-});
+document.getElementById('offerModal').addEventListener('click',  function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('declineModal').addEventListener('click', function(e){if(e.target===this)this.classList.remove('open');});
 </script>
 </body>
 </html>
