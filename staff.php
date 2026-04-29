@@ -11,15 +11,6 @@ function write_audit(PDO $pdo, $actor_id, $actor_username, $actor_role, string $
     } catch (PDOException $e) {}
 }
 
-if (!function_exists('write_pawn_update')) {
-    function write_pawn_update(PDO $pdo, $tenant_id, string $ticket_no, string $update_type, string $message): void {
-        try {
-            $pdo->prepare("INSERT INTO pawn_updates (ticket_no, update_type, message, created_at, is_read) VALUES (?, ?, ?, NOW(), 0)")
-                ->execute([$ticket_no, $update_type, $message]);
-        } catch (Throwable $e) {}
-    }
-}
-
 
 
 if (empty($_SESSION['user'])) {
@@ -549,33 +540,6 @@ tr:hover td{background:rgba(255,255,255,.03);}
 <?php
 $staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1600&auto=format&fit=crop&q=60');
 ?>
-<script>
-// Modal functions defined early so buttons can call them at any point
-function openOfferModal(reqId, refNo, customerName) {
-  document.getElementById('offer_request_id').value = reqId;
-  document.getElementById('offerModalCustomer').textContent = customerName;
-  document.getElementById('offerModalRef').textContent = refNo;
-  document.getElementById('offer_appraisal').value = '';
-  document.getElementById('offer_amount').value = '';
-  calcOfferSummary();
-  document.getElementById('offerModal').classList.add('open');
-}
-function calcOfferSummary() {
-  const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
-  const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
-  const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
-  const i = l * r;
-  document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
-  document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
-  document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
-  document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
-}
-function openDeclineModal(reqId, reqNo) {
-  document.getElementById('decline_request_id').value = reqId;
-  document.getElementById('decline_ref_display').value = reqNo;
-  document.getElementById('declineModal').classList.add('open');
-}
-</script>
 <div class="bg-scene">
   <img src="<?= $staffBg ?>" alt="">
   <div class="bg-overlay"></div>
@@ -1268,10 +1232,10 @@ function previewId(input) {
     reader.readAsDataURL(input.files[0]);
   }
 }
-function openVoid(tn){document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;document.getElementById('voidModal').classList.add('open');}
-document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+function openVoid(tn){const m=document.getElementById('voidModal');if(!m)return;document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;m.classList.add('open');}
+document.getElementById('voidModal')?.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
-function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
+function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;const da=document.getElementById('d_a');const dl=document.getElementById('d_l');const di=document.getElementById('d_i');const dt=document.getElementById('d_t');if(da)da.textContent='₱'+a.toFixed(2);if(dl)dl.textContent='₱'+l.toFixed(2);if(di)di.textContent='₱'+i.toFixed(2);if(dt)dt.textContent='₱'+(l+i).toFixed(2);}
 function toggleGoldFields() {
   const cat = document.getElementById('item_category')?.value || '';
   const isGold = (cat === 'Gold');
@@ -1323,7 +1287,7 @@ function showLogoutModal(url){
 function hideLogoutModal(){
   document.getElementById('logoutModal').style.display='none';
 }
-document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
+document.getElementById('logoutModal')?.addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
 </script>
 <div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
 <script>
@@ -1437,8 +1401,36 @@ function toggleSidebar(){
 </div>
 
 <script>
-document.getElementById('offerModal').addEventListener('click',  function(e){if(e.target===this)this.classList.remove('open');});
-document.getElementById('declineModal').addEventListener('click', function(e){if(e.target===this)this.classList.remove('open');});
+function openOfferModal(reqId, refNo, customerName) {
+  const m = document.getElementById('offerModal');
+  if (!m) return;
+  document.getElementById('offer_request_id').value = reqId;
+  document.getElementById('offerModalCustomer').textContent = customerName;
+  document.getElementById('offerModalRef').textContent = refNo;
+  document.getElementById('offer_appraisal').value = '';
+  document.getElementById('offer_amount').value = '';
+  calcOfferSummary();
+  m.classList.add('open');
+}
+function calcOfferSummary() {
+  const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
+  const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
+  const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
+  const i = l * r;
+  const sa = document.getElementById('os_a'); if(sa) sa.textContent = '₱' + a.toFixed(2);
+  const sl = document.getElementById('os_l'); if(sl) sl.textContent = '₱' + l.toFixed(2);
+  const si = document.getElementById('os_i'); if(si) si.textContent = '₱' + i.toFixed(2);
+  const st = document.getElementById('os_t'); if(st) st.textContent = '₱' + (l + i).toFixed(2);
+}
+function openDeclineModal(reqId, reqNo) {
+  const m = document.getElementById('declineModal');
+  if (!m) return;
+  document.getElementById('decline_request_id').value = reqId;
+  document.getElementById('decline_ref_display').value = reqNo;
+  m.classList.add('open');
+}
+document.getElementById('offerModal')?.addEventListener('click',  function(e){if(e.target===this)this.classList.remove('open');});
+document.getElementById('declineModal')?.addEventListener('click', function(e){if(e.target===this)this.classList.remove('open');});
 </script>
 </body>
 </html>
