@@ -237,50 +237,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'mobile_requests';
     }
 
+    // ── Mobile Pawn Request: Staff finalizes → convert to pawn ticket ────────
     if ($_POST['action'] === 'finalize_pawn_request') {
         $req_id = (int)trim($_POST['request_id'] ?? 0);
+
         if ($req_id > 0) {
+            // 'approved' = offer sent; 'customer_accepted' = customer confirmed via app
             $preq = $pdo->prepare("SELECT * FROM pawn_requests WHERE id=? AND tenant_id=? AND status IN ('approved','customer_accepted') LIMIT 1");
             $preq->execute([$req_id, $tid]);
             $pr = $preq->fetch();
+
             if ($pr) {
-                $ticket_no = $pr['ticket_no'] ?? null;
-                // If customer already accepted via app, ticket exists — just update status to Stored
-                if ($ticket_no) {
-                    $pdo->prepare("UPDATE pawn_transactions SET status='Stored', updated_at=NOW() WHERE ticket_no=? AND tenant_id=?")
-                      ->execute([$ticket_no, $tid]);
-                } else {
-                    // Staff manually finalizing before customer accepts — create ticket
-                    $ticket_no = 'TP-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid()), 0, 6));
-                    $loan_amount     = (float)($pr['offer_amount']    ?? 0);
-                    $interest_rate   = (float)($pr['interest_rate']   ?? 0.02);
-                    $appraisal       = (float)($pr['appraisal_value'] ?? 0);
-                    $claim_term      = $pr['claim_term'] ?? '1-15';
-                    $interest_amount = round($loan_amount * $interest_rate, 2);
-                    $total_redeem    = $loan_amount + $interest_amount;
-                    $term_days       = match($claim_term) { '1-15'=>15,'16-30'=>30,'2m'=>60,'3m'=>90,'4m'=>120,default=>30 };
-                    $pawn_date     = date('Y-m-d');
-                    $maturity_date = date('Y-m-d', strtotime("+{$term_days} days"));
-                    $expiry_date   = date('Y-m-d', strtotime("+".($term_days+90)." days"));
-                    $mc = null;
-                    if (!empty($pr['customer_id'])) {
-                        $mcs = $pdo->prepare("SELECT * FROM mobile_customers WHERE id=? LIMIT 1");
-                        $mcs->execute([$pr['customer_id']]); $mc = $mcs->fetch();
-                    }
-                    $customer_name  = $mc['full_name']      ?? $pr['customer_name']  ?? 'Mobile Customer';
-                    $contact_number = $mc['contact_number'] ?? $pr['contact_number'] ?? '';
-                    $pdo->prepare("INSERT INTO pawn_transactions
-                        (tenant_id,ticket_no,customer_name,contact_number,item_category,item_description,item_condition,serial_number,appraisal_value,loan_amount,interest_rate,interest_amount,total_redeem,pawn_date,maturity_date,expiry_date,status,created_by,assigned_staff_id,item_photo_path)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?,?)")
-                      ->execute([$tid,$ticket_no,$customer_name,$contact_number,$pr['item_category'],$pr['item_description'],$pr['item_condition']??'Good',$pr['serial_number']??'',$appraisal,$loan_amount,$interest_rate,$interest_amount,$total_redeem,$pawn_date,$maturity_date,$expiry_date,$u['id'],$u['id'],$pr['front_photo_path']??null]);
+                $ticket_no       = 'TP-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid()), 0, 6));
+                $loan_amount     = (float)($pr['offer_amount']    ?? 0);
+                $interest_rate   = (float)($pr['interest_rate']   ?? 0.02);
+                $appraisal       = (float)($pr['appraisal_value'] ?? 0);
+                $claim_term      = $pr['claim_term'] ?? '1-15';
+                $interest_amount = round($loan_amount * $interest_rate, 2);
+                $total_redeem    = $loan_amount + $interest_amount;
+                $term_days       = match($claim_term) {
+                    '1-15'=>15,'16-30'=>30,'2m'=>60,'3m'=>90,'4m'=>120, default=>30
+                };
+                $pawn_date     = date('Y-m-d');
+                $maturity_date = date('Y-m-d', strtotime("+{$term_days} days"));
+                $expiry_date   = date('Y-m-d', strtotime("+".($term_days+90)." days"));
+
+                // Fetch mobile customer details
+                $mc = null;
+                if (!empty($pr['customer_id'])) {
+                    $mcs = $pdo->prepare("SELECT * FROM mobile_customers WHERE id=? LIMIT 1");
+                    $mcs->execute([$pr['customer_id']]);
+                    $mc = $mcs->fetch();
                 }
+                $customer_name  = $mc['full_name']      ?? $pr['customer_name']  ?? 'Mobile Customer';
+                $contact_number = $mc['contact_number'] ?? $pr['contact_number'] ?? '';
+                $email          = $mc['email']          ?? '';
+                $address        = $mc['address']        ?? '';
+                $birthdate      = $mc['birthdate']      ?? null;
+
+                $pdo->prepare("INSERT INTO pawn_transactions
+                    (tenant_id,ticket_no,customer_name,contact_number,email,address,birthdate,
+                     gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,
+                     valid_id_type,valid_id_number,
+                     item_category,item_description,item_condition,item_weight,item_karat,serial_number,
+                     appraisal_value,loan_amount,interest_rate,claim_term,interest_amount,total_redeem,
+                     pawn_date,maturity_date,expiry_date,status,created_by,assigned_staff_id)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?)")
+                  ->execute([
+                    $tid,$ticket_no,$customer_name,$contact_number,$email,$address,$birthdate,
+                    '','Filipino','','','','','',
+                    '','',
+                    $pr['item_category'],$pr['item_description'],$pr['item_condition']??'Good',
+                    0,'',$pr['serial_number']??'',
+                    $appraisal,$loan_amount,$interest_rate,$claim_term,$interest_amount,$total_redeem,
+                    $pawn_date,$maturity_date,$expiry_date,$u['id'],$u['id']
+                  ]);
+
+                $inv_id = (int)$pdo->lastInsertId();
+                // Use front_photo_path as the item photo
+                $item_photo = $pr['front_photo_path'] ?? null;
+                $pdo->prepare("INSERT INTO item_inventory (tenant_id,pawn_id,ticket_no,item_name,item_category,serial_no,condition_notes,appraisal_value,loan_amount,item_photo_path,status) VALUES (?,?,?,?,?,?,?,?,?,?,'pawned')")
+                  ->execute([$tid,$inv_id,$ticket_no,$pr['item_description'],$pr['item_category'],$pr['serial_number']??'',$pr['item_condition']??'Good',$appraisal,$loan_amount,$item_photo]);
+
+                // Mark pawn_request as cancelled (closed/finalized) and store ticket_no
                 $pdo->prepare("UPDATE pawn_requests SET status='cancelled', ticket_no=?, updated_at=NOW() WHERE id=?")
                   ->execute([$ticket_no, $req_id]);
-                write_pawn_update($pdo, $tid, $ticket_no, 'PAWNED', "Pawn ticket #{$ticket_no} has been confirmed. Please visit the branch to claim your loan.");
-                write_audit($pdo, $u['id'], $u['username'], 'staff', 'PAWN_FINALIZE', 'pawn_request', (string)$req_id, "Finalized mobile request #{$req_id} → {$ticket_no}", $tid);
-                $success_msg = "Pawn ticket {$ticket_no} confirmed!";
+
+                write_pawn_update($pdo, $tid, $ticket_no, 'PAWNED',
+                    "Your item has been successfully pawned. Ticket #{$ticket_no} — Loan: ₱" . number_format($loan_amount, 2) . ". Maturity: {$maturity_date}.");
+
+                write_audit($pdo, $u['id'], $u['username'], 'staff', 'PAWN_CREATE', 'pawn_transaction', $ticket_no,
+                    "Finalized mobile request #{$req_id} → ticket {$ticket_no}", $tid);
+
+                $success_msg = "Pawn ticket {$ticket_no} created from mobile request!";
             } else {
-                $error_msg = 'Request not found or not ready to finalize.';
+                $error_msg = 'Request not found or offer not yet sent.';
             }
         }
         $active_page = 'mobile_requests';
@@ -337,6 +368,12 @@ try {
 } catch (Throwable $e) { $mobile_requests = []; $mobile_req_pending_count = 0; }
 
 $business_name = $tenant['business_name'] ?? 'My Branch';
+
+function normalize_photo_path(string $p): string {
+    if (!$p) return '';
+    if (strpos($p, 'http') === 0) return $p;
+    return '/' . ltrim($p, '/');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -390,7 +427,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-urole{font-size:.62rem;color:rgba(255,255,255,.3);}
 .sb-status{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;background:rgba(16,185,129,.2);color:#6ee7b7;padding:2px 7px;border-radius:100px;margin-top:3px;}
 
-.sb-nav{flex:1;padding:10px 0 60px;}
+.sb-nav{flex:1;padding:10px 0;}
 .sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.2);padding:12px 16px 4px;}
 .sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;cursor:pointer;color:rgba(255,255,255,.4);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
 .sb-item:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.9);}
@@ -479,7 +516,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 .empty-state .material-symbols-outlined{font-size:46px;display:block;margin:0 auto 14px;opacity:.3;}
 .empty-state p{font-size:.82rem;}
 
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9990;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
 .modal-overlay.open{display:flex;}
 .modal{background:#0a0d14;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:580px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.7);animation:mIn .25s ease both;}
 @keyframes mIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
@@ -1017,11 +1054,6 @@ $notif_count = count($notifs);
         <!-- Item photos submitted by customer -->
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
           <?php
-            function normalize_photo_path(string $p): string {
-                if (!$p) return '';
-                if (strpos($p, 'http') === 0) return $p; // already full URL
-                return '/' . ltrim($p, '/');             // add leading slash for relative paths
-            }
             $photos = [
               'Front Photo'  => normalize_photo_path($mr['front_photo_path']  ?? ''),
               'Back Photo'   => normalize_photo_path($mr['back_photo_path']   ?? ''),
@@ -1068,11 +1100,11 @@ $notif_count = count($notifs);
 
         <!-- Action buttons -->
         <?php if($mr['status'] === 'pending'): ?>
-        <button type="button" onclick="openOfferModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>', '<?=htmlspecialchars(addslashes($mr['mc_name']??$mr['customer_name']??'Customer'))?>')"
+        <button onclick="openOfferModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>', '<?=htmlspecialchars(addslashes($mr['mc_name']??$mr['customer_name']??'Customer'))?>')"
           style="background:linear-gradient(135deg,var(--t-primary,#2563eb),var(--t-secondary,#1d4ed8));color:#fff;border:none;border-radius:10px;padding:9px 18px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;margin-right:8px;">
           <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">local_offer</span> Send Loan Offer
         </button>
-        <button type="button" onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
+        <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
           style="background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:9px 18px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;">
           <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">cancel</span> Reject
         </button>
@@ -1082,7 +1114,7 @@ $notif_count = count($notifs);
           <span class="material-symbols-outlined" style="color:#93c5fd;font-size:20px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">schedule</span>
           <span style="font-size:.82rem;color:#93c5fd;font-weight:600;">⏳ Offer sent — waiting for customer to accept or decline in the app.</span>
         </div>
-        <button type="button" onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
+        <button onclick="openDeclineModal(<?=(int)$mr['id']?>, '<?=htmlspecialchars(addslashes($mr['request_no']??''))?>')"
           style="background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.18);border-radius:8px;padding:7px 14px;font-family:inherit;font-size:.76rem;font-weight:600;cursor:pointer;">
           Cancel / Reject
         </button>
@@ -1146,80 +1178,9 @@ $notif_count = count($notifs);
   </div>
 </div>
 
-<script>
-function searchCustomers(val) {
-  const dropdown = document.getElementById('cust_dropdown');
-  const opts = document.querySelectorAll('.cust-opt');
-  if (val.length < 1) { dropdown.style.display = 'none'; return; }
-  const q = val.toLowerCase();
-  let any = false;
-  opts.forEach(o => {
-    const name = o.dataset.name.toLowerCase();
-    const contact = o.dataset.contact;
-    // Match if any word in name starts with query, or contact includes query
-    const words = name.split(/[\s,]+/);
-    const match = words.some(w => w.startsWith(q)) || contact.includes(q);
-    o.style.display = match ? 'block' : 'none';
-    if (match) any = true;
-  });
-  dropdown.style.display = any ? 'block' : 'none';
-  document.getElementById('selected_customer_id').value = '';
-}
-
-function selectCustomer(el) {
-  document.getElementById('cust_name_input').value    = el.dataset.name;
-  document.getElementById('cust_contact').value       = el.dataset.contact;
-  document.getElementById('cust_email').value         = el.dataset.email;
-  document.getElementById('cust_birthdate').value     = el.dataset.birthdate;
-  document.getElementById('cust_address').value       = el.dataset.address;
-  document.getElementById('selected_customer_id').value = el.dataset.id;
-
-  // Set ID type dropdown
-  const idSel = document.getElementById('cust_id_type');
-  for (let o of idSel.options) {
-    if (o.value === el.dataset.id_type || o.text === el.dataset.id_type) {
-      o.selected = true; break;
-    }
-  }
-  document.getElementById('cust_id_number').value = el.dataset.id_number;
-  document.getElementById('cust_dropdown').style.display = 'none';
-}
-
-function previewItemPhoto(input) {
-  const preview = document.getElementById('item_photo_preview');
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
-    reader.readAsDataURL(input.files[0]);
-  }
-}
-function previewId(input) {
-  const preview = document.getElementById('id_preview');
-  if (input.files && input.files[0]) {
-    const reader = new FileReader();
-    reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
-    reader.readAsDataURL(input.files[0]);
-  }
-}
-function openVoid(tn){document.getElementById('void_ticket_no').value=tn;document.getElementById('void_display').value=tn;document.getElementById('voidModal').classList.add('open');}
-document.getElementById('voidModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
-function calcLoan(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const lf=document.getElementById('loan_amt');if(lf&&!lf.value)lf.value=(a*0.70).toFixed(2);calcSummary();}
-function calcSummary(){const a=parseFloat(document.getElementById('appraisal')?.value)||0;const l=parseFloat(document.getElementById('loan_amt')?.value)||0;const r=parseFloat(document.getElementById('irate')?.value)||0.02;const i=l*r;document.getElementById('d_a').textContent='₱'+a.toFixed(2);document.getElementById('d_l').textContent='₱'+l.toFixed(2);document.getElementById('d_i').textContent='₱'+i.toFixed(2);document.getElementById('d_t').textContent='₱'+(l+i).toFixed(2);}
-function toggleGoldFields() {
-  const cat = document.getElementById('item_category')?.value || '';
-  const isGold = (cat === 'Gold');
-  document.getElementById('gold_weight_wrap').style.display = isGold ? '' : 'none';
-  document.getElementById('gold_karat_wrap').style.display  = isGold ? '' : 'none';
-  if (!isGold) {
-    document.getElementById('item_weight').value = '';
-    document.getElementById('item_karat').value  = '';
-  }
-}
-</script>
-
 <!-- LOGOUT CONFIRMATION MODAL -->
 <div id="logoutModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;">
-  <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);animation:logoutIn .22s ease both;">
+  <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);">
     <div style="background:linear-gradient(135deg,#7f1d1d,#991b1b);padding:24px 24px 20px;display:flex;align-items:center;gap:14px;">
       <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
         <span class="material-symbols-outlined" style="color:#fff;font-size:22px;">logout</span>
@@ -1237,36 +1198,6 @@ function toggleGoldFields() {
     </div>
   </div>
 </div>
-<style>
-@keyframes logoutIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.sb-logout{background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
-</style>
-<script>
-function toggleNotifPanel(e){
-  e.stopPropagation();
-  document.getElementById('notifPanel').classList.toggle('open');
-}
-document.addEventListener('click',function(e){
-  if(!e.target.closest('#notifPanel')&&!e.target.closest('#notifBtn')){
-    document.getElementById('notifPanel')?.classList.remove('open');
-  }
-});
-function showLogoutModal(url){
-  document.getElementById('logoutConfirmBtn').href=url;
-  document.getElementById('logoutModal').style.display='flex';
-}
-function hideLogoutModal(){
-  document.getElementById('logoutModal').style.display='none';
-}
-document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
-</script>
-<div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
-<script>
-function toggleSidebar(){
-  document.querySelector('.sidebar').classList.toggle('mobile-open');
-  document.getElementById('mobOverlay').classList.toggle('open');
-}
-</script>
 
 <!-- ── SEND LOAN OFFER MODAL ──────────────────────────────── -->
 <div class="modal-overlay" id="offerModal">
@@ -1318,7 +1249,6 @@ function toggleSidebar(){
             <textarea name="staff_notes" class="finput" rows="2" placeholder="e.g. Item is in good condition, offer based on current gold rate…" style="resize:vertical;"></textarea>
           </div>
         </div>
-        <!-- Offer summary -->
         <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:12px 14px;font-size:.8rem;margin-bottom:14px;">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:rgba(110,231,183,.7);">Appraisal</span><span id="os_a" style="font-weight:700;color:#6ee7b7;">₱0.00</span></div>
           <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:rgba(110,231,183,.7);">Loan Offer</span><span id="os_l" style="font-weight:700;color:#6ee7b7;">₱0.00</span></div>
@@ -1329,7 +1259,7 @@ function toggleSidebar(){
           </div>
         </div>
         <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.18);border-radius:10px;padding:10px 13px;font-size:.76rem;color:#93c5fd;margin-bottom:14px;">
-          📱 Once you send this offer, the customer will receive a notification in the app. They can then <strong>Accept</strong> or <strong>Decline</strong> the offer. If accepted, you'll finalize the pawn ticket here.
+          📱 Once you send this offer, the customer will receive a notification in the app. They can then <strong>Accept</strong> or <strong>Decline</strong> the offer.
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-xs" onclick="document.getElementById('offerModal').classList.remove('open')">Cancel</button>
@@ -1371,33 +1301,192 @@ function toggleSidebar(){
   </div>
 </div>
 
+<!-- VOID REQUEST MODAL -->
+<div class="modal-overlay" id="voidModal">
+  <div class="modal" style="width:440px;">
+    <div class="mhdr"><div class="mtitle">Submit Void Request</div><button class="mclose" onclick="document.getElementById('voidModal').classList.remove('open')"><span class="material-symbols-outlined">close</span></button></div>
+    <div class="mbody">
+      <form method="POST">
+        <input type="hidden" name="action" value="void_request">
+        <input type="hidden" name="ticket_no" id="void_ticket_no">
+        <div class="fgroup"><label class="flabel">Ticket No.</label><input type="text" id="void_display" class="finput" readonly style="opacity:.7;"></div>
+        <div class="fgroup"><label class="flabel">Reason *</label><textarea name="reason" class="finput" rows="3" placeholder="Enter reason..." required style="resize:vertical;"></textarea></div>
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:11px 13px;font-size:.76rem;color:#fcd34d;margin-bottom:14px;">⚠️ Requires admin approval before the ticket is voided.</div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-xs" onclick="document.getElementById('voidModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-xs btn-danger-xs">Submit Void Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="mob-overlay" id="mobOverlay"></div>
+
+<style>
+@keyframes logoutIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.sb-logout{background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
+</style>
+
 <script>
-function openOfferModal(reqId, refNo, customerName) {
-  document.getElementById('offer_request_id').value = reqId;
-  document.getElementById('offerModalCustomer').textContent = customerName;
-  document.getElementById('offerModalRef').textContent = refNo;
-  document.getElementById('offer_appraisal').value = '';
-  document.getElementById('offer_amount').value = '';
-  calcOfferSummary();
-  document.getElementById('offerModal').classList.add('open');
-}
-function calcOfferSummary() {
-  const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
-  const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
-  const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
-  const i = l * r;
-  document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
-  document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
-  document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
-  document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
-}
-function openDeclineModal(reqId, reqNo) {
-  document.getElementById('decline_request_id').value = reqId;
-  document.getElementById('decline_ref_display').value = reqNo;
-  document.getElementById('declineModal').classList.add('open');
-}
-document.getElementById('offerModal').addEventListener('click',  function(e){if(e.target===this)this.classList.remove('open');});
-document.getElementById('declineModal').addEventListener('click', function(e){if(e.target===this)this.classList.remove('open');});
+document.addEventListener('DOMContentLoaded', function () {
+
+  // ── Sidebar ─────────────────────────────────────────────
+  window.toggleSidebar = function () {
+    document.querySelector('.sidebar').classList.toggle('mobile-open');
+    document.getElementById('mobOverlay').classList.toggle('open');
+  };
+  var mo = document.getElementById('mobOverlay');
+  if (mo) mo.addEventListener('click', function () { toggleSidebar(); });
+
+  // ── Notification panel ───────────────────────────────────
+  window.toggleNotifPanel = function (e) {
+    e.stopPropagation();
+    document.getElementById('notifPanel')?.classList.toggle('open');
+  };
+  document.addEventListener('click', function () {
+    document.getElementById('notifPanel')?.classList.remove('open');
+  });
+
+  // ── Logout modal ─────────────────────────────────────────
+  window.showLogoutModal = function (url) {
+    document.getElementById('logoutConfirmBtn').href = url;
+    document.getElementById('logoutModal').style.display = 'flex';
+  };
+  window.hideLogoutModal = function () {
+    document.getElementById('logoutModal').style.display = 'none';
+  };
+  var lm = document.getElementById('logoutModal');
+  if (lm) lm.addEventListener('click', function (e) { if (e.target === this) hideLogoutModal(); });
+
+  // ── Offer modal ──────────────────────────────────────────
+  window.openOfferModal = function (reqId, refNo, customerName) {
+    document.getElementById('offer_request_id').value = reqId;
+    document.getElementById('offerModalCustomer').textContent = customerName;
+    document.getElementById('offerModalRef').textContent = refNo;
+    document.getElementById('offer_appraisal').value = '';
+    document.getElementById('offer_amount').value = '';
+    calcOfferSummary();
+    document.getElementById('offerModal').classList.add('open');
+  };
+  window.calcOfferSummary = function () {
+    var a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
+    var l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
+    var r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
+    var i = l * r;
+    document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
+    document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
+    document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
+    document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
+  };
+  var om = document.getElementById('offerModal');
+  if (om) om.addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+
+  // ── Decline modal ────────────────────────────────────────
+  window.openDeclineModal = function (reqId, reqNo) {
+    document.getElementById('decline_request_id').value = reqId;
+    document.getElementById('decline_ref_display').value = reqNo;
+    document.getElementById('declineModal').classList.add('open');
+  };
+  var dm = document.getElementById('declineModal');
+  if (dm) dm.addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+
+  // ── Void modal ───────────────────────────────────────────
+  window.openVoid = function (tn) {
+    document.getElementById('void_ticket_no').value = tn;
+    document.getElementById('void_display').value = tn;
+    document.getElementById('voidModal').classList.add('open');
+  };
+  var vm = document.getElementById('voidModal');
+  if (vm) vm.addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+
+  // ── Loan calculators (create_ticket page) ────────────────
+  window.calcLoan = function () {
+    var a = parseFloat(document.getElementById('appraisal')?.value) || 0;
+    var lf = document.getElementById('loan_amt');
+    if (lf && !lf.value) lf.value = (a * 0.70).toFixed(2);
+    calcSummary();
+  };
+  window.calcSummary = function () {
+    var a = parseFloat(document.getElementById('appraisal')?.value)  || 0;
+    var l = parseFloat(document.getElementById('loan_amt')?.value)   || 0;
+    var r = parseFloat(document.getElementById('irate')?.value)      || 0.02;
+    var i = l * r;
+    var da = document.getElementById('d_a'); if (da) da.textContent = '₱' + a.toFixed(2);
+    var dl = document.getElementById('d_l'); if (dl) dl.textContent = '₱' + l.toFixed(2);
+    var di = document.getElementById('d_i'); if (di) di.textContent = '₱' + i.toFixed(2);
+    var dt = document.getElementById('d_t'); if (dt) dt.textContent = '₱' + (l + i).toFixed(2);
+  };
+
+  // ── Gold fields toggle ───────────────────────────────────
+  window.toggleGoldFields = function () {
+    var cat = document.getElementById('item_category')?.value || '';
+    var isGold = (cat === 'Gold');
+    var ww = document.getElementById('gold_weight_wrap');
+    var kw = document.getElementById('gold_karat_wrap');
+    if (ww) ww.style.display = isGold ? '' : 'none';
+    if (kw) kw.style.display = isGold ? '' : 'none';
+    if (!isGold) {
+      var iw = document.getElementById('item_weight'); if (iw) iw.value = '';
+      var ik = document.getElementById('item_karat');  if (ik) ik.value = '';
+    }
+  };
+
+  // ── Customer search / select ─────────────────────────────
+  window.searchCustomers = function (val) {
+    var dropdown = document.getElementById('cust_dropdown');
+    if (!dropdown) return;
+    var opts = document.querySelectorAll('.cust-opt');
+    if (val.length < 1) { dropdown.style.display = 'none'; return; }
+    var q = val.toLowerCase(), any = false;
+    opts.forEach(function (o) {
+      var name = o.dataset.name.toLowerCase();
+      var contact = o.dataset.contact;
+      var words = name.split(/[\s,]+/);
+      var match = words.some(function (w) { return w.startsWith(q); }) || contact.includes(q);
+      o.style.display = match ? 'block' : 'none';
+      if (match) any = true;
+    });
+    dropdown.style.display = any ? 'block' : 'none';
+    var sci = document.getElementById('selected_customer_id');
+    if (sci) sci.value = '';
+  };
+  window.selectCustomer = function (el) {
+    var set = function (id, val) { var e = document.getElementById(id); if (e) e.value = val; };
+    set('cust_name_input', el.dataset.name);
+    set('cust_contact',    el.dataset.contact);
+    set('cust_email',      el.dataset.email);
+    set('cust_birthdate',  el.dataset.birthdate);
+    set('cust_address',    el.dataset.address);
+    set('selected_customer_id', el.dataset.id);
+    var idSel = document.getElementById('cust_id_type');
+    if (idSel) {
+      for (var o of idSel.options) {
+        if (o.value === el.dataset.id_type || o.text === el.dataset.id_type) { o.selected = true; break; }
+      }
+    }
+    set('cust_id_number', el.dataset.id_number);
+    var dd = document.getElementById('cust_dropdown');
+    if (dd) dd.style.display = 'none';
+  };
+
+  // ── Photo previews ───────────────────────────────────────
+  window.previewItemPhoto = function (input) {
+    var preview = document.getElementById('item_photo_preview');
+    if (!preview || !input.files || !input.files[0]) return;
+    var reader = new FileReader();
+    reader.onload = function (e) { preview.src = e.target.result; preview.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  };
+  window.previewId = function (input) {
+    var preview = document.getElementById('id_preview');
+    if (!preview || !input.files || !input.files[0]) return;
+    var reader = new FileReader();
+    reader.onload = function (e) { preview.src = e.target.result; preview.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  };
+
+});
 </script>
 </body>
 </html>
