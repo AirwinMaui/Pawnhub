@@ -401,7 +401,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
   backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);
   border-right:1px solid rgba(255,255,255,.06);
   display:flex;flex-direction:column;
-  position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;overflow-x:hidden;
+  position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
 }
 .sb-brand{padding:22px 18px 14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:11px;}
 .sb-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#1e3a8a));border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 4px 14px rgba(37,99,235,.35);}
@@ -428,7 +428,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-item.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600;}
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;}
 
-.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);position:sticky;bottom:0;background:rgba(8,11,18,.97);z-index:101;}
+.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.06);}
 .sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:rgba(255,255,255,.3);text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
 .sb-logout:hover{color:#f87171;background:rgba(239,68,68,.1);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
@@ -510,7 +510,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
 .empty-state .material-symbols-outlined{font-size:46px;display:block;margin:0 auto 14px;opacity:.3;}
 .empty-state p{font-size:.82rem;}
 
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9990;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
 .modal-overlay.open{display:flex;}
 .modal{background:#0a0d14;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:580px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.7);animation:mIn .25s ease both;}
 @keyframes mIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
@@ -974,6 +974,32 @@ $notif_count = count($notifs);
     </div>
 
   <?php elseif($active_page==='mobile_requests'): ?>
+  <script>
+  function openOfferModal(reqId, refNo, customerName) {
+    document.getElementById('offer_request_id').value = reqId;
+    document.getElementById('offerModalCustomer').textContent = customerName;
+    document.getElementById('offerModalRef').textContent = refNo;
+    document.getElementById('offer_appraisal').value = '';
+    document.getElementById('offer_amount').value = '';
+    calcOfferSummary();
+    document.getElementById('offerModal').classList.add('open');
+  }
+  function calcOfferSummary() {
+    const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
+    const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
+    const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
+    const i = l * r;
+    document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
+    document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
+    document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
+    document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
+  }
+  function openDeclineModal(reqId, reqNo) {
+    document.getElementById('decline_request_id').value = reqId;
+    document.getElementById('decline_ref_display').value = reqNo;
+    document.getElementById('declineModal').classList.add('open');
+  }
+  </script>
     <div class="page-hdr">
       <div>
         <h2>Mobile Pawn Requests</h2>
@@ -1277,8 +1303,8 @@ function toggleNotifPanel(e){
   e.stopPropagation();
   document.getElementById('notifPanel').classList.toggle('open');
 }
-document.addEventListener('click',function(e){
-  if(!e.target.closest('#notifPanel')&&!e.target.closest('#notifBtn')){document.getElementById('notifPanel')?.classList.remove('open');}
+document.addEventListener('click',function(){
+  document.getElementById('notifPanel')?.classList.remove('open');
 });
 function showLogoutModal(url){
   document.getElementById('logoutConfirmBtn').href=url;
@@ -1401,30 +1427,6 @@ function toggleSidebar(){
 </div>
 
 <script>
-function openOfferModal(reqId, refNo, customerName) {
-  document.getElementById('offer_request_id').value = reqId;
-  document.getElementById('offerModalCustomer').textContent = customerName;
-  document.getElementById('offerModalRef').textContent = refNo;
-  document.getElementById('offer_appraisal').value = '';
-  document.getElementById('offer_amount').value = '';
-  calcOfferSummary();
-  document.getElementById('offerModal').classList.add('open');
-}
-function calcOfferSummary() {
-  const a = parseFloat(document.getElementById('offer_appraisal')?.value) || 0;
-  const l = parseFloat(document.getElementById('offer_amount')?.value)    || 0;
-  const r = parseFloat(document.getElementById('offer_irate')?.value)     || 0.02;
-  const i = l * r;
-  document.getElementById('os_a').textContent = '₱' + a.toFixed(2);
-  document.getElementById('os_l').textContent = '₱' + l.toFixed(2);
-  document.getElementById('os_i').textContent = '₱' + i.toFixed(2);
-  document.getElementById('os_t').textContent = '₱' + (l + i).toFixed(2);
-}
-function openDeclineModal(reqId, reqNo) {
-  document.getElementById('decline_request_id').value = reqId;
-  document.getElementById('decline_ref_display').value = reqNo;
-  document.getElementById('declineModal').classList.add('open');
-}
 document.getElementById('offerModal').addEventListener('click',  function(e){if(e.target===this)this.classList.remove('open');});
 document.getElementById('declineModal').addEventListener('click', function(e){if(e.target===this)this.classList.remove('open');});
 </script>
