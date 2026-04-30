@@ -732,7 +732,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       </div>
       <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
         <p style="font-size:.76rem;color:rgba(255,255,255,.4);line-height:1.8;margin:0;">
-          🔒 <strong style="color:rgba(255,255,255,.6);">Accepted:</strong> GCash, Maya (PayMaya), Credit Card, Debit Card, Online Banking (BPI, UnionBank &amp; more)<br>
+          🔒 <strong style="color:rgba(255,255,255,.6);">Accepted:</strong> GCash, Maya (PayMaya), Credit Card, Debit Card, Online Banking (BPI &amp; more)<br>
           After payment, our admin will approve your renewal within 24 hours.
         </p>
       </div>
