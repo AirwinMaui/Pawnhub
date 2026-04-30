@@ -4,12 +4,13 @@
  * ─────────────────────────────────────────────────────────────
  * User lands here after successful PayMongo payment.
  *
- * Acts as a WEBHOOK FALLBACK for test/local environments where
- * PayMongo cannot reach your server via webhook.
+ * WEBHOOK FALLBACK for test/local environments where PayMongo
+ * cannot reach your server via webhook.
  *
- * Logic:
- *  1. Verify payment with PayMongo API (fetch checkout session)
- *  2. If paid and not yet processed → auto-approve tenant (signup)
+ * Flow:
+ *  1. Fetch checkout session from PayMongo API to verify payment
+ *  2. If paid and not yet processed → auto-approve tenant
+ *     (same logic as paymongo_webhook.php signup path)
  *  3. Show confirmation UI
  * ─────────────────────────────────────────────────────────────
  */
@@ -21,7 +22,7 @@ require 'paymongo_config.php';
 $tenant_id = intval($_GET['tenant'] ?? 0);
 $user_id   = intval($_GET['user']   ?? 0);
 
-// ── Fetch tenant from DB ──────────────────────────────────────
+// ── Fetch tenant ──────────────────────────────────────────────
 $tenant = null;
 if ($tenant_id) {
     $stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ?");
@@ -29,15 +30,13 @@ if ($tenant_id) {
     $tenant = $stmt->fetch();
 }
 
-$biz_name      = $tenant['business_name'] ?? 'Your Business';
-$plan          = $tenant['plan']          ?? '';
-$payment_status = $tenant['payment_status'] ?? 'unpaid';
-$session_id    = $tenant['paymongo_session_id'] ?? '';
-
-// ── WEBHOOK FALLBACK: only run if not yet paid ────────────────
+$plan           = $tenant['plan']                ?? '';
+$payment_status = $tenant['payment_status']      ?? 'unpaid';
+$session_id     = $tenant['paymongo_session_id'] ?? '';
 $auto_processed = false;
-$process_error  = '';
 
+// ── WEBHOOK FALLBACK ─────────────────────────────────────────
+// Only run if not yet paid (webhook may have already handled it)
 if ($tenant_id && $user_id && $payment_status !== 'paid' && $session_id) {
 
     // 1. Verify with PayMongo API
@@ -53,30 +52,29 @@ if ($tenant_id && $user_id && $payment_status !== 'paid' && $session_id) {
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    $cs = json_decode($raw, true);
-    $payment_status_pm = $cs['data']['attributes']['payment_status'] ?? '';
+    $cs                = json_decode($raw, true);
+    $pm_payment_status = $cs['data']['attributes']['payment_status'] ?? '';
 
-    if ($httpCode === 200 && $payment_status_pm === 'paid') {
-        // Payment confirmed by PayMongo — process it now (webhook fallback)
+    if ($httpCode === 200 && $pm_payment_status === 'paid') {
 
         // Resolve payment method
-        $payments = $cs['data']['attributes']['payments'] ?? [];
+        $payments       = $cs['data']['attributes']['payments'] ?? [];
         $payment_method = '';
         if (!empty($payments[0])) {
-            $pm = $payments[0]['attributes']['payment_method_used'] ?? '';
+            $pm             = $payments[0]['attributes']['payment_method_used'] ?? '';
             $payment_method = strtoupper($pm);
         }
 
         try {
-            // Mark payment_status = paid
+            // 2. Mark payment_status = paid
             $pdo->prepare("
                 UPDATE tenants
-                SET payment_status = 'paid',
+                SET payment_status   = 'paid',
                     paymongo_paid_at = NOW()
                 WHERE id = ?
             ")->execute([$tenant_id]);
 
-            // Check for duplicate
+            // 3. Deduplicate check — skip if already processed by webhook
             $dup = $pdo->prepare("
                 SELECT id FROM subscription_renewals
                 WHERE tenant_id = ? AND payment_reference = ?
@@ -85,18 +83,20 @@ if ($tenant_id && $user_id && $payment_status !== 'paid' && $session_id) {
             $dup->execute([$tenant_id, $session_id]);
 
             if (!$dup->fetch()) {
-                // Fetch user row
+
+                // 4. Fetch user row
                 $u_row = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
                 $u_row->execute([$user_id]);
                 $u_row = $u_row->fetch();
 
                 if ($tenant && $u_row) {
-                    // Generate slug if missing
+
+                    // 5. Generate slug if missing
                     $slug = $tenant['slug'] ?? '';
                     if (empty($slug)) {
                         $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $tenant['business_name']));
-                        $slug = $base_slug;
-                        $ctr  = 1;
+                        $slug      = $base_slug;
+                        $ctr       = 1;
                         while (true) {
                             $chk = $pdo->prepare("SELECT id FROM tenants WHERE slug = ? AND id != ?");
                             $chk->execute([$slug, $tenant_id]);
@@ -105,7 +105,7 @@ if ($tenant_id && $user_id && $payment_status !== 'paid' && $session_id) {
                         }
                     }
 
-                    // Activate tenant
+                    // 6. Activate tenant
                     $pdo->prepare("
                         UPDATE tenants SET
                             status              = 'active',
@@ -119,34 +119,63 @@ if ($tenant_id && $user_id && $payment_status !== 'paid' && $session_id) {
                         WHERE id = ?
                     ")->execute([$slug, $tenant_id]);
 
-                    // Activate user
+                    // 7. Activate user
                     $pdo->prepare("
-                        UPDATE users SET status = 'approved', approved_at = NOW() WHERE id = ?
+                        UPDATE users
+                        SET status      = 'approved',
+                            approved_at = NOW()
+                        WHERE id = ?
                     ")->execute([$user_id]);
 
-                    // Record subscription payment
+                    // 8. Record subscription payment in subscription_renewals
                     $plan_amounts = ['Starter' => 0, 'Pro' => 999, 'Enterprise' => 2499];
                     $sub_amount   = $plan_amounts[$plan] ?? 0;
                     if ($sub_amount > 0) {
                         try {
                             $pdo->prepare("
                                 INSERT INTO subscription_renewals
-                                    (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at, reviewed_at, new_subscription_end)
-                                VALUES (?, ?, 'monthly', ?, ?, ?, 'approved', NOW(), NOW(), DATE_ADD(CURDATE(), INTERVAL 1 MONTH))
-                            ")->execute([$tenant_id, $plan, 'PayMongo — ' . $payment_method, $session_id, $sub_amount]);
-                        } catch (PDOException $e) {}
+                                    (tenant_id, plan, billing_cycle, payment_method, payment_reference,
+                                     amount, status, requested_at, reviewed_at, new_subscription_end)
+                                VALUES (?, ?, 'monthly', ?, ?, ?, 'approved', NOW(), NOW(),
+                                        DATE_ADD(CURDATE(), INTERVAL 1 MONTH))
+                            ")->execute([
+                                $tenant_id, $plan,
+                                'PayMongo — ' . $payment_method,
+                                $session_id, $sub_amount,
+                            ]);
+                        } catch (PDOException $e) {
+                            error_log("[SuccessFallback] subscription_renewals insert error: " . $e->getMessage());
+                        }
                     }
 
-                    // Send activation email
+                    // 9. Send activation email
                     try {
                         require_once __DIR__ . '/mailer.php';
-                        $inv = $pdo->prepare("SELECT token FROM tenant_invitations WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1");
+                        $inv = $pdo->prepare("
+                            SELECT token FROM tenant_invitations
+                            WHERE tenant_id = ? AND status = 'pending'
+                            ORDER BY created_at DESC LIMIT 1
+                        ");
                         $inv->execute([$tenant_id]);
                         $inv_row = $inv->fetch();
+
                         if ($inv_row) {
-                            sendTenantInvitation($tenant['email'], $tenant['owner_name'], $tenant['business_name'], $inv_row['token'], $slug);
+                            // SA-invited tenant: send setup link with token
+                            sendTenantInvitation(
+                                $tenant['email'],
+                                $tenant['owner_name'],
+                                $tenant['business_name'],
+                                $inv_row['token'],
+                                $slug
+                            );
                         } else {
-                            sendTenantApproved($tenant['email'], $tenant['owner_name'], $tenant['business_name'], $slug);
+                            // Self-signup tenant: send approved/login email
+                            sendTenantApproved(
+                                $tenant['email'],
+                                $tenant['owner_name'],
+                                $tenant['business_name'],
+                                $slug
+                            );
                         }
                     } catch (Throwable $mail_err) {
                         error_log("[SuccessFallback] Email error: " . $mail_err->getMessage());
@@ -155,21 +184,24 @@ if ($tenant_id && $user_id && $payment_status !== 'paid' && $session_id) {
                     $auto_processed = true;
 
                     // Re-fetch tenant for display
-                    $stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ?");
+                    $stmt   = $pdo->prepare("SELECT * FROM tenants WHERE id = ?");
                     $stmt->execute([$tenant_id]);
                     $tenant = $stmt->fetch();
                     $plan   = $tenant['plan'] ?? $plan;
                 }
             } else {
-                // Already processed (maybe webhook did fire)
+                // Already processed by webhook before user landed here
                 $auto_processed = true;
             }
 
         } catch (Throwable $e) {
-            $process_error = $e->getMessage();
             error_log("[SuccessFallback] Error: " . $e->getMessage());
         }
     }
+
+} elseif ($payment_status === 'paid' && ($tenant['status'] ?? '') === 'active') {
+    // Webhook already handled it before user landed here
+    $auto_processed = true;
 }
 
 // Clear pending session data
@@ -183,6 +215,7 @@ unset(
 
 $biz_name_display = htmlspecialchars($tenant['business_name'] ?? 'Your Business');
 $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
+$tenant_email     = htmlspecialchars($tenant['email'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -212,15 +245,15 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
     <?php if ($auto_processed): ?>
       is now active. Check your email to set up your account!
     <?php else: ?>
-      payment has been recorded.
+      payment has been recorded. Our admin will review shortly.
     <?php endif; ?>
   </p>
 
-  <!-- Step indicator -->
+  <!-- Steps -->
   <div class="bg-gray-800 rounded-2xl p-6 mb-6 text-left">
     <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">What happens next</p>
 
-    <!-- Step 1: Done -->
+    <!-- Step 1: Payment confirmed (always done) -->
     <div class="flex items-start gap-3 mb-4">
       <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
@@ -233,9 +266,9 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
       </div>
     </div>
 
-    <?php if ($auto_processed): ?>
-    <!-- Step 2: Done (auto-approved) -->
+    <!-- Step 2 -->
     <div class="flex items-start gap-3 mb-4">
+      <?php if ($auto_processed): ?>
       <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
@@ -243,35 +276,35 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
       </div>
       <div>
         <p class="text-sm font-semibold text-white">Account setup email sent</p>
-        <p class="text-xs text-gray-400 mt-0.5">A setup link was sent to <strong class="text-white"><?= htmlspecialchars($tenant['email'] ?? '') ?></strong> — click it to set your username &amp; password.</p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          A setup link was sent to <strong class="text-white"><?= $tenant_email ?></strong> —
+          click it to set your username &amp; password.
+        </p>
       </div>
-    </div>
-
-    <!-- Step 3: Active -->
-    <div class="flex items-start gap-3">
-      <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-blue-300">Check your email &amp; set up your account</p>
-        <p class="text-xs text-gray-400 mt-0.5">Open the setup link in your email to create your login credentials and access your PawnHub dashboard.</p>
-      </div>
-    </div>
-
-    <?php else: ?>
-    <!-- Step 2: Pending SA review -->
-    <div class="flex items-start gap-3 mb-4">
+      <?php else: ?>
       <div class="w-7 h-7 rounded-full bg-yellow-500/20 border-2 border-yellow-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
         <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
       </div>
       <div>
         <p class="text-sm font-semibold text-yellow-300">Super Admin review</p>
-        <p class="text-xs text-gray-400 mt-0.5">Our admin will verify your Business Permit and payment details.</p>
+        <p class="text-xs text-gray-400 mt-0.5">Our admin will verify your payment and activate your account.</p>
       </div>
+      <?php endif; ?>
     </div>
 
-    <!-- Step 3: Upcoming -->
+    <!-- Step 3 -->
     <div class="flex items-start gap-3">
+      <?php if ($auto_processed): ?>
+      <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-blue-300">Check your email &amp; set up your account</p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          Open the setup link in your email to create your login credentials and access your PawnHub dashboard.
+        </p>
+      </div>
+      <?php else: ?>
       <div class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
         <span class="text-gray-400 text-xs font-bold">3</span>
       </div>
@@ -279,8 +312,8 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
         <p class="text-sm font-semibold text-gray-300">Account activated</p>
         <p class="text-xs text-gray-500 mt-0.5">Once approved, you'll receive your login link by email.</p>
       </div>
+      <?php endif; ?>
     </div>
-    <?php endif; ?>
   </div>
 
   <!-- Info box -->
@@ -289,9 +322,11 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
       <span class="text-base mt-0.5">📧</span>
       <span>
         <?php if ($auto_processed): ?>
-          Can't find the email? Check your <strong>spam or junk folder</strong>. The setup link expires in <strong>24 hours</strong>.
+          Can't find the email? Check your <strong>spam or junk folder</strong>.
+          The setup link expires in <strong>24 hours</strong>.
         <?php else: ?>
-          You'll receive a confirmation email once your account is approved — usually <strong>within 24 hours</strong>. Check your spam folder if you don't see it.
+          You'll receive a confirmation email once your account is approved —
+          usually <strong>within 24 hours</strong>. Check your spam folder if you don't see it.
         <?php endif; ?>
       </span>
     </div>
