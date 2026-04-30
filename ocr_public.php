@@ -2,13 +2,19 @@
 /**
  * ocr_public.php
  * Uses Tesseract OCR — free, no API key, runs on server.
+ * Uses full binary paths to work under PHP-FPM's restricted PATH.
  */
 
 header('Content-Type: application/json');
 
+// ── Full binary paths (PHP-FPM has different PATH than SSH) ───
+define('TESSERACT_BIN', '/usr/bin/tesseract');
+define('PDFTOPPM_BIN',  '/usr/bin/pdftoppm');
+define('CONVERT_BIN',   '/usr/bin/convert');
+
 // ── Rate limiting ─────────────────────────────────────────────
 $rate_file = sys_get_temp_dir() . '/ocr_rl_' . md5($_SERVER['REMOTE_ADDR'] ?? 'x');
-$now = time();
+$now  = time();
 $last = @file_get_contents($rate_file);
 if ($last && ($now - (int)$last) < 10) {
     echo json_encode(['success' => false, 'error' => 'Please wait a moment before trying again.']);
@@ -30,13 +36,12 @@ if (!in_array($mime, $allowed)) {
     echo json_encode(['success' => false, 'error' => 'Invalid file type. Upload JPG, PNG, WEBP, or PDF.']);
     exit;
 }
-
 if ($file['size'] > 10 * 1024 * 1024) {
     echo json_encode(['success' => false, 'error' => 'File too large. Max 10MB.']);
     exit;
 }
 
-// ── Prepare temp paths ────────────────────────────────────────
+// ── Temp paths ────────────────────────────────────────────────
 $tmp_dir    = sys_get_temp_dir();
 $unique     = 'ocr_' . uniqid('', true);
 $input_file = $tmp_dir . '/' . $unique . '_input';
@@ -45,43 +50,46 @@ $out_txt    = $out_base . '.txt';
 
 move_uploaded_file($file['tmp_name'], $input_file);
 
-// ── If PDF, convert first page to image ──────────────────────
+// ── PDF → PNG conversion ──────────────────────────────────────
 $ocr_input = $input_file;
 $pdf_page  = $tmp_dir . '/' . $unique . '_page';
 
 if ($mime === 'application/pdf') {
-    exec('pdftoppm -r 200 -png -l 1 ' . escapeshellarg($input_file) . ' ' . escapeshellarg($pdf_page) . ' 2>&1');
+    exec(PDFTOPPM_BIN . ' -r 200 -png -l 1 ' . escapeshellarg($input_file) . ' ' . escapeshellarg($pdf_page) . ' 2>&1');
     $candidates = glob($pdf_page . '*.png');
     if (!empty($candidates)) {
         $ocr_input = $candidates[0];
-    } else {
+    } elseif (file_exists(CONVERT_BIN)) {
         $fallback = $tmp_dir . '/' . $unique . '_fb.png';
-        exec('convert -density 200 ' . escapeshellarg($input_file . '[0]') . ' ' . escapeshellarg($fallback) . ' 2>&1');
+        exec(CONVERT_BIN . ' -density 200 ' . escapeshellarg($input_file . '[0]') . ' ' . escapeshellarg($fallback) . ' 2>&1');
         if (file_exists($fallback)) $ocr_input = $fallback;
     }
 }
 
-// ── Detect language packs ─────────────────────────────────────
-exec('tesseract --list-langs 2>&1', $lang_list);
+// ── Detect installed language packs ──────────────────────────
+exec(TESSERACT_BIN . ' --list-langs 2>&1', $lang_list);
 $lang = 'eng';
 if (in_array('fil', $lang_list)) $lang = 'eng+fil';
 elseif (in_array('tgl', $lang_list)) $lang = 'eng+tgl';
 
-// ── Run Tesseract ─────────────────────────────────────────────
-$cmd = 'tesseract ' . escapeshellarg($ocr_input) . ' ' . escapeshellarg($out_base)
+// ── Run Tesseract with full path ──────────────────────────────
+$cmd = TESSERACT_BIN . ' '
+     . escapeshellarg($ocr_input) . ' '
+     . escapeshellarg($out_base)
      . ' -l ' . escapeshellarg($lang)
      . ' --psm 3 --oem 3 2>&1';
+
 exec($cmd, $tess_out, $tess_ret);
 
-// ── Cleanup ───────────────────────────────────────────────────
+// ── Cleanup temp files ────────────────────────────────────────
 @unlink($input_file);
 foreach (glob($pdf_page . '*.png') as $f) @unlink($f);
 @unlink($tmp_dir . '/' . $unique . '_fb.png');
 
-// ── Read result ───────────────────────────────────────────────
+// ── Read OCR result ───────────────────────────────────────────
 if ($tess_ret !== 0 || !file_exists($out_txt)) {
     @unlink($out_txt);
-    echo json_encode(['success' => false, 'error' => 'Could not extract text. Try a clearer photo of your permit.']);
+    echo json_encode(['success' => false, 'error' => 'OCR failed (exit ' . $tess_ret . '). Try a clearer photo.']);
     exit;
 }
 
@@ -105,70 +113,55 @@ function parsePermitText(string $text): array
     $lines  = array_values(array_filter(array_map('trim', explode("\n", $text)), fn($l) => strlen($l) > 1));
     $fields = ['business_name' => '', 'owner_name' => '', 'address' => ''];
 
-    // ── Business Name ─────────────────────────────────────────
-    // Matches PH Mayor's Permit format: "Business Name: XXXXX"
-    // Also matches: TRADE NAME, NAME OF BUSINESS, ESTABLISHMENT NAME
-    $biz_patterns = [
+    // Business Name — matches "Business Name: XXXXX" and variations
+    foreach ([
         '/Business\s+Name\s*[:\-]\s*(.+)/i',
         '/(?:TRADE\s+NAME|NAME\s+OF\s+BUSINESS|ESTABLISHMENT\s+NAME|REGISTERED\s+NAME)\s*[:\-]\s*(.+)/i',
-    ];
-    foreach ($biz_patterns as $p) {
+    ] as $p) {
         if (preg_match($p, $text, $m)) {
             $val = trim($m[1]);
-            if (strlen($val) > 1 && strlen($val) < 120) {
-                $fields['business_name'] = $val;
-                break;
-            }
+            if (strlen($val) > 1 && strlen($val) < 120) { $fields['business_name'] = $val; break; }
         }
     }
 
-    // ── Owner / Proprietor ────────────────────────────────────
-    // Matches: "Owner / Proprietor:", "Owner:", "Proprietor:", "Applicant:", etc.
-    $owner_patterns = [
+    // Owner — matches "Owner / Proprietor: XXXXX" and variations
+    foreach ([
         '/Owner\s*[\/\\\\]?\s*Proprietor\s*[:\-]\s*(.+)/i',
         '/(?:OWNER|PROPRIETOR|REGISTERED\s+OWNER|APPLICANT|LICENSEE|ISSUED\s+TO|GRANTED\s+TO)\s*[:\-]\s*(.+)/i',
         '/(?:NAME\s+OF\s+OWNER|NAME\s+OF\s+PROPRIETOR)\s*[:\-]\s*(.+)/i',
-    ];
-    foreach ($owner_patterns as $p) {
+    ] as $p) {
         if (preg_match($p, $text, $m)) {
             $val = trim($m[1]);
             if (strlen($val) < 80 && !preg_match('/PERMIT|LICENSE|BUSINESS|TRADE|NATURE/i', $val)) {
-                $fields['owner_name'] = $val;
-                break;
+                $fields['owner_name'] = $val; break;
             }
         }
     }
 
-    // ── Address ───────────────────────────────────────────────
-    // Matches: "Business Address:", "Address:", "Location:", etc.
-    $addr_patterns = [
+    // Address — matches "Business Address: XXXXX" and variations
+    foreach ([
         '/Business\s+Address\s*[:\-]\s*(.+)/i',
         '/(?:ADDRESS|LOCATION|PLACE\s+OF\s+BUSINESS)\s*[:\-]\s*(.+)/i',
         '/(?:BARANGAY|BRGY\.?)\s+[\w\s,]+(?:,\s*[\w\s]+){1,2}/i',
-    ];
-    foreach ($addr_patterns as $p) {
+    ] as $p) {
         if (preg_match($p, $text, $m)) {
             $val = trim($m[1]);
-            if (strlen($val) > 3 && strlen($val) < 200) {
-                $fields['address'] = $val;
-                break;
-            }
+            if (strlen($val) > 3 && strlen($val) < 200) { $fields['address'] = $val; break; }
         }
     }
 
-    // ── Fallback: ALL-CAPS line as business name ──────────────
+    // Fallback: prominent ALL-CAPS line = business name
     if (empty($fields['business_name'])) {
         foreach ($lines as $line) {
             if (strlen($line) < 5 || strlen($line) > 60) continue;
             if (preg_match('/\d{4}|\bREPUBLIC\b|\bPROVINCE\b|\bCITY\b|\bMUNICIPALITY\b|\bPERMIT\b|\bOFFICE\b/i', $line)) continue;
             if ($line === strtoupper($line) && preg_match('/[A-Z]{3}/', $line)) {
-                $fields['business_name'] = ucwords(strtolower($line));
-                break;
+                $fields['business_name'] = ucwords(strtolower($line)); break;
             }
         }
     }
 
-    // ── Clean all fields ──────────────────────────────────────
+    // Clean all fields
     foreach ($fields as &$val) {
         $val = trim(preg_replace('/\s+/', ' ', $val), " \t\n\r\0\x0B-:;,.");
         if (strlen($val) > 120) $val = substr($val, 0, 120);
