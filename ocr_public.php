@@ -1,29 +1,12 @@
 <?php
 /**
  * ocr_public.php
- * ─────────────────────────────────────────────────────────────
- * Public OCR endpoint for the signup page.
- * No session/auth required — called via AJAX when a user
- * uploads their business permit on signup.php.
- *
- * Returns JSON:
- *   { success, fields: { business_name, owner_name, address } }
- *
- * Rate-limited to 1 request per IP per 30 seconds to prevent abuse.
- * ─────────────────────────────────────────────────────────────
+ * Uses Tesseract OCR — free, no API key, runs on server.
  */
-
-require_once __DIR__ . '/paymongo_config.php'; // GOOGLE_VISION_API_KEY defined here
 
 header('Content-Type: application/json');
 
-// ── Session (only start if not already active) ────────────────
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// ── Rate limiting: 1 OCR call per IP per 10 seconds ──────────
-// Use IP-based file lock instead of session to avoid conflicts
+// ── Rate limiting ─────────────────────────────────────────────
 $rate_file = sys_get_temp_dir() . '/ocr_rl_' . md5($_SERVER['REMOTE_ADDR'] ?? 'x');
 $now = time();
 $last = @file_get_contents($rate_file);
@@ -33,7 +16,7 @@ if ($last && ($now - (int)$last) < 10) {
 }
 @file_put_contents($rate_file, $now);
 
-// ── Only accept POST with a file ──────────────────────────────
+// ── Validate upload ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['permit'])) {
     echo json_encode(['success' => false, 'error' => 'No file uploaded.']);
     exit;
@@ -44,7 +27,7 @@ $mime    = mime_content_type($file['tmp_name']);
 $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
 
 if (!in_array($mime, $allowed)) {
-    echo json_encode(['success' => false, 'error' => 'Invalid file type.']);
+    echo json_encode(['success' => false, 'error' => 'Invalid file type. Upload JPG, PNG, WEBP, or PDF.']);
     exit;
 }
 
@@ -53,125 +36,122 @@ if ($file['size'] > 10 * 1024 * 1024) {
     exit;
 }
 
-$api_key = defined('GOOGLE_VISION_API_KEY') ? GOOGLE_VISION_API_KEY : '';
-if (!$api_key) {
-    echo json_encode(['success' => false, 'error' => 'DEBUG: GOOGLE_VISION_API_KEY is not defined in paymongo_config.php']);
+// ── Prepare temp paths ────────────────────────────────────────
+$tmp_dir    = sys_get_temp_dir();
+$unique     = 'ocr_' . uniqid('', true);
+$input_file = $tmp_dir . '/' . $unique . '_input';
+$out_base   = $tmp_dir . '/' . $unique . '_out';
+$out_txt    = $out_base . '.txt';
+
+move_uploaded_file($file['tmp_name'], $input_file);
+
+// ── If PDF, convert first page to image ──────────────────────
+$ocr_input = $input_file;
+$pdf_page  = $tmp_dir . '/' . $unique . '_page';
+
+if ($mime === 'application/pdf') {
+    exec('pdftoppm -r 200 -png -l 1 ' . escapeshellarg($input_file) . ' ' . escapeshellarg($pdf_page) . ' 2>&1');
+    $candidates = glob($pdf_page . '*.png');
+    if (!empty($candidates)) {
+        $ocr_input = $candidates[0];
+    } else {
+        // Try imagemagick as fallback
+        $fallback = $tmp_dir . '/' . $unique . '_fb.png';
+        exec('convert -density 200 ' . escapeshellarg($input_file . '[0]') . ' ' . escapeshellarg($fallback) . ' 2>&1');
+        if (file_exists($fallback)) $ocr_input = $fallback;
+    }
+}
+
+// ── Detect available language packs ──────────────────────────
+exec('tesseract --list-langs 2>&1', $lang_list);
+$lang = 'eng';
+if (in_array('fil', $lang_list)) $lang = 'eng+fil';
+elseif (in_array('tgl', $lang_list)) $lang = 'eng+tgl';
+
+// ── Run Tesseract ─────────────────────────────────────────────
+$cmd = 'tesseract ' . escapeshellarg($ocr_input) . ' ' . escapeshellarg($out_base)
+     . ' -l ' . escapeshellarg($lang)
+     . ' --psm 3 --oem 3 2>&1';
+exec($cmd, $tess_out, $tess_ret);
+
+// ── Cleanup ───────────────────────────────────────────────────
+@unlink($input_file);
+foreach (glob($pdf_page . '*.png') as $f) @unlink($f);
+@unlink($tmp_dir . '/' . $unique . '_fb.png');
+
+// ── Read result ───────────────────────────────────────────────
+if ($tess_ret !== 0 || !file_exists($out_txt)) {
+    @unlink($out_txt);
+    echo json_encode(['success' => false, 'error' => 'Could not extract text. Try a clearer photo of your permit.']);
     exit;
 }
 
-// ── Call Google Cloud Vision API ─────────────────────────────
-$image_data   = base64_encode(file_get_contents($file['tmp_name']));
-$request_type = ($mime === 'application/pdf') ? 'DOCUMENT_TEXT_DETECTION' : 'TEXT_DETECTION';
+$raw_text = file_get_contents($out_txt);
+@unlink($out_txt);
 
-$payload = json_encode([
-    'requests' => [[
-        'image'    => ['content' => $image_data],
-        'features' => [['type' => $request_type, 'maxResults' => 1]],
-    ]],
-]);
-
-$ch = curl_init('https://vision.googleapis.com/v1/images:annotate?key=' . urlencode($api_key));
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-    CURLOPT_POSTFIELDS     => $payload,
-    CURLOPT_TIMEOUT        => 30,
-]);
-$raw      = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlErr  = curl_error($ch);
-curl_close($ch);
-
-if ($httpCode !== 200 || !$raw) {
-    echo json_encode(['success' => false, 'error' => 'DEBUG: Vision API HTTP ' . $httpCode . ($curlErr ? ' | cURL: ' . $curlErr : '') . ' — ' . substr($raw, 0, 300)]);
+if (!trim($raw_text)) {
+    echo json_encode(['success' => false, 'error' => 'No text found in the image. Please upload a clearer photo of your business permit.']);
     exit;
 }
 
-$result   = json_decode($raw, true);
-$raw_text = $result['responses'][0]['fullTextAnnotation']['text']
-          ?? $result['responses'][0]['textAnnotations'][0]['description']
-          ?? '';
-
-if (!$raw_text) {
-    echo json_encode(['success' => false, 'error' => 'Could not extract text. Please fill in manually.']);
-    exit;
-}
-
-// ── Parse extracted text ──────────────────────────────────────
+// ── Parse fields ──────────────────────────────────────────────
 $fields = parsePermitText($raw_text);
 
-echo json_encode([
-    'success' => true,
-    'fields'  => $fields,
-]);
+echo json_encode(['success' => true, 'fields' => $fields]);
 exit;
 
 
-// ── Parser (same logic as ocr_permit.php) ────────────────────
 function parsePermitText(string $text): array
 {
-    $lines = array_map('trim', explode("\n", $text));
-    $lines = array_filter($lines, fn($l) => strlen($l) > 1);
-    $lines = array_values($lines);
-
+    $lines  = array_values(array_filter(array_map('trim', explode("\n", $text)), fn($l) => strlen($l) > 1));
     $fields = ['business_name' => '', 'owner_name' => '', 'address' => ''];
 
     // Business Name
-    $biz_patterns = [
-        '/(?:BUSINESS\s+NAME|TRADE\s+NAME|NAME\s+OF\s+BUSINESS|ESTABLISHMENT\s+NAME)\s*[:\-]?\s*(.+)/i',
-        '/(?:REGISTERED\s+NAME)\s*[:\-]?\s*(.+)/i',
-    ];
-    foreach ($biz_patterns as $pattern) {
-        if (preg_match($pattern, $text, $m)) {
-            $fields['business_name'] = trim($m[1]);
-            break;
+    foreach ([
+        '/(?:BUSINESS\s+NAME|TRADE\s+NAME|NAME\s+OF\s+BUSINESS|ESTABLISHMENT\s+NAME|REGISTERED\s+NAME)\s*[:\-]?\s*(.+)/i',
+    ] as $p) {
+        if (preg_match($p, $text, $m) && strlen(trim($m[1])) > 1 && strlen(trim($m[1])) < 120) {
+            $fields['business_name'] = trim($m[1]); break;
         }
     }
 
-    // Owner Name
-    $owner_patterns = [
-        '/(?:OWNER|PROPRIETOR|REGISTERED\s+OWNER|APPLICANT|LICENSEE)\s*[:\-]?\s*(.+)/i',
+    // Owner
+    foreach ([
+        '/(?:OWNER|PROPRIETOR|REGISTERED\s+OWNER|APPLICANT|LICENSEE|ISSUED\s+TO|GRANTED\s+TO)\s*[:\-]?\s*(.+)/i',
         '/(?:NAME\s+OF\s+OWNER|NAME\s+OF\s+PROPRIETOR)\s*[:\-]?\s*(.+)/i',
-    ];
-    foreach ($owner_patterns as $pattern) {
-        if (preg_match($pattern, $text, $m)) {
+    ] as $p) {
+        if (preg_match($p, $text, $m)) {
             $val = trim($m[1]);
             if (strlen($val) < 80 && !preg_match('/PERMIT|LICENSE|BUSINESS|TRADE/i', $val)) {
-                $fields['owner_name'] = $val;
-                break;
+                $fields['owner_name'] = $val; break;
             }
         }
     }
 
     // Address
-    $addr_patterns = [
+    foreach ([
         '/(?:ADDRESS|BUSINESS\s+ADDRESS|LOCATION|PLACE\s+OF\s+BUSINESS)\s*[:\-]?\s*(.+)/i',
-        '/(?:BARANGAY|BRGY\.?|SITIO)\s+.{3,}/i',
-    ];
-    foreach ($addr_patterns as $pattern) {
-        if (preg_match($pattern, $text, $m)) {
-            $fields['address'] = trim($m[1]);
-            break;
+        '/(?:BARANGAY|BRGY\.?)\s+[\w\s,]+/i',
+    ] as $p) {
+        if (preg_match($p, $text, $m) && strlen(trim($m[1])) > 3) {
+            $fields['address'] = trim($m[1]); break;
         }
     }
 
-    // Fallback: prominent ALL-CAPS line for business name
+    // Fallback: ALL-CAPS prominent line = business name
     if (empty($fields['business_name'])) {
         foreach ($lines as $line) {
-            if (strlen($line) < 5) continue;
-            if (preg_match('/\d{4}|\bREPUBLIC\b|\bPROVINCE\b|\bCITY\b|\bMUNICIPALITY\b|\bBUSINESS PERMIT\b/i', $line)) continue;
-            if ($line === strtoupper($line) && strlen($line) > 5 && strlen($line) < 60) {
-                $fields['business_name'] = ucwords(strtolower($line));
-                break;
+            if (strlen($line) < 5 || strlen($line) > 60) continue;
+            if (preg_match('/\d{4}|\bREPUBLIC\b|\bPROVINCE\b|\bCITY\b|\bMUNICIPALITY\b|\bPERMIT\b|\bOFFICE\b/i', $line)) continue;
+            if ($line === strtoupper($line) && preg_match('/[A-Z]{3}/', $line)) {
+                $fields['business_name'] = ucwords(strtolower($line)); break;
             }
         }
     }
 
-    // Clean up
+    // Clean
     foreach ($fields as &$val) {
-        $val = preg_replace('/\s+/', ' ', $val);
-        $val = trim($val, " \t\n\r\0\x0B-:;,.");
+        $val = trim(preg_replace('/\s+/', ' ', $val), " \t\n\r\0\x0B-:;,.");
         if (strlen($val) > 120) $val = substr($val, 0, 120);
     }
 
