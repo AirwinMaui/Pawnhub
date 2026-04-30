@@ -19,11 +19,12 @@ if (!file_exists($_autoload)) {
         function sendStaffWelcome(): bool { return false; }
         function sendManagerInvitation(): bool { return false; }
         function sendManagerWelcome(): bool { return false; }
-        function sendSubscriptionExpiring(): bool { return false; }
-        function sendSubscriptionExpired(): bool  { return false; }
-        function sendSubscriptionRenewed(): bool  { return false; }
-        function sendRenewalRequestReceived(): bool { return false; }
-        function sendSuperAdminAccountReady(): bool { return false; }
+        function sendSubscriptionExpiring(): bool         { return false; }
+        function sendSubscriptionExpired(): bool          { return false; }
+        function sendSubscriptionRenewed(): bool          { return false; }
+        function sendRenewalRequestReceived(): bool       { return false; }
+        function sendSubscriptionAutoDeactivated(): bool  { return false; }
+        function sendSuperAdminAccountReady(): bool       { return false; }
     }
     return;
 }
@@ -943,6 +944,92 @@ function sendSuperAdminPasswordReset(string $toEmail, string $toName, string $us
     </div></body></html>';
 
     return sendMail($toEmail, $toName, '🔑 PawnHub — Super Admin Password Reset', $html);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sendSubscriptionAutoDeactivated — sent when tenant is auto-deactivated after
+// 7 days of expired subscription
+// ─────────────────────────────────────────────────────────────────────────────
+function sendSubscriptionAutoDeactivated(
+    string $toEmail,
+    string $toName,
+    string $businessName,
+    string $plan,
+    string $slug
+): bool {
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#450a0a,#7f1d1d);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:rgba(255,255,255,.15);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Account Notice</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px;">
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2rem;margin:0 0 6px;">🔒</p>
+          <p style="color:#dc2626;font-size:1.1rem;font-weight:800;margin:0 0 4px;">Account Auto-Deactivated</p>
+          <p style="color:#b91c1c;font-size:.84rem;margin:0;">Subscription expired — 7-day grace period has passed</p>
+        </div>
+
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
+          Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
+          Your <strong>' . htmlspecialchars($businessName) . '</strong> account
+          (<strong>' . htmlspecialchars($plan) . ' Plan</strong>) has been
+          <strong style="color:#dc2626;">automatically deactivated</strong> because your subscription
+          expired more than 7 days ago and was not renewed.<br><br>
+          All staff and cashier accounts under your branch have also been suspended.
+          Please renew your subscription to restore full access.
+        </p>
+
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+          <p style="color:#334155;font-size:.85rem;font-weight:700;margin:0 0 10px;">📋 How to Reactivate Your Account:</p>
+          <ol style="color:#475569;font-size:.84rem;line-height:1.9;margin:0;padding-left:18px;">
+            <li>Sign in to your dashboard</li>
+            <li>Click <strong>Subscription</strong> in the sidebar</li>
+            <li>Click <strong>Request Renewal</strong></li>
+            <li>Fill in your payment details and submit</li>
+            <li>Wait for Super Admin confirmation <em>(usually within 24 hours)</em></li>
+          </ol>
+        </div>
+
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:24px;">
+          <p style="color:#991b1b;font-size:.82rem;margin:0;line-height:1.6;">
+            ⚠️ <strong>Your data is safe.</strong> All your records and transaction history are preserved.
+            Renewing your subscription will immediately restore access to your account.
+          </p>
+        </div>
+
+        <div style="text-align:center;margin:28px 0;">
+          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(220,38,38,.3);">
+            Renew My Subscription →
+          </a>
+        </div>
+
+        <p style="color:#94a3b8;font-size:.76rem;text-align:center;">
+          Need help? Contact us at <a href="mailto:' . MAIL_FROM . '" style="color:#2563eb;">' . MAIL_FROM . '</a>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, '🔒 PawnHub — ' . $businessName . ' Account Has Been Deactivated', $html);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
