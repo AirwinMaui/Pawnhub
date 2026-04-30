@@ -443,11 +443,11 @@ html { scroll-behavior: smooth; }
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
           <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">📄 Business Permit <span style="color:#f87171;">*</span></p>
           <div class="file-upload-zone" id="permitDropZone" onclick="document.getElementById('business_permit').click()">
-            <input type="file" name="business_permit" id="business_permit" accept="*/*" style="display:none;" onchange="handlePermitFile(this)">
+            <input type="file" name="business_permit" id="business_permit" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handlePermitFile(this)">
             <div id="permitPlaceholder">
               <span class="material-symbols-outlined" style="font-size:32px;color:rgba(255,255,255,0.3);margin-bottom:8px;display:block;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">upload_file</span>
               <p style="font-size:0.82rem;font-weight:600;color:rgba(255,255,255,0.5);margin-bottom:4px;">Click or drag & drop your Business Permit</p>
-              <p style="font-size:0.72rem;color:rgba(255,255,255,0.3);">Any file format accepted · Max 5MB</p>
+              <p style="font-size:0.72rem;color:rgba(255,255,255,0.3);">JPG, PNG, WEBP, or PDF only · Max 5MB</p>
             </div>
             <div id="permitPreview" style="display:none;">
               <span class="material-symbols-outlined" style="font-size:28px;color:#34d399;margin-bottom:6px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
@@ -638,6 +638,23 @@ function selectPlan(name) {
 function handlePermitFile(input) {
   const file = input.files[0];
   if (!file) return;
+
+  // Client-side type guard — reject non-image/PDF immediately
+  const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
+  if (!allowed.includes(file.type)) {
+    const ocrBanner = document.getElementById('ocrBanner');
+    const ocrStatus = document.getElementById('ocrStatus');
+    // Reset file input
+    input.value = '';
+    document.getElementById('permitPlaceholder').style.display = 'block';
+    document.getElementById('permitPreview').style.display = 'none';
+    ocrBanner.style.display = 'flex';
+    ocrBanner.style.background = 'rgba(220,38,38,0.12)';
+    ocrBanner.style.borderColor = 'rgba(220,38,38,0.35)';
+    ocrStatus.innerHTML = '❌ <strong style="color:#fca5a5;">Invalid file type.</strong> Please upload your business permit as a <strong style="color:#fca5a5;">JPG, PNG, WEBP, or PDF</strong> — not a Word document or other file.';
+    ocrStatus.style.color = '#fca5a5';
+    return;
+  }
 
   // Show file name preview
   document.getElementById('permitPlaceholder').style.display = 'none';
