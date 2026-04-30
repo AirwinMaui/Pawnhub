@@ -17,15 +17,21 @@ require_once __DIR__ . '/paymongo_config.php'; // GOOGLE_VISION_API_KEY defined 
 
 header('Content-Type: application/json');
 
-// ── Basic rate limiting via session ───────────────────────────
-session_start();
+// ── Session (only start if not already active) ────────────────
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// ── Rate limiting: 1 OCR call per IP per 10 seconds ──────────
+// Use IP-based file lock instead of session to avoid conflicts
+$rate_file = sys_get_temp_dir() . '/ocr_rl_' . md5($_SERVER['REMOTE_ADDR'] ?? 'x');
 $now = time();
-$last = $_SESSION['ocr_last_call'] ?? 0;
-if ($now - $last < 30) {
+$last = @file_get_contents($rate_file);
+if ($last && ($now - (int)$last) < 10) {
     echo json_encode(['success' => false, 'error' => 'Please wait a moment before trying again.']);
     exit;
 }
-$_SESSION['ocr_last_call'] = $now;
+@file_put_contents($rate_file, $now);
 
 // ── Only accept POST with a file ──────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['permit'])) {
@@ -49,8 +55,7 @@ if ($file['size'] > 10 * 1024 * 1024) {
 
 $api_key = defined('GOOGLE_VISION_API_KEY') ? GOOGLE_VISION_API_KEY : '';
 if (!$api_key) {
-    // Silently return empty — don't expose missing config to public
-    echo json_encode(['success' => false, 'error' => 'OCR not available.']);
+    echo json_encode(['success' => false, 'error' => 'DEBUG: GOOGLE_VISION_API_KEY is not defined in paymongo_config.php']);
     exit;
 }
 
@@ -75,10 +80,11 @@ curl_setopt_array($ch, [
 ]);
 $raw      = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr  = curl_error($ch);
 curl_close($ch);
 
 if ($httpCode !== 200 || !$raw) {
-    echo json_encode(['success' => false, 'error' => 'Could not read the permit. Please fill in manually.']);
+    echo json_encode(['success' => false, 'error' => 'DEBUG: Vision API HTTP ' . $httpCode . ($curlErr ? ' | cURL: ' . $curlErr : '') . ' — ' . substr($raw, 0, 300)]);
     exit;
 }
 
