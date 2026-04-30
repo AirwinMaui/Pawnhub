@@ -33,10 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $branches = intval($_POST['branches']    ?? 1);
 
         if ($bname && $oname && $email) {
-            $chk = $pdo->prepare("SELECT id FROM users WHERE email=?");
-            $chk->execute([$email]);
-            if ($chk->fetch()) {
-                $error_msg = 'Email already registered in the system.';
+            // Check email in BOTH users AND tenants tables
+            $chk_u = $pdo->prepare("SELECT id FROM users WHERE email=? LIMIT 1");
+            $chk_u->execute([$email]);
+            $chk_t = $pdo->prepare("SELECT id FROM tenants WHERE email=? LIMIT 1");
+            $chk_t->execute([$email]);
+            if ($chk_u->fetch() || $chk_t->fetch()) {
+                $error_msg = 'This email is already registered. Each tenant must use a unique email address.';
             } else {
                 try {
                     $pdo->beginTransaction();
@@ -609,9 +612,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } elseif (!filter_var($sa_email, FILTER_VALIDATE_EMAIL)) {
             $error_msg = 'Invalid email address.';
         } else {
-            $dup = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
-            $dup->execute([$sa_email]);
-            if ($dup->fetch()) {
+            // Check email in BOTH users AND tenants tables
+            $dup_u = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+            $dup_u->execute([$sa_email]);
+            $dup_t = $pdo->prepare("SELECT id FROM tenants WHERE email = ? LIMIT 1");
+            $dup_t->execute([$sa_email]);
+            if ($dup_u->fetch() || $dup_t->fetch()) {
                 $error_msg = 'This email is already registered in the system.';
             } else {
                 // DDL (CREATE TABLE) must run OUTSIDE a transaction — MySQL DDL causes
