@@ -55,14 +55,13 @@ if ($mime === 'application/pdf') {
     if (!empty($candidates)) {
         $ocr_input = $candidates[0];
     } else {
-        // Try imagemagick as fallback
         $fallback = $tmp_dir . '/' . $unique . '_fb.png';
         exec('convert -density 200 ' . escapeshellarg($input_file . '[0]') . ' ' . escapeshellarg($fallback) . ' 2>&1');
         if (file_exists($fallback)) $ocr_input = $fallback;
     }
 }
 
-// ── Detect available language packs ──────────────────────────
+// ── Detect language packs ─────────────────────────────────────
 exec('tesseract --list-langs 2>&1', $lang_list);
 $lang = 'eng';
 if (in_array('fil', $lang_list)) $lang = 'eng+fil';
@@ -90,7 +89,7 @@ $raw_text = file_get_contents($out_txt);
 @unlink($out_txt);
 
 if (!trim($raw_text)) {
-    echo json_encode(['success' => false, 'error' => 'No text found in the image. Please upload a clearer photo of your business permit.']);
+    echo json_encode(['success' => false, 'error' => 'No text found. Please upload a clearer photo of your business permit.']);
     exit;
 }
 
@@ -106,50 +105,70 @@ function parsePermitText(string $text): array
     $lines  = array_values(array_filter(array_map('trim', explode("\n", $text)), fn($l) => strlen($l) > 1));
     $fields = ['business_name' => '', 'owner_name' => '', 'address' => ''];
 
-    // Business Name
-    foreach ([
-        '/(?:BUSINESS\s+NAME|TRADE\s+NAME|NAME\s+OF\s+BUSINESS|ESTABLISHMENT\s+NAME|REGISTERED\s+NAME)\s*[:\-]?\s*(.+)/i',
-    ] as $p) {
-        if (preg_match($p, $text, $m) && strlen(trim($m[1])) > 1 && strlen(trim($m[1])) < 120) {
-            $fields['business_name'] = trim($m[1]); break;
-        }
-    }
-
-    // Owner
-    foreach ([
-        '/(?:OWNER|PROPRIETOR|REGISTERED\s+OWNER|APPLICANT|LICENSEE|ISSUED\s+TO|GRANTED\s+TO)\s*[:\-]?\s*(.+)/i',
-        '/(?:NAME\s+OF\s+OWNER|NAME\s+OF\s+PROPRIETOR)\s*[:\-]?\s*(.+)/i',
-    ] as $p) {
+    // ── Business Name ─────────────────────────────────────────
+    // Matches PH Mayor's Permit format: "Business Name: XXXXX"
+    // Also matches: TRADE NAME, NAME OF BUSINESS, ESTABLISHMENT NAME
+    $biz_patterns = [
+        '/Business\s+Name\s*[:\-]\s*(.+)/i',
+        '/(?:TRADE\s+NAME|NAME\s+OF\s+BUSINESS|ESTABLISHMENT\s+NAME|REGISTERED\s+NAME)\s*[:\-]\s*(.+)/i',
+    ];
+    foreach ($biz_patterns as $p) {
         if (preg_match($p, $text, $m)) {
             $val = trim($m[1]);
-            if (strlen($val) < 80 && !preg_match('/PERMIT|LICENSE|BUSINESS|TRADE/i', $val)) {
-                $fields['owner_name'] = $val; break;
+            if (strlen($val) > 1 && strlen($val) < 120) {
+                $fields['business_name'] = $val;
+                break;
             }
         }
     }
 
-    // Address
-    foreach ([
-        '/(?:ADDRESS|BUSINESS\s+ADDRESS|LOCATION|PLACE\s+OF\s+BUSINESS)\s*[:\-]?\s*(.+)/i',
-        '/(?:BARANGAY|BRGY\.?)\s+[\w\s,]+/i',
-    ] as $p) {
-        if (preg_match($p, $text, $m) && strlen(trim($m[1])) > 3) {
-            $fields['address'] = trim($m[1]); break;
+    // ── Owner / Proprietor ────────────────────────────────────
+    // Matches: "Owner / Proprietor:", "Owner:", "Proprietor:", "Applicant:", etc.
+    $owner_patterns = [
+        '/Owner\s*[\/\\\\]?\s*Proprietor\s*[:\-]\s*(.+)/i',
+        '/(?:OWNER|PROPRIETOR|REGISTERED\s+OWNER|APPLICANT|LICENSEE|ISSUED\s+TO|GRANTED\s+TO)\s*[:\-]\s*(.+)/i',
+        '/(?:NAME\s+OF\s+OWNER|NAME\s+OF\s+PROPRIETOR)\s*[:\-]\s*(.+)/i',
+    ];
+    foreach ($owner_patterns as $p) {
+        if (preg_match($p, $text, $m)) {
+            $val = trim($m[1]);
+            if (strlen($val) < 80 && !preg_match('/PERMIT|LICENSE|BUSINESS|TRADE|NATURE/i', $val)) {
+                $fields['owner_name'] = $val;
+                break;
+            }
         }
     }
 
-    // Fallback: ALL-CAPS prominent line = business name
+    // ── Address ───────────────────────────────────────────────
+    // Matches: "Business Address:", "Address:", "Location:", etc.
+    $addr_patterns = [
+        '/Business\s+Address\s*[:\-]\s*(.+)/i',
+        '/(?:ADDRESS|LOCATION|PLACE\s+OF\s+BUSINESS)\s*[:\-]\s*(.+)/i',
+        '/(?:BARANGAY|BRGY\.?)\s+[\w\s,]+(?:,\s*[\w\s]+){1,2}/i',
+    ];
+    foreach ($addr_patterns as $p) {
+        if (preg_match($p, $text, $m)) {
+            $val = trim($m[1]);
+            if (strlen($val) > 3 && strlen($val) < 200) {
+                $fields['address'] = $val;
+                break;
+            }
+        }
+    }
+
+    // ── Fallback: ALL-CAPS line as business name ──────────────
     if (empty($fields['business_name'])) {
         foreach ($lines as $line) {
             if (strlen($line) < 5 || strlen($line) > 60) continue;
             if (preg_match('/\d{4}|\bREPUBLIC\b|\bPROVINCE\b|\bCITY\b|\bMUNICIPALITY\b|\bPERMIT\b|\bOFFICE\b/i', $line)) continue;
             if ($line === strtoupper($line) && preg_match('/[A-Z]{3}/', $line)) {
-                $fields['business_name'] = ucwords(strtolower($line)); break;
+                $fields['business_name'] = ucwords(strtolower($line));
+                break;
             }
         }
     }
 
-    // Clean
+    // ── Clean all fields ──────────────────────────────────────
     foreach ($fields as &$val) {
         $val = trim(preg_replace('/\s+/', ' ', $val), " \t\n\r\0\x0B-:;,.");
         if (strlen($val) > 120) $val = substr($val, 0, 120);
