@@ -625,7 +625,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <div class="card">
       <div class="card-label">Current Subscription</div>
 
-      <?php if ($sub_stat === 'expired' || ($days_left !== null && $days_left < 0)): ?>
+      <?php if ($sub_stat === 'expired' || ($days_left !== null && $days_left <= 0)): ?>
       <div class="alert alert-error" style="margin-bottom:16px;">
         ⛔ <strong>Your subscription has expired.</strong> Renew below to restore full access.
       </div>

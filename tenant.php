@@ -847,7 +847,7 @@ tr:hover td{background:rgba(255,255,255,.03);}
   $sub_status  = $tenant['subscription_status'] ?? null;
   if ($sub_end_ts && $tenant['plan'] !== 'Starter') {
       $days_left_banner = (int)ceil(($sub_end_ts - time()) / 86400);
-      $is_expired_banner = ($days_left_banner < 0 || $sub_status === 'expired');
+      $is_expired_banner = ($days_left_banner <= 0 || $sub_status === 'expired');
 
       if ($is_expired_banner) {
           $expired_days_ago = abs($days_left_banner);
