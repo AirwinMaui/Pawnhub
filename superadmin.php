@@ -1366,45 +1366,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <div class="card">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
         <?php if(empty($tenants)):?><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg><p>No tenants yet.</p></div>
-        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="font-size:.79rem;min-width:600px;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th><th style="white-space:nowrap;">Subscription</th><th style="white-space:nowrap;">Expiry</th><th style="width:36px;text-align:center;">Users</th><th style="width:130px;">Actions</th></tr></thead><tbody>
-        <?php foreach($tenants as $t):
-          // Subscription expiry display logic
-          $sub_end   = $t['subscription_end'] ?? null;
-          $days_left = isset($t['days_left']) ? (int)$t['days_left'] : null;
-          $sub_stat  = $t['subscription_status'] ?? null;
-
-          if (!$sub_end || $t['status'] === 'pending') {
-            $sub_badge   = '<span class="badge b-gray" style="font-size:.63rem;">—</span>';
-            $expiry_cell = '<span style="font-size:.7rem;color:var(--text-dim);">—</span>';
-          } elseif ($sub_stat === 'expired' || $days_left < 0) {
-            $expired_days    = abs($days_left ?? 0);
-            $auto_deact_days = max(0, 7 - $expired_days);
-            $sub_badge = '<span class="badge b-red" style="font-size:.63rem;">❌ Expired</span>';
-            if ($auto_deact_days > 0) {
-              $expiry_cell = '<div style="font-size:.7rem;color:#dc2626;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                           . '<div style="font-size:.63rem;color:#ef4444;">Deactivate in ' . $auto_deact_days . 'd</div>';
-            } else {
-              $expiry_cell = '<div style="font-size:.7rem;color:#dc2626;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                           . '<div style="font-size:.63rem;color:#ef4444;">Overdue ' . $expired_days . 'd</div>';
-            }
-          } elseif ($days_left <= 3) {
-            $sub_badge   = '<span class="badge b-red" style="font-size:.63rem;">🚨 Critical</span>';
-            $expiry_cell = '<div style="font-size:.7rem;color:#dc2626;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.63rem;color:#ef4444;">' . $days_left . 'd left</div>';
-          } elseif ($days_left <= 7) {
-            $sub_badge   = '<span class="badge b-orange" style="font-size:.63rem;">⚠️ Expiring</span>';
-            $expiry_cell = '<div style="font-size:.7rem;color:#c2410c;font-weight:700;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.63rem;color:#ea580c;">' . $days_left . 'd left</div>';
-          } elseif ($days_left <= 14) {
-            $sub_badge   = '<span class="badge b-yellow" style="font-size:.63rem;">⏰ Soon</span>';
-            $expiry_cell = '<div style="font-size:.7rem;color:#b45309;white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.63rem;color:#d97706;">' . $days_left . 'd left</div>';
-          } else {
-            $sub_badge   = '<span class="badge b-green" style="font-size:.63rem;">✅ Active</span>';
-            $expiry_cell = '<div style="font-size:.7rem;color:var(--text-dim);white-space:nowrap;">' . date('M d, Y', strtotime($sub_end)) . '</div>'
-                         . '<div style="font-size:.63rem;color:#16a34a;">' . $days_left . 'd left</div>';
-          }
-        ?>
+        <?php else:?><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="font-size:.79rem;min-width:600px;"><thead><tr><th style="width:40px;">ID</th><th>Business Name</th><th>Email</th><th style="white-space:nowrap;">Plan</th><th>Status</th></tr></thead><tbody>
+        <?php foreach($tenants as $t): ?>
         <tr>
           <td style="color:var(--text-dim);font-size:.7rem;">#<?=$t['id']?></td>
           <td>
@@ -1414,12 +1377,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td style="font-size:.71rem;color:var(--text-dim);"><?=htmlspecialchars($t['email'])?></td>
           <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>" style="font-size:.63rem;"><?=$t['plan']?></span></td>
           <td><span class="badge <?=$t['status']==='active'?'b-green':($t['status']==='pending'?'b-yellow':($t['status']==='inactive'?'b-red':'b-gray'))?>" style="font-size:.63rem;"><span class="b-dot"></span><?=ucfirst($t['status'])?></span></td>
-          <td><?= $sub_badge ?></td>
-          <td><?= $expiry_cell ?></td>
-          <td style="text-align:center;"><?=$t['user_count']?></td>
-          <td>
-            <span style="font-size:.7rem;color:var(--text-dim);">—</span>
-          </td>
         </tr>
         <?php endforeach;?></tbody></table></div><?php endif;?>
       </div>
