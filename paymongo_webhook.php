@@ -76,8 +76,8 @@ if ($event_type === 'checkout_session.payment.paid') {
     ];
     $amount_paid = $billing_amounts[$plan][$billing_cycle] ?? ($billing_amounts[$plan]['monthly'] ?? 0);
 
-    if (!$tenant_id || !$user_id) {
-        error_log("[Webhook] Missing tenant_id or user_id in metadata. session_id={$session_id}");
+    if (!$tenant_id) {
+        error_log("[Webhook] Missing tenant_id in metadata. session_id={$session_id}");
         http_response_code(200);
         echo json_encode(['received' => true]);
         exit;
@@ -185,18 +185,15 @@ if ($event_type === 'checkout_session.payment.paid') {
 
             } else {
                 // ── D. INITIAL SIGNUP PAYMENT — AUTO APPROVE ─
-                // Payment confirmed by PayMongo — auto-activate tenant & user
+                // Payment confirmed by PayMongo — auto-activate tenant (and user if exists).
+                // NOTE: For SA-sent payment links, user_id may be 0 (no user account yet).
                 try {
-                    // Fetch tenant + user info for email
+                    // Fetch tenant info
                     $t_row = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
                     $t_row->execute([$tenant_id]);
                     $t_row = $t_row->fetch();
 
-                    $u_row = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
-                    $u_row->execute([$user_id]);
-                    $u_row = $u_row->fetch();
-
-                    if ($t_row && $u_row) {
+                    if ($t_row) {
                         // Generate slug if missing
                         $slug = $t_row['slug'] ?? '';
                         if (empty($slug)) {
@@ -225,8 +222,10 @@ if ($event_type === 'checkout_session.payment.paid') {
                             WHERE id = ?
                         ")->execute([$slug, $tenant_id]);
 
-                        // Activate user
-                        $pdo->prepare("UPDATE users SET status = 'approved', approved_at = NOW() WHERE id = ?")->execute([$user_id]);
+                        // Activate user only if one exists (SA-added tenants may not have a user yet)
+                        if ($user_id) {
+                            $pdo->prepare("UPDATE users SET status = 'approved', approved_at = NOW() WHERE id = ?")->execute([$user_id]);
+                        }
 
                         // Record initial subscription payment
                         $plan_amounts = ['Starter' => 0, 'Pro' => 999, 'Enterprise' => 2499];
@@ -259,7 +258,9 @@ if ($event_type === 'checkout_session.payment.paid') {
                             }
                         }
 
-                        error_log("[Webhook] SIGNUP AUTO-APPROVED: tenant_id={$tenant_id}, plan={$plan}, method={$payment_method}, slug={$slug}");
+                        error_log("[Webhook] SIGNUP AUTO-APPROVED: tenant_id={$tenant_id}, user_id={$user_id}, plan={$plan}, method={$payment_method}, slug={$slug}");
+                    } else {
+                        error_log("[Webhook] Tenant not found for auto-approve: tenant_id={$tenant_id}");
                     }
                 } catch (Throwable $approve_err) {
                     error_log("[Webhook] Auto-approve error for tenant_id={$tenant_id}: " . $approve_err->getMessage());
