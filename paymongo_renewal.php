@@ -163,7 +163,7 @@ $payload = [
                 'name'     => $line_label,
                 'quantity' => 1,
             ]],
-            'payment_method_types' => ['card', 'gcash', 'dob', 'billease'],
+            'payment_method_types' => ['card', 'gcash', 'paymaya', 'dob', 'dob_ubp', 'brankas_atlas', 'billease'],
             'success_url' => PAYMONGO_SUCCESS_URL_RENEWAL . '?tenant=' . $tid . '&user=' . $uid . '&cycle=' . $billing_cycle . '&type=' . $payment_type,
             'cancel_url'  => PAYMONGO_CANCEL_URL_RENEWAL,
             'metadata'    => [

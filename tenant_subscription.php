@@ -726,83 +726,23 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 
       <!-- Payment method tabs -->
       <?php if ($is_paid_plan): ?>
-      <div class="pay-tabs">
-        <button type="button" class="pay-tab active" onclick="switchTab('paymongo')">
-          ⚡ Pay via PayMongo
-        </button>
-        <button type="button" class="pay-tab" onclick="switchTab('manual')">
-          📋 Manual Payment
-        </button>
+      <div class="alert alert-info" style="margin-bottom:18px;">
+        ✅ <strong>Secure payment powered by PayMongo.</strong> Pay instantly via GCash, Maya, Credit/Debit Card, or Online Banking.
+        Your renewal request will be recorded automatically after payment.
       </div>
-
-      <!-- PayMongo Tab -->
-      <div class="pay-panel active" id="panel-paymongo">
-        <div class="alert alert-info" style="margin-bottom:18px;">
-          ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking.
-          Your renewal request will be recorded automatically after payment.
-        </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
-          <p style="font-size:.76rem;color:rgba(255,255,255,.4);line-height:1.8;margin:0;">
-            🔒 <strong style="color:rgba(255,255,255,.6);">Secure payment powered by PayMongo.</strong><br>
-            Accepted: GCash, Credit Card, Debit Card, Online Banking<br>
-            After payment, our admin will approve your renewal within 24 hours.
-          </p>
-        </div>
-        <form method="POST" action="paymongo_renewal.php" id="form-paymongo">
-          <input type="hidden" name="action" value="pay_via_paymongo"/>
-          <input type="hidden" name="billing_cycle" id="pm_billing_cycle" value="monthly"/>
-          <button type="submit" class="btn btn-paymongo">
-            ⚡ Pay Now via PayMongo
-          </button>
-        </form>
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+        <p style="font-size:.76rem;color:rgba(255,255,255,.4);line-height:1.8;margin:0;">
+          🔒 <strong style="color:rgba(255,255,255,.6);">Accepted:</strong> GCash, Maya (PayMaya), Credit Card, Debit Card, Online Banking (BPI, UnionBank &amp; more)<br>
+          After payment, our admin will approve your renewal within 24 hours.
+        </p>
       </div>
-
-      <!-- Manual Tab -->
-      <div class="pay-panel" id="panel-manual">
-      <?php endif; ?>
-
-        <div class="alert alert-info" style="margin-bottom:16px;">
-          📌 <strong>Manual payment:</strong> Send payment to our GCash/bank account, then submit the reference number below.
-          Admin will verify and activate within 24 hours.
-        </div>
-
-        <form method="POST" action="">
-          <input type="hidden" name="action" value="request_renewal_manual"/>
-          <input type="hidden" name="billing_cycle" id="manual_billing_cycle" value="monthly"/>
-
-          <div class="form-group">
-            <label class="flabel">Payment Method</label>
-            <select name="payment_method" class="fselect" required>
-              <option value="">— Select Payment Method —</option>
-              <option value="GCash">GCash</option>
-              <option value="Maya">Maya (PayMaya)</option>
-              <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-              <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-              <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-              <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-              <option value="Cash">Cash (walk-in)</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-            <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
-          </div>
-
-          <div class="form-group">
-            <label class="flabel">Additional Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-            <textarea name="notes" class="finput" rows="3" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-primary">
-            <span class="material-symbols-outlined" style="font-size:17px;">send</span>
-            Submit Renewal Request
-          </button>
-        </form>
-
-      <?php if ($is_paid_plan): ?>
-      </div><!-- /panel-manual -->
+      <form method="POST" action="paymongo_renewal.php" id="form-paymongo">
+        <input type="hidden" name="action" value="pay_via_paymongo"/>
+        <input type="hidden" name="billing_cycle" id="pm_billing_cycle" value="monthly"/>
+        <button type="submit" class="btn btn-paymongo">
+          ⚡ Pay Now via PayMongo
+        </button>
+      </form>
       <?php endif; ?>
 
     </div>
@@ -908,66 +848,20 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         </div>
       </div>
 
-      <!-- Payment method tabs -->
-      <div class="pay-tabs" style="margin-bottom:0;">
-        <button type="button" class="pay-tab active" onclick="switchUpgradeTab('paymongo', this)">⚡ Pay via PayMongo</button>
-        <button type="button" class="pay-tab" onclick="switchUpgradeTab('manual', this)">📋 Manual Payment</button>
+      <!-- PayMongo only for upgrade -->
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        ✅ <strong>Secure payment powered by PayMongo.</strong> Pay instantly via GCash, Maya, Credit/Debit Card, or Online Banking.
+        Your upgrade will be recorded automatically after payment.
       </div>
-
-      <!-- PayMongo Tab -->
-      <div id="upg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
-        <div class="alert alert-info" style="margin-bottom:16px;">
-          ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking. Your upgrade will be recorded automatically after payment.
-        </div>
-        <form method="POST" action="paymongo_renewal.php" id="upgradeFormPM">
-          <input type="hidden" name="action"        value="pay_upgrade_paymongo"/>
-          <input type="hidden" name="upgrade_to"    id="upg_pm_plan"    value=""/>
-          <input type="hidden" name="billing_cycle" id="upg_pm_cycle"   value="monthly"/>
-          <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
-            onclick="return validateUpgradeSelect()">
-            ⚡ Pay Now via PayMongo
-          </button>
-        </form>
-      </div>
-
-      <!-- Manual Tab -->
-      <div id="upg-panel-manual" class="pay-panel" style="padding-top:16px;">
-        <div class="alert alert-info" style="margin-bottom:16px;">
-          📌 <strong>Manual payment:</strong> Send payment to our GCash/bank account, then submit the reference number. Admin will verify and activate within 24 hours.
-        </div>
-        <form method="POST" id="upgradeFormManual">
-          <input type="hidden" name="action"        value="request_upgrade"/>
-          <input type="hidden" name="upgrade_to"    id="upg_mn_plan"  value=""/>
-          <input type="hidden" name="billing_cycle" id="upg_mn_cycle" value="monthly"/>
-          <div class="form-group">
-            <label class="flabel">Payment Method</label>
-            <select name="payment_method" class="fselect" required>
-              <option value="">— Select Payment Method —</option>
-              <option value="GCash">GCash</option>
-              <option value="Maya">Maya (PayMaya)</option>
-              <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-              <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-              <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-              <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-              <option value="Cash">Cash (walk-in)</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="flabel">Payment Reference / Transaction No. <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-            <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
-          </div>
-          <div class="form-group">
-            <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-            <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-          </div>
-          <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg,#7c3aed,#2563eb);width:100%;justify-content:center;font-size:.92rem;padding:14px;"
-            onclick="return validateUpgradeSelect()">
-            <span class="material-symbols-outlined" style="font-size:17px;">rocket_launch</span>
-            <?= $in_7day_window ? 'Schedule Upgrade Request' : 'Submit Upgrade Request' ?>
-          </button>
-        </form>
-      </div>
+      <form method="POST" action="paymongo_renewal.php" id="upgradeFormPM">
+        <input type="hidden" name="action"        value="pay_upgrade_paymongo"/>
+        <input type="hidden" name="upgrade_to"    id="upg_pm_plan"    value=""/>
+        <input type="hidden" name="billing_cycle" id="upg_pm_cycle"   value="monthly"/>
+        <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
+          onclick="return validateUpgradeSelect()">
+          ⚡ <?= $in_7day_window ? 'Schedule & Pay via PayMongo' : 'Pay Now via PayMongo' ?>
+        </button>
+      </form>
     </div>
     <?php elseif ($plan === 'Enterprise'): ?>
     <div class="card" style="text-align:center;padding:28px;">
@@ -1125,73 +1019,23 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         </div>
       </div>
 
-      <!-- Payment tabs — hidden for free/Starter, shown for paid plans -->
+      <!-- PayMongo only for downgrade -->
       <div id="dg-payment-section">
-        <div class="pay-tabs" style="margin-bottom:0;">
-          <button type="button" class="pay-tab active" onclick="switchDgTab('paymongo', this)">⚡ Pay via PayMongo</button>
-          <button type="button" class="pay-tab" onclick="switchDgTab('manual', this)">📋 Manual Payment</button>
+        <div class="alert alert-info" style="margin-bottom:16px;">
+          ✅ <strong>Secure payment powered by PayMongo.</strong> Pay instantly via GCash, Maya, Credit/Debit Card, or Online Banking.
+          <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
+          Your plan will switch after <?= $dg_sub_end_fmt ?>.
+          <?php endif; ?>
         </div>
-
-        <!-- PayMongo Tab -->
-        <div id="dg-panel-paymongo" class="pay-panel active" style="padding-top:16px;">
-          <div class="alert alert-info" style="margin-bottom:16px;">
-            ✅ <strong>Recommended.</strong> Pay instantly via GCash, Credit/Debit Card, or online banking.
-            <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
-            Your plan will switch after <?= $dg_sub_end_fmt ?>.
-            <?php endif; ?>
-          </div>
-          <form method="POST" action="paymongo_renewal.php" id="downgradeFormPM">
-            <input type="hidden" name="action"        value="pay_downgrade_paymongo"/>
-            <input type="hidden" name="downgrade_to"  id="dg_pm_plan"  value=""/>
-            <input type="hidden" name="billing_cycle" id="dg_pm_cycle" value="monthly"/>
-            <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
-              onclick="return validateDgSelect()">
-              <?= $dg_is_scheduled ? '⚡ Schedule & Pay via PayMongo' : '⚡ Pay Now via PayMongo' ?>
-            </button>
-          </form>
-        </div>
-
-        <!-- Manual Tab -->
-        <div id="dg-panel-manual" class="pay-panel" style="padding-top:16px;">
-          <div class="alert alert-info" style="margin-bottom:16px;">
-            📌 <strong>Manual payment:</strong> Send payment to our GCash/bank, then submit the reference. Admin verifies within 24 hours.
-            <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
-            Your plan switches after <?= $dg_sub_end_fmt ?>.
-            <?php endif; ?>
-          </div>
-          <form method="POST" id="downgradeFormManual">
-            <input type="hidden" name="action"        value="request_downgrade"/>
-            <input type="hidden" name="downgrade_to"  id="dg_mn_plan"  value=""/>
-            <input type="hidden" name="billing_cycle" id="dg_mn_cycle" value="monthly"/>
-            <div class="form-group">
-              <label class="flabel">Payment Method</label>
-              <select name="payment_method" id="dg_payment_method" class="fselect">
-                <option value="">— Select Payment Method —</option>
-                <option value="GCash">GCash</option>
-                <option value="Maya">Maya (PayMaya)</option>
-                <option value="Bank Transfer - BDO">Bank Transfer — BDO</option>
-                <option value="Bank Transfer - BPI">Bank Transfer — BPI</option>
-                <option value="Bank Transfer - UnionBank">Bank Transfer — UnionBank</option>
-                <option value="Bank Transfer - Metrobank">Bank Transfer — Metrobank</option>
-                <option value="Cash">Cash (walk-in)</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="flabel">Payment Reference <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-              <input type="text" name="payment_reference" class="finput" placeholder="e.g. GCash ref #1234567890"/>
-            </div>
-            <div class="form-group">
-              <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
-              <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
-            </div>
-            <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
-              onclick="return validateDgSelect() && confirmDowngrade()">
-              <span class="material-symbols-outlined" style="font-size:17px;"><?= $dg_is_scheduled ? 'schedule' : 'arrow_downward' ?></span>
-              <?= $dg_is_scheduled ? 'Schedule Downgrade Request' : 'Submit Downgrade Request' ?>
-            </button>
-          </form>
-        </div>
+        <form method="POST" action="paymongo_renewal.php" id="downgradeFormPM">
+          <input type="hidden" name="action"        value="pay_downgrade_paymongo"/>
+          <input type="hidden" name="downgrade_to"  id="dg_pm_plan"  value=""/>
+          <input type="hidden" name="billing_cycle" id="dg_pm_cycle" value="monthly"/>
+          <button type="submit" class="btn btn-paymongo" style="margin-top:4px;"
+            onclick="return validateDgSelect()">
+            <?= $dg_is_scheduled ? '⚡ Schedule & Pay via PayMongo' : '⚡ Pay Now via PayMongo' ?>
+          </button>
+        </form>
       </div>
 
       <!-- Free/Starter downgrade — no payment needed -->
@@ -1307,18 +1151,11 @@ function updateAmount(cycle) {
 
 function syncBillingCycle(val) {
   const pm = document.getElementById('pm_billing_cycle');
-  const mn = document.getElementById('manual_billing_cycle');
   if (pm) pm.value = val;
-  if (mn) mn.value = val;
   updateAmount(val);
 }
 
-function switchTab(tab) {
-  document.querySelectorAll('.pay-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.pay-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
-  event.currentTarget.classList.add('active');
-}
+// Manual payment tabs removed — PayMongo only
 
 // ── Upgrade helpers ───────────────────────────────────────────
 function syncUpgradePlan(val) {
@@ -1333,12 +1170,7 @@ function syncUpgradeCycle(val) {
     if (el) el.value = val;
   });
 }
-function switchUpgradeTab(tab, btn) {
-  document.querySelectorAll('#upg-panel-paymongo, #upg-panel-manual').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.card .pay-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('upg-panel-' + tab).classList.add('active');
-  btn.classList.add('active');
-}
+// Upgrade manual tab removed — PayMongo only
 function validateUpgradeSelect() {
   const plan = document.getElementById('upgrade_to_shared')?.value;
   if (!plan) { alert('Please select a plan to upgrade to.'); return false; }
@@ -1377,12 +1209,7 @@ function syncDgCycle(val) {
     if (el) el.value = val;
   });
 }
-function switchDgTab(tab, btn) {
-  document.querySelectorAll('#dg-panel-paymongo, #dg-panel-manual').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('#dg-payment-section .pay-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('dg-panel-' + tab).classList.add('active');
-  btn.classList.add('active');
-}
+// Downgrade manual tab removed — PayMongo only
 function validateDgSelect() {
   const plan = document.getElementById('downgrade_to_shared')?.value;
   if (!plan) { alert('Please select a plan to downgrade to.'); return false; }

@@ -46,7 +46,7 @@ $payload = [
                 'name'        => "PawnHub {$plan} Plan — Monthly Subscription",
                 'quantity'    => 1,
             ]],
-            'payment_method_types' => ['card', 'gcash', 'dob', 'billease'],
+            'payment_method_types' => ['card', 'gcash', 'paymaya', 'dob', 'dob_ubp', 'brankas_atlas', 'billease'],
             'success_url' => PAYMONGO_SUCCESS_URL . '?tenant=' . $tenant_id . '&user=' . $user_id,
             'cancel_url'  => PAYMONGO_CANCEL_URL,
             'metadata'    => [
