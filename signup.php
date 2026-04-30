@@ -82,6 +82,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!move_uploaded_file($file_tmp, $upload_path)) {
                     $error = 'Failed to upload file. Please try again.';
                 } else {
+                    // ── OCR: scan business permit for DTI/Mayor's Permit number ──
+                    $ocr_verified = 0;
+                    if (defined('GOOGLE_VISION_API_KEY') && GOOGLE_VISION_API_KEY) {
+                        $img_data    = base64_encode(file_get_contents($upload_path));
+                        $ocr_payload = json_encode(['requests' => [['image' => ['content' => $img_data], 'features' => [['type' => 'DOCUMENT_TEXT_DETECTION', 'maxResults' => 1]]]]]);
+                        $ch = curl_init('https://vision.googleapis.com/v1/images:annotate?key=' . urlencode(GOOGLE_VISION_API_KEY));
+                        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_POSTFIELDS => $ocr_payload, CURLOPT_TIMEOUT => 20]);
+                        $ocr_raw  = curl_exec($ch);
+                        curl_close($ch);
+                        $ocr_res  = json_decode($ocr_raw, true);
+                        $ocr_text = $ocr_res['responses'][0]['fullTextAnnotation']['text']
+                                 ?? $ocr_res['responses'][0]['textAnnotations'][0]['description']
+                                 ?? '';
+                        if ($ocr_text) {
+                            $ph_patterns = [
+                                '/DTI[\s\-#:]*[\d\-]{5,}/i',
+                                '/SEC[\s\-#:]*[\d\-]{5,}/i',
+                                '/CDA[\s\-#:]*[\d\-]{5,}/i',
+                                '/(?:MAYOR.{0,3}PERMIT|BUSINESS\s*PERMIT)\s*(?:NO|NUMBER|#)?[\s.:]*[\w\-]{4,}/i',
+                                '/PERMIT\s*(?:NO|NUMBER|#)[\s.:]*[\w\-]{4,}/i',
+                                '/LICENSE\s*(?:NO|NUMBER|#)[\s.:]*[\w\-]{4,}/i',
+                                '/REGISTRATION\s*(?:NO|NUMBER|#)[\s.:]*[\w\-]{4,}/i',
+                                '/CERTIFICATE\s+OF\s+REGISTRATION/i',
+                                '/BIR.*\d{3,}/i',
+                            ];
+                            foreach ($ph_patterns as $pat) {
+                                if (preg_match($pat, $ocr_text)) { $ocr_verified = 1; break; }
+                            }
+                        }
+                        error_log("[Signup OCR] {$biz_name}: verified={$ocr_verified}");
+                    }
+
                     // Starter is free — use 'free' so the ENUM doesn't truncate.
                     // Pro / Enterprise start as 'unpaid' until the PayMongo webhook sets 'paid'.
                     $payment_status = 'pending'; // ENUM: pending|paid|failed|free — webhook sets 'paid' after PayMongo confirms
@@ -90,6 +122,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
                             ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $payment_status, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
+                        // Save OCR verification result (non-fatal if column doesn't exist yet)
+                        try {
+                            $pdo->prepare("UPDATE tenants SET ocr_verified = ? WHERE id = ?")->execute([$ocr_verified, $new_tid]);
+                        } catch (PDOException $e) { /* column may not exist yet — run: ALTER TABLE tenants ADD COLUMN ocr_verified TINYINT(1) DEFAULT 0; */ }
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                             ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
                         $new_uid = $pdo->lastInsertId();

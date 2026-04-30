@@ -10,8 +10,8 @@
  *   • 'renewal'          → Subscription renewal payment
  *
  * ⚠️  IMPORTANT FLOW:
- *     For SIGNUP:  sets payment_status='paid' on tenants row.
- *                  SA still approves to activate.
+ *     For SIGNUP:  AUTO-APPROVES tenant immediately after payment.
+ *                  Activates tenant + user, sends login email automatically.
  *     For RENEWAL: inserts subscription_renewals row (status='pending')
  *                  + sets payment_status='paid'.
  *                  SA still approves in Subscriptions page to extend.
@@ -184,9 +184,86 @@ if ($event_type === 'checkout_session.payment.paid') {
                 error_log("[Webhook] RENEWAL payment recorded for tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
 
             } else {
-                // ── D. INITIAL SIGNUP PAYMENT ─────────────────
-                // No subscription_renewals row — just mark paid, SA reviews permit + payment
-                error_log("[Webhook] SIGNUP payment recorded for tenant_id={$tenant_id}, plan={$plan}, method={$payment_method}. Awaiting SA approval.");
+                // ── D. INITIAL SIGNUP PAYMENT — AUTO APPROVE ─
+                // Payment confirmed by PayMongo — auto-activate tenant & user
+                try {
+                    // Fetch tenant + user info for email
+                    $t_row = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+                    $t_row->execute([$tenant_id]);
+                    $t_row = $t_row->fetch();
+
+                    $u_row = $pdo->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
+                    $u_row->execute([$user_id]);
+                    $u_row = $u_row->fetch();
+
+                    if ($t_row && $u_row) {
+                        // Generate slug if missing
+                        $slug = $t_row['slug'] ?? '';
+                        if (empty($slug)) {
+                            $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $t_row['business_name']));
+                            $slug = $base_slug;
+                            $ctr  = 1;
+                            while (true) {
+                                $chk = $pdo->prepare("SELECT id FROM tenants WHERE slug = ? AND id != ?");
+                                $chk->execute([$slug, $tenant_id]);
+                                if (!$chk->fetch()) break;
+                                $slug = $base_slug . $ctr++;
+                            }
+                        }
+
+                        // Activate tenant
+                        $pdo->prepare("
+                            UPDATE tenants SET
+                                status              = 'active',
+                                slug                = ?,
+                                subscription_start  = CURDATE(),
+                                subscription_end    = DATE_ADD(CURDATE(), INTERVAL 1 MONTH),
+                                subscription_status = 'active',
+                                renewal_reminded_7d = 0,
+                                renewal_reminded_3d = 0,
+                                renewal_reminded_1d = 0
+                            WHERE id = ?
+                        ")->execute([$slug, $tenant_id]);
+
+                        // Activate user
+                        $pdo->prepare("UPDATE users SET status = 'approved', approved_at = NOW() WHERE id = ?")->execute([$user_id]);
+
+                        // Record initial subscription payment
+                        $plan_amounts = ['Starter' => 0, 'Pro' => 999, 'Enterprise' => 2499];
+                        $sub_amount   = $plan_amounts[$plan] ?? 0;
+                        if ($sub_amount > 0) {
+                            try {
+                                $pdo->prepare("
+                                    INSERT INTO subscription_renewals
+                                        (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at, reviewed_at, new_subscription_end)
+                                    VALUES (?, ?, 'monthly', ?, ?, ?, 'approved', NOW(), NOW(), DATE_ADD(CURDATE(), INTERVAL 1 MONTH))
+                                ")->execute([$tenant_id, $plan, 'PayMongo — ' . $payment_method, $session_id, $sub_amount]);
+                            } catch (PDOException $e) {}
+                        }
+
+                        // Send login credentials email
+                        if (!empty($t_row['email']) && !empty($slug)) {
+                            try {
+                                require_once __DIR__ . '/mailer.php';
+                                // Check for SA-invited tenant (has invitation token)
+                                $inv = $pdo->prepare("SELECT token FROM tenant_invitations WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1");
+                                $inv->execute([$tenant_id]);
+                                $inv_row = $inv->fetch();
+                                if ($inv_row) {
+                                    sendTenantInvitation($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $inv_row['token'], $slug);
+                                } else {
+                                    sendTenantApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $slug);
+                                }
+                            } catch (Throwable $mail_err) {
+                                error_log("[Webhook] Auto-approve email error: " . $mail_err->getMessage());
+                            }
+                        }
+
+                        error_log("[Webhook] SIGNUP AUTO-APPROVED: tenant_id={$tenant_id}, plan={$plan}, method={$payment_method}, slug={$slug}");
+                    }
+                } catch (Throwable $approve_err) {
+                    error_log("[Webhook] Auto-approve error for tenant_id={$tenant_id}: " . $approve_err->getMessage());
+                }
             }
         }
 
