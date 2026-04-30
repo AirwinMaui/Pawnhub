@@ -308,6 +308,11 @@ input, select, textarea { font-size: max(16px, 1rem) !important; }
 /* Smooth scrolling on mobile */
 html { scroll-behavior: smooth; }
 
+/* OCR spinner */
+@keyframes ocrSpin {
+  to { transform: rotate(360deg); }
+}
+
 /* Form mobile fixes */
 @media (max-width: 480px) {
     .panel, .card { 
@@ -449,6 +454,10 @@ html { scroll-behavior: smooth; }
               <p id="permitFileName" style="font-size:0.82rem;font-weight:700;color:#86efac;"></p>
               <p style="font-size:0.7rem;color:rgba(255,255,255,0.35);margin-top:2px;">Click to change file</p>
             </div>
+          </div>
+          <!-- OCR Status Banner (hidden until file selected) -->
+          <div id="ocrBanner" style="display:none;align-items:flex-start;gap:8px;margin-top:10px;padding:10px 14px;border-radius:10px;border:1px solid;font-size:0.78rem;line-height:1.5;transition:all 0.3s;">
+            <span id="ocrStatus"></span>
           </div>
           <p style="font-size:0.71rem;color:rgba(255,255,255,0.3);margin-top:6px;">📌 This will be reviewed by the Super Admin before your account is approved.</p>
         </div>
@@ -625,13 +634,98 @@ function selectPlan(name) {
   if (btn) btn.textContent = isPaid ? 'Continue to Payment →' : 'Submit Application →';
 }
 
-// ── Business Permit File Handling ─────────────────────────────
+// ── Business Permit File Handling + OCR Auto-fill ─────────────
 function handlePermitFile(input) {
   const file = input.files[0];
   if (!file) return;
+
+  // Show file name preview
   document.getElementById('permitPlaceholder').style.display = 'none';
   document.getElementById('permitFileName').textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
   document.getElementById('permitPreview').style.display = 'block';
+
+  // Show OCR loading banner
+  const ocrBanner = document.getElementById('ocrBanner');
+  const ocrStatus = document.getElementById('ocrStatus');
+  ocrBanner.style.display = 'flex';
+  ocrBanner.style.background = 'rgba(59,130,246,0.12)';
+  ocrBanner.style.borderColor = 'rgba(59,130,246,0.35)';
+  ocrStatus.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(147,197,253,0.4);border-top-color:#93c5fd;border-radius:50%;animation:ocrSpin 0.7s linear infinite;margin-right:8px;vertical-align:middle;"></span>Reading your permit...';
+  ocrStatus.style.color = '#93c5fd';
+
+  // Send file to ocr_public.php via AJAX
+  const formData = new FormData();
+  formData.append('permit', file);
+
+  fetch('ocr_public.php', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.fields) {
+        const f = data.fields;
+        let filled = [];
+
+        // Auto-fill Business Name (only if empty)
+        if (f.business_name) {
+          const bizInput = document.querySelector('input[name="business_name"]');
+          if (bizInput && !bizInput.value.trim()) {
+            bizInput.value = f.business_name;
+            flashField(bizInput);
+            filled.push('Business Name');
+          }
+        }
+
+        // Auto-fill Full Name / Owner Name (only if empty)
+        if (f.owner_name) {
+          const nameInput = document.querySelector('input[name="fullname"]');
+          if (nameInput && !nameInput.value.trim()) {
+            nameInput.value = f.owner_name;
+            flashField(nameInput);
+            filled.push('Full Name');
+          }
+        }
+
+        // Auto-fill Address (only if empty)
+        if (f.address) {
+          const addrInput = document.querySelector('input[name="address"]');
+          if (addrInput && !addrInput.value.trim()) {
+            addrInput.value = f.address;
+            flashField(addrInput);
+            filled.push('Address');
+          }
+        }
+
+        if (filled.length > 0) {
+          ocrBanner.style.background = 'rgba(34,197,94,0.1)';
+          ocrBanner.style.borderColor = 'rgba(34,197,94,0.3)';
+          ocrStatus.innerHTML = '✅ Auto-filled from permit: <strong style="color:#86efac;">' + filled.join(', ') + '</strong> — please review and correct if needed.';
+          ocrStatus.style.color = '#86efac';
+        } else {
+          ocrBanner.style.background = 'rgba(234,179,8,0.1)';
+          ocrBanner.style.borderColor = 'rgba(234,179,8,0.3)';
+          ocrStatus.innerHTML = '⚠️ Permit scanned but fields were already filled. Please verify the information below.';
+          ocrStatus.style.color = '#fde047';
+        }
+      } else {
+        ocrBanner.style.background = 'rgba(234,179,8,0.1)';
+        ocrBanner.style.borderColor = 'rgba(234,179,8,0.3)';
+        ocrStatus.innerHTML = '⚠️ Could not read permit automatically — please fill in the fields manually.';
+        ocrStatus.style.color = '#fde047';
+      }
+    })
+    .catch(() => {
+      ocrBanner.style.display = 'none';
+    });
+}
+
+// Flash a field green briefly to show it was auto-filled
+function flashField(el) {
+  el.style.transition = 'border-color 0.3s, box-shadow 0.3s';
+  el.style.borderColor = 'rgba(34,197,94,0.8)';
+  el.style.boxShadow   = '0 0 0 3px rgba(34,197,94,0.2)';
+  setTimeout(() => {
+    el.style.borderColor = '';
+    el.style.boxShadow   = '';
+  }, 2500);
 }
 
 // Drag & drop
