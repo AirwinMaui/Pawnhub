@@ -944,3 +944,116 @@ function sendSuperAdminPasswordReset(string $toEmail, string $toName, string $us
 
     return sendMail($toEmail, $toName, '🔑 PawnHub — Super Admin Password Reset', $html);
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// sendPaymentLink — SA-initiated: sends PayMongo checkout link + QR to tenant
+// ────────────────────────────────────────────────────────────────────────────
+function sendPaymentLink(
+    string  $toEmail,
+    string  $toName,
+    string  $businessName,
+    string  $plan,
+    string  $checkoutUrl,
+    ?string $qrDataUri,
+    float   $amountPesos
+): bool {
+    $amount_fmt = '₱' . number_format($amountPesos, 2);
+    $plan_label = htmlspecialchars($plan);
+
+    // QR code block — embedded inline if we have the data URI, else show link only
+    $qr_block = $qrDataUri
+        ? '<div style="text-align:center;margin:24px 0 8px;">
+             <img src="' . $qrDataUri . '" alt="Payment QR Code"
+                  style="width:220px;height:220px;border:4px solid #e2e8f0;border-radius:12px;"/>
+             <p style="color:#64748b;font-size:.78rem;margin:6px 0 0;">
+               Scan this QR code with GCash, Maya, or your banking app to pay
+             </p>
+           </div>'
+        : '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin:20px 0;text-align:center;">
+             <p style="color:#1d4ed8;font-size:.85rem;margin:0;">
+               ⚠️ QR code unavailable — please use the button below to pay online.
+             </p>
+           </div>';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:580px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Multi-Tenant Pawnshop Management</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px;">
+        <h2 style="font-size:1.2rem;font-weight:800;color:#0f172a;margin:0 0 8px;">
+          Complete Your Subscription Payment 💳
+        </h2>
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
+          Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
+          Your PawnHub account for <strong>' . htmlspecialchars($businessName) . '</strong>
+          is ready! Please complete your <strong>' . $plan_label . ' Plan</strong> subscription payment
+          to activate your account.
+        </p>
+
+        <!-- Amount card -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:18px 22px;margin-bottom:20px;text-align:center;">
+          <p style="color:#64748b;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px;">Amount Due</p>
+          <p style="color:#0f172a;font-size:2rem;font-weight:900;margin:0;">' . $amount_fmt . '</p>
+          <p style="color:#94a3b8;font-size:.78rem;margin:4px 0 0;">' . $plan_label . ' Plan — Monthly Subscription</p>
+        </div>
+
+        <!-- QR code -->
+        ' . $qr_block . '
+
+        <!-- Payment button -->
+        <div style="text-align:center;margin:24px 0;">
+          <a href="' . htmlspecialchars($checkoutUrl) . '"
+             style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;
+                    text-decoration:none;padding:16px 40px;border-radius:10px;font-size:1rem;
+                    font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.35);">
+            Pay Now via PayMongo →
+          </a>
+        </div>
+
+        <!-- Accepted methods -->
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+          <p style="color:#166534;font-size:.82rem;margin:0;line-height:1.8;">
+            ✅ <strong>Accepted payment methods:</strong><br>
+            GCash &nbsp;·&nbsp; Maya (PayMaya) &nbsp;·&nbsp; Credit / Debit Card &nbsp;·&nbsp; Online Banking (BPI &amp; more) &nbsp;·&nbsp; Billease
+          </p>
+        </div>
+
+        <!-- Steps -->
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+          <p style="color:#1d4ed8;font-size:.82rem;margin:0;line-height:1.9;">
+            <strong>What happens after payment?</strong><br>
+            1️⃣ &nbsp;Payment is confirmed automatically<br>
+            2️⃣ &nbsp;Our admin reviews and approves your account (within 24 hours)<br>
+            3️⃣ &nbsp;You receive your login credentials by email ✅
+          </p>
+        </div>
+
+        <!-- Link fallback -->
+        <p style="color:#94a3b8;font-size:.75rem;word-break:break-all;">
+          Or copy this payment link:<br>
+          <a href="' . htmlspecialchars($checkoutUrl) . '" style="color:#2563eb;">'
+          . htmlspecialchars($checkoutUrl) . '</a>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, "PawnHub — Complete Your {$plan} Plan Payment", $html);
+}
