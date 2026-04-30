@@ -38,8 +38,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $chk_u->execute([$email]);
             $chk_t = $pdo->prepare("SELECT id FROM tenants WHERE email=? LIMIT 1");
             $chk_t->execute([$email]);
+            // Check duplicate business name (case-insensitive)
+            $chk_biz = $pdo->prepare("SELECT id FROM tenants WHERE LOWER(business_name)=LOWER(?) LIMIT 1");
+            $chk_biz->execute([$bname]);
             if ($chk_u->fetch() || $chk_t->fetch()) {
                 $error_msg = 'This email is already registered. Each tenant must use a unique email address.';
+            } elseif ($chk_biz->fetch()) {
+                $error_msg = 'A business with that name is already registered. Please use a different business name.';
             } else {
                 try {
                     $pdo->beginTransaction();

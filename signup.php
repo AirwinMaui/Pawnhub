@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($file_size > 5 * 1024 * 1024) {
             $error = 'Business permit file must be less than 5MB.';
         } else {
-            // Check duplicate username in users table
+            // Check duplicate username
             $chk_user = $pdo->prepare("SELECT id FROM users WHERE username=? LIMIT 1");
             $chk_user->execute([$username]);
             // Check duplicate email in BOTH users AND tenants tables
@@ -75,11 +75,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $chk_email_u->execute([$email]);
             $chk_email_t = $pdo->prepare("SELECT id FROM tenants WHERE email=? LIMIT 1");
             $chk_email_t->execute([$email]);
+            // Check duplicate business name (case-insensitive)
+            $chk_biz = $pdo->prepare("SELECT id FROM tenants WHERE LOWER(business_name)=LOWER(?) LIMIT 1");
+            $chk_biz->execute([$biz_name]);
 
             if ($chk_user->fetch()) {
                 $error = 'Username is already taken. Please choose another.';
             } elseif ($chk_email_u->fetch() || $chk_email_t->fetch()) {
                 $error = 'This email address is already registered. Please use a different email or contact support.';
+            } elseif ($chk_biz->fetch()) {
+                $error = 'A business with that name is already registered. Please use a different business name or contact support.';
             } else {
                 $upload_dir = __DIR__ . '/uploads/permits/';
                 if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
