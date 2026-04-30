@@ -55,6 +55,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
                     $pdo->prepare("UPDATE tenants SET slug = ? WHERE id = ?")->execute([$slug, $new_tid]);
 
+                    // ── Business Permit Upload (optional) ─────────
+                    if (!empty($_FILES['business_permit']['tmp_name'])) {
+                        $allowed_types = ['image/png', 'image/jpeg', 'application/pdf'];
+                        $file_type     = mime_content_type($_FILES['business_permit']['tmp_name']);
+                        $file_size     = $_FILES['business_permit']['size'];
+                        if (in_array($file_type, $allowed_types) && $file_size <= 5 * 1024 * 1024) {
+                            $ext         = ($file_type === 'application/pdf') ? 'pdf' : (($file_type === 'image/png') ? 'png' : 'jpg');
+                            $upload_dir  = __DIR__ . '/uploads/permits/';
+                            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+                            $filename    = 'permit_' . $new_tid . '_' . time() . '.' . $ext;
+                            $dest        = $upload_dir . $filename;
+                            if (move_uploaded_file($_FILES['business_permit']['tmp_name'], $dest)) {
+                                $permit_url = 'uploads/permits/' . $filename;
+                                $pdo->prepare("UPDATE tenants SET business_permit_url = ? WHERE id = ?")
+                                    ->execute([$permit_url, $new_tid]);
+                            }
+                        }
+                    }
+
                     $token      = bin2hex(random_bytes(32));
                     $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
                     $pdo->prepare("INSERT INTO tenant_invitations (tenant_id,email,owner_name,token,status,expires_at,created_by) VALUES (?,?,?,?,'pending',?,?)")
@@ -2349,9 +2368,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     </div>
     <div class="mbody">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#15803d;margin-bottom:16px;line-height:1.8;">📧 <strong>Flow:</strong> Fill form → Token generated → Email sent to owner → Owner clicks link → Owner sets username & password → Owner accesses system ✅</div>
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="action" value="add_tenant">
-
 
         <div style="font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;display:block;">Business Information</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
@@ -2362,6 +2380,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <div><label class="flabel">Address</label><input type="text" name="address" class="finput" placeholder="Street, City, Province"></div>
           <div style="grid-column:1/-1;"><label class="flabel">Plan *</label><select name="plan" class="finput"><option value="Starter">Starter — Free</option><option value="Pro">Pro — ₱999/mo</option><option value="Enterprise">Enterprise — ₱2,499/mo</option></select></div>
           <input type="hidden" name="branches" value="1">
+          <div style="grid-column:1/-1;">
+            <label class="flabel">Business Permit <span style="font-weight:400;color:var(--text-dim);">(PNG, JPG, or PDF — optional)</span></label>
+            <input type="file" name="business_permit" id="business_permit_file" accept="image/png,image/jpeg,.pdf"
+              class="finput" style="padding:7px 10px;cursor:pointer;"
+              onchange="updatePermitLabel(this)">
+            <div id="permit_file_label" style="font-size:.72rem;color:var(--text-dim);margin-top:4px;"></div>
+          </div>
         </div>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:.77rem;color:#1d4ed8;margin-bottom:14px;">ℹ️ No password needed — the owner will set their own via the invitation link sent to their Gmail.</div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
@@ -2705,6 +2730,17 @@ document.getElementById('logoutModal').addEventListener('click', function(e){ if
 function toggleSidebar(){
   document.querySelector('.sidebar').classList.toggle('mobile-open');
   document.getElementById('mobOverlay').classList.toggle('open');
+}
+function updatePermitLabel(input) {
+  const lbl = document.getElementById('permit_file_label');
+  if (input.files && input.files[0]) {
+    const f = input.files[0];
+    const kb = (f.size / 1024).toFixed(1);
+    lbl.textContent = '📎 ' + f.name + ' (' + kb + ' KB)';
+    lbl.style.color = '#15803d';
+  } else {
+    lbl.textContent = '';
+  }
 }
 </script>
 
