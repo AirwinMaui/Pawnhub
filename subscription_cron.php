@@ -190,7 +190,8 @@ foreach ($auto_deactivate_tenants as $tenant) {
                 $tenant['owner_name'],
                 $tenant['business_name'],
                 $tenant['plan'],
-                $tenant['slug']
+                $tenant['slug'],
+                (int)$tenant['id']
             );
         } else {
             $sent = false;

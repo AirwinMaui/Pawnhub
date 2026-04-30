@@ -23,7 +23,7 @@ if (!file_exists($_autoload)) {
         function sendSubscriptionExpired(): bool          { return false; }
         function sendSubscriptionRenewed(): bool          { return false; }
         function sendRenewalRequestReceived(): bool       { return false; }
-        function sendSubscriptionAutoDeactivated(): bool  { return false; }
+        function sendSubscriptionAutoDeactivated(string $toEmail='', string $toName='', string $businessName='', string $plan='', string $slug='', int $tenantId=0): bool  { return false; }
         function sendSuperAdminAccountReady(): bool       { return false; }
     }
     return;
@@ -955,13 +955,52 @@ function sendSubscriptionAutoDeactivated(
     string $toName,
     string $businessName,
     string $plan,
-    string $slug
+    string $slug,
+    int    $tenantId = 0
 ): bool {
-    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $loginLink       = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $reactivateBase  = APP_URL . '/paymongo_reactivate.php?tenant=' . $tenantId;
+
+    // ── Plan cards with direct PayMongo reactivation links ───────────────────
+    $plans = [
+        'Starter'    => ['price' => 'Free',      'centavos' => 0,      'color' => '#0f172a', 'bg' => '#f8fafc', 'border' => '#e2e8f0', 'badge_bg' => '#e2e8f0',    'badge_color' => '#334155', 'features' => 'Basic features · Up to 1 branch'],
+        'Pro'        => ['price' => '₱999/mo',   'centavos' => 99900,  'color' => '#1d4ed8', 'bg' => '#eff6ff', 'border' => '#bfdbfe', 'badge_bg' => '#dbeafe',    'badge_color' => '#1e40af', 'features' => 'Full features · Up to 3 branches'],
+        'Enterprise' => ['price' => '₱2,499/mo', 'centavos' => 249900, 'color' => '#6d28d9', 'bg' => '#f5f3ff', 'border' => '#ddd6fe', 'badge_bg' => '#ede9fe',    'badge_color' => '#5b21b6', 'features' => 'Unlimited branches · Priority support'],
+    ];
+
+    $plan_cards = '';
+    foreach ($plans as $plan_name => $p) {
+        $is_current  = ($plan_name === $plan);
+        $current_tag = $is_current ? '<span style="display:inline-block;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:700;color:#713f12;margin-left:6px;">Current Plan</span>' : '';
+        $link_url    = $plan_name === 'Starter'
+            ? $reactivateBase . '&plan=Starter'
+            : $reactivateBase . '&plan=' . urlencode($plan_name);
+
+        $btn_style = $plan_name === 'Starter'
+            ? 'background:#334155;color:#fff;'
+            : ($plan_name === 'Enterprise'
+                ? 'background:linear-gradient(135deg,#4c1d95,#6d28d9);color:#fff;'
+                : 'background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;');
+
+        $plan_cards .= '
+        <div style="background:' . $p['bg'] . ';border:2px solid ' . ($is_current ? $p['color'] : $p['border']) . ';border-radius:12px;padding:16px 18px;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div>
+              <span style="font-size:.95rem;font-weight:800;color:' . $p['color'] . ';">' . $plan_name . ' Plan</span>' . $current_tag . '
+              <p style="color:#64748b;font-size:.78rem;margin:3px 0 0;">' . $p['features'] . '</p>
+            </div>
+            <span style="background:' . $p['badge_bg'] . ';color:' . $p['badge_color'] . ';border-radius:8px;padding:4px 12px;font-size:.85rem;font-weight:800;">' . $p['price'] . '</span>
+          </div>
+          <a href="' . $link_url . '"
+             style="display:block;text-align:center;' . $btn_style . 'text-decoration:none;padding:10px;border-radius:8px;font-size:.84rem;font-weight:700;">
+            ' . ($plan_name === 'Starter' ? 'Reactivate Free →' : 'Pay &amp; Reactivate →') . '
+          </a>
+        </div>';
+    }
 
     $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
     <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
-    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+    <div style="max-width:580px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
 
       <!-- Header -->
       <div style="background:linear-gradient(135deg,#450a0a,#7f1d1d);padding:32px 36px;text-align:center;">
@@ -987,31 +1026,23 @@ function sendSubscriptionAutoDeactivated(
           <strong style="color:#dc2626;">automatically deactivated</strong> because your subscription
           expired more than 7 days ago and was not renewed.<br><br>
           All staff and cashier accounts under your branch have also been suspended.
-          Please renew your subscription to restore full access.
+          Choose a plan below to reactivate your account immediately.
         </p>
 
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
-          <p style="color:#334155;font-size:.85rem;font-weight:700;margin:0 0 10px;">📋 How to Reactivate Your Account:</p>
-          <ol style="color:#475569;font-size:.84rem;line-height:1.9;margin:0;padding-left:18px;">
-            <li>Sign in to your dashboard</li>
-            <li>Click <strong>Subscription</strong> in the sidebar</li>
-            <li>Click <strong>Request Renewal</strong></li>
-            <li>Fill in your payment details and submit</li>
-            <li>Wait for Super Admin confirmation <em>(usually within 24 hours)</em></li>
-          </ol>
+        <!-- Plan Selection -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+          <p style="color:#334155;font-size:.85rem;font-weight:700;margin:0 0 14px;">🔄 Choose a Plan to Reactivate:</p>
+          ' . $plan_cards . '
+          <p style="color:#94a3b8;font-size:.76rem;margin:8px 0 0;text-align:center;">
+            Not sure? <a href="' . $reactivateBase . '" style="color:#2563eb;">View all plan details →</a>
+          </p>
         </div>
 
         <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:24px;">
           <p style="color:#991b1b;font-size:.82rem;margin:0;line-height:1.6;">
             ⚠️ <strong>Your data is safe.</strong> All your records and transaction history are preserved.
-            Renewing your subscription will immediately restore access to your account.
+            Reactivating your account will immediately restore access for you and your staff.
           </p>
-        </div>
-
-        <div style="text-align:center;margin:28px 0;">
-          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(220,38,38,.3);">
-            Renew My Subscription →
-          </a>
         </div>
 
         <p style="color:#94a3b8;font-size:.76rem;text-align:center;">
