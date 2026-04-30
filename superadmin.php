@@ -1598,10 +1598,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
               <?php foreach ($all_tenants_sub as $ts):
                 $dl = $ts['days_left'];
                 $ss_status = $ts['subscription_status'];
-                if ($ts['subscription_end'] && strtotime($ts['subscription_end']) < strtotime('today')) {
+                if ($ts['status'] === 'inactive') {
+                    $ss_status = 'deactivated';
+                } elseif ($ts['subscription_end'] && strtotime($ts['subscription_end']) < strtotime('today')) {
                     $ss_status = 'expired';
                 }
                 $sc = match(true) {
+                    $ss_status === 'deactivated'    => ['Deactivated',   '#7c3aed','#f3e8ff','#d8b4fe'],
                     $ss_status === 'expired'        => ['Expired',       '#dc2626','#fee2e2','#fecaca'],
                     $ss_status === 'expiring_soon'  => ['Expiring Soon', '#d97706','#fef3c7','#fde68a'],
                     $dl !== null && $dl <= 7        => ['Expiring Soon', '#d97706','#fef3c7','#fde68a'],
@@ -1659,7 +1662,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <table>
             <thead>
               <tr>
-                <?php foreach (['Business','Plan','Billing','Method','Ref #','Amount','Status','Requested','Reviewed'] as $th): ?>
+                <?php foreach (['Business','Plan','Type','Billing','Method','Ref #','Amount','Status','Requested','Reviewed'] as $th): ?>
                 <th><?= $th ?></th>
                 <?php endforeach; ?>
               </tr>
@@ -1669,10 +1672,24 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 $rc = match($r['status']) {
                   'approved' => ['#15803d','#f0fdf4'], 'rejected' => ['#dc2626','#fee2e2'], default => ['#d97706','#fef3c7']
                 };
+                // Determine type label from notes or upgrade columns
+                $r_type = '—';
+                if (!empty($r['is_upgrade']) && ($r['upgrade_from'] ?? '') < ($r['upgrade_to'] ?? '')) {
+                    $r_type = '⬆️ Upgrade';
+                } elseif (!empty($r['upgrade_from']) && !empty($r['upgrade_to']) && $r['upgrade_from'] !== $r['upgrade_to']) {
+                    $r_type = '⬇️ Downgrade';
+                } elseif (stripos($r['notes'] ?? '', 'reactivation') !== false || stripos($r['notes'] ?? '', 'reactivated') !== false) {
+                    $r_type = '🔄 Reactivation';
+                } elseif (stripos($r['payment_reference'] ?? '', 'starter-free') !== false) {
+                    $r_type = '🆓 Free Starter';
+                } else {
+                    $r_type = '🔁 Renewal';
+                }
               ?>
               <tr>
                 <td style="font-weight:600;"><?= htmlspecialchars($r['business_name']) ?></td>
                 <td><?= htmlspecialchars($r['plan']) ?></td>
+                <td style="font-size:.75rem;"><?= $r_type ?></td>
                 <td><?= ucfirst($r['billing_cycle']) ?></td>
                 <td style="color:var(--text-dim);"><?= htmlspecialchars($r['payment_method']?:'—') ?></td>
                 <td style="font-size:.75rem;color:var(--text-dim);"><?= htmlspecialchars($r['payment_reference']?:'—') ?></td>

@@ -32,7 +32,7 @@ if (!$tid || !$uid) {
 }
 
 // ── Validate POST ──────────────────────────────────────────────
-$allowed_actions = ['pay_via_paymongo', 'pay_upgrade_paymongo', 'pay_downgrade_paymongo'];
+$allowed_actions = ['pay_via_paymongo', 'pay_upgrade_paymongo', 'pay_downgrade_paymongo', 'pay_reactivation_paymongo'];
 $action = $_POST['action'] ?? '';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !in_array($action, $allowed_actions)) {
     header('Location: tenant_subscription.php'); exit;
@@ -47,8 +47,16 @@ $stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
 $stmt->execute([$tid]);
 $tenant = $stmt->fetch();
 
-if (!$tenant || $tenant['status'] !== 'active') {
-    die('Tenant account not found or inactive.');
+if (!$tenant) {
+    die('Tenant account not found.');
+}
+
+// Determine if this is a reactivation (deactivated/expired tenant paying again)
+$is_reactivation = ($tenant['status'] === 'inactive' || $tenant['subscription_status'] === 'expired');
+
+// Allow inactive tenants to reactivate — only block truly deleted/unknown
+if (!in_array($tenant['status'], ['active', 'inactive'])) {
+    die('Tenant account is not eligible for payment.');
 }
 
 $current_plan = $tenant['plan'];
@@ -63,7 +71,15 @@ $line_label   = '';
 
 $plan_hierarchy = ['Starter' => 0, 'Pro' => 1, 'Enterprise' => 2];
 
-if ($action === 'pay_upgrade_paymongo') {
+// Force reactivation type if tenant is inactive/expired
+if ($is_reactivation || $action === 'pay_reactivation_paymongo') {
+    $reactivate_plan = trim($_POST['reactivate_plan'] ?? $current_plan);
+    if (!isset($plan_hierarchy[$reactivate_plan])) $reactivate_plan = $current_plan;
+    $target_plan  = $reactivate_plan;
+    $payment_type = 'reactivation';
+    $line_label   = "PawnHub {$target_plan} Plan — Account Reactivation";
+
+} elseif ($action === 'pay_upgrade_paymongo') {
     $upgrade_to = trim($_POST['upgrade_to'] ?? '');
     if (!isset($plan_hierarchy[$upgrade_to]) || $plan_hierarchy[$upgrade_to] <= ($plan_hierarchy[$current_plan] ?? 0)) {
         header('Location: tenant_subscription.php?error=invalid_upgrade'); exit;
@@ -102,21 +118,24 @@ if ($action === 'pay_upgrade_paymongo') {
     $line_label   = '';
 }
 
-// ── Check for existing pending renewal ───────────────────────
-$pending_chk = $pdo->prepare("
-    SELECT id FROM subscription_renewals
-    WHERE tenant_id = ? AND status = 'pending'
-    LIMIT 1
-");
-$pending_chk->execute([$tid]);
-if ($pending_chk->fetch()) {
-    header('Location: tenant_subscription.php?error=already_pending'); exit;
+// ── Check for existing pending renewal (skip for reactivations) ───────────────────────────
+if ($payment_type !== 'reactivation') {
+    $pending_chk = $pdo->prepare("
+        SELECT id FROM subscription_renewals
+        WHERE tenant_id = ? AND status = 'pending'
+        LIMIT 1
+    ");
+    $pending_chk->execute([$tid]);
+    if ($pending_chk->fetch()) {
+        header('Location: tenant_subscription.php?error=already_pending'); exit;
+    }
 }
 
 // ── Plan pricing (in centavos) ────────────────────────────────
 $billing_amounts_centavos = [
     'Pro'        => ['monthly' => 99900,   'quarterly' => 269700,  'annually' => 958800],
     'Enterprise' => ['monthly' => 249900,  'quarterly' => 674700,  'annually' => 2398800],
+    'Starter'    => ['monthly' => 0,       'quarterly' => 0,       'annually' => 0],
 ];
 
 $billing_labels = [
@@ -125,8 +144,48 @@ $billing_labels = [
     'annually'  => 'Annual (12 months)',
 ];
 
-// Starter is free — guard
-if (!isset($billing_amounts_centavos[$target_plan])) {
+// Starter reactivation is free — auto-reactivate without payment
+if ($payment_type === 'reactivation' && $target_plan === 'Starter') {
+    // Auto-reactivate tenant to Starter (free) without going through PayMongo
+    $pdo->prepare("
+        UPDATE tenants SET
+            status              = 'active',
+            plan                = 'Starter',
+            subscription_start  = CURDATE(),
+            subscription_end    = DATE_ADD(CURDATE(), INTERVAL 1 MONTH),
+            subscription_status = 'active',
+            renewal_reminded_7d = 0,
+            renewal_reminded_3d = 0,
+            renewal_reminded_1d = 0
+        WHERE id = ?
+    ")->execute([$tid]);
+
+    // Unsuspend all users
+    $pdo->prepare("
+        UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL
+        WHERE tenant_id=? AND is_suspended=1
+    ")->execute([$tid]);
+
+    // Insert free reactivation record
+    try {
+        $pdo->prepare("
+            INSERT INTO subscription_renewals
+                (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at, reviewed_at, new_subscription_end)
+            VALUES (?, 'Starter', 'monthly', 'Free', 'starter-free-reactivation', 0, 'approved', NOW(), NOW(), DATE_ADD(CURDATE(), INTERVAL 1 MONTH))
+        ")->execute([$tid]);
+    } catch (Throwable $e) {}
+
+    // Audit log
+    try {
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_REACTIVATED_STARTER','subscription',?,?,?,NOW())")
+            ->execute([$tid, $uid, $u['username'], 'admin', $tid, "Tenant reactivated to Starter (free) plan.", $_SERVER['REMOTE_ADDR'] ?? '::1']);
+    } catch (Throwable $e) {}
+
+    header('Location: tenant_subscription.php?reactivated=1'); exit;
+}
+
+// For paid plans only
+if (!isset($billing_amounts_centavos[$target_plan]) || $billing_amounts_centavos[$target_plan]['monthly'] === 0) {
     header('Location: tenant_subscription.php?error=free_plan'); exit;
 }
 
@@ -146,7 +205,7 @@ if ($payment_type === 'upgrade' && $sub_end && strtotime($sub_end) > time()) {
 
 if (empty($line_label)) {
     $plan = $target_plan;
-    $line_label = "PawnHub {$plan} Plan — {$billing_labels[$billing_cycle]} Renewal";
+    $line_label = "PawnHub {$plan} Plan — {$billing_labels[$billing_cycle]} " . ($payment_type === 'reactivation' ? 'Reactivation' : 'Renewal');
 }
 
 // ── Build Checkout Session payload ────────────────────────────
@@ -172,7 +231,7 @@ $payload = [
                 'plan'                     => $target_plan,
                 'current_plan'             => $current_plan,
                 'billing_cycle'            => $billing_cycle,
-                'type'                     => $payment_type,  // 'renewal', 'upgrade', 'downgrade'
+                'type'                     => $payment_type,  // 'renewal', 'upgrade', 'downgrade', 'reactivation'
                 'proration_credit_centavos'=> $proration_credit_centavos,
             ],
         ],
@@ -211,15 +270,17 @@ $_SESSION['renewal_type']              = $payment_type;
 
 // ── Log the attempt ───────────────────────────────────────────
 $action_map = [
-    'renewal'   => 'RENEWAL_PAYMONGO_INITIATED',
-    'upgrade'   => 'UPGRADE_PAYMONGO_INITIATED',
-    'downgrade' => 'DOWNGRADE_PAYMONGO_INITIATED',
+    'renewal'      => 'RENEWAL_PAYMONGO_INITIATED',
+    'upgrade'      => 'UPGRADE_PAYMONGO_INITIATED',
+    'downgrade'    => 'DOWNGRADE_PAYMONGO_INITIATED',
+    'reactivation' => 'REACTIVATION_PAYMONGO_INITIATED',
 ];
 $log_action = $action_map[$payment_type] ?? 'RENEWAL_PAYMONGO_INITIATED';
 $log_msg    = match($payment_type) {
-    'upgrade'   => "PayMongo upgrade checkout initiated for {$biz_name} ({$current_plan} → {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
-    'downgrade' => "PayMongo downgrade checkout initiated for {$biz_name} ({$current_plan} → {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
-    default     => "PayMongo renewal checkout initiated for {$biz_name} ({$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+    'upgrade'      => "PayMongo upgrade checkout initiated for {$biz_name} ({$current_plan} → {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+    'downgrade'    => "PayMongo downgrade checkout initiated for {$biz_name} ({$current_plan} → {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+    'reactivation' => "PayMongo reactivation checkout initiated for {$biz_name} (plan: {$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
+    default        => "PayMongo renewal checkout initiated for {$biz_name} ({$target_plan}, {$billing_cycle}). Amount: ₱{$amount_pesos}. Session: {$session_id}.",
 };
 try {
     $pdo->prepare("

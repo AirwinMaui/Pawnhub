@@ -58,7 +58,7 @@ if ($event_type === 'checkout_session.payment.paid') {
     $user_id       = intval($metadata['user_id']       ?? 0);
     $plan          = $metadata['plan']                 ?? '';
     $billing_cycle = $metadata['billing_cycle']        ?? 'monthly';
-    $payment_type  = $metadata['type']                 ?? 'signup';   // 'signup' or 'renewal'
+    $payment_type  = $metadata['type']                 ?? 'signup';   // 'signup', 'renewal', 'upgrade', 'downgrade', 'reactivation'
 
     // Resolve payment method used
     $payment_method = '';
@@ -182,6 +182,87 @@ if ($event_type === 'checkout_session.payment.paid') {
                     $session_id, $amount_paid,
                 ]);
                 error_log("[Webhook] RENEWAL payment recorded for tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
+
+            } elseif ($payment_type === 'reactivation') {
+                // ── D. REACTIVATION PAYMENT — AUTO APPROVE ────
+                // Tenant was inactive/deactivated and paid to reactivate.
+                // Auto-activate immediately — no SA approval needed.
+                try {
+                    $billing_months_map = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
+                    $months = $billing_months_map[$billing_cycle] ?? 1;
+                    $new_sub_end = date('Y-m-d', strtotime("+{$months} months"));
+
+                    // Reactivate tenant
+                    $pdo->prepare("
+                        UPDATE tenants SET
+                            status              = 'active',
+                            plan                = ?,
+                            subscription_start  = CURDATE(),
+                            subscription_end    = ?,
+                            subscription_status = 'active',
+                            renewal_reminded_7d = 0,
+                            renewal_reminded_3d = 0,
+                            renewal_reminded_1d = 0
+                        WHERE id = ?
+                    ")->execute([$plan, $new_sub_end, $tenant_id]);
+
+                    // Unsuspend all users
+                    $pdo->prepare("
+                        UPDATE users SET is_suspended=0, suspended_at=NULL, suspension_reason=NULL
+                        WHERE tenant_id=? AND is_suspended=1
+                    ")->execute([$tenant_id]);
+
+                    // Record as approved renewal in subscription_renewals
+                    $pdo->prepare("
+                        INSERT INTO subscription_renewals
+                            (tenant_id, plan, billing_cycle, payment_method, payment_reference,
+                             amount, status, requested_at, reviewed_at, new_subscription_end, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, 'approved', NOW(), NOW(), ?, 'Auto-approved: Tenant reactivation via PayMongo.')
+                    ")->execute([
+                        $tenant_id, $plan, $billing_cycle,
+                        'PayMongo — ' . $payment_method,
+                        $session_id, $amount_paid, $new_sub_end,
+                    ]);
+
+                    // Record in subscription_notifications
+                    try {
+                        $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, 'renewed')")->execute([$tenant_id]);
+                    } catch (PDOException $e) {}
+
+                    // Send renewal confirmation email to tenant
+                    try {
+                        require_once __DIR__ . '/mailer.php';
+                        $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
+                        $t_info->execute([$tenant_id]);
+                        $t_info = $t_info->fetch();
+                        if ($t_info && function_exists('sendSubscriptionRenewed')) {
+                            sendSubscriptionRenewed(
+                                $t_info['email'], $t_info['owner_name'],
+                                $t_info['business_name'], $plan,
+                                $new_sub_end, $t_info['slug']
+                            );
+                        }
+                    } catch (Throwable $mail_err) {
+                        error_log("[Webhook] Reactivation email error: " . $mail_err->getMessage());
+                    }
+
+                    // Audit log
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO audit_logs
+                                (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                            VALUES (?,NULL,'system','system','TENANT_REACTIVATED','subscription',?,?,?,NOW())
+                        ")->execute([
+                            $tenant_id, $tenant_id,
+                            "Tenant auto-reactivated via PayMongo payment. Plan: {$plan}, Cycle: {$billing_cycle}, New expiry: {$new_sub_end}, Session: {$session_id}.",
+                            '::webhook',
+                        ]);
+                    } catch (Throwable $e) {}
+
+                    error_log("[Webhook] REACTIVATION AUTO-APPROVED: tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
+                } catch (Throwable $react_err) {
+                    error_log("[Webhook] Reactivation error for tenant_id={$tenant_id}: " . $react_err->getMessage());
+                }
 
             } else {
                 // ── D. INITIAL SIGNUP PAYMENT — AUTO APPROVE ─
