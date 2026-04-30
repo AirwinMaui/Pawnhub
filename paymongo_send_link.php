@@ -17,7 +17,7 @@
  */
 
 require_once __DIR__ . '/session_helper.php';
-pawnhub_session_start('admin');
+pawnhub_session_start('super_admin');
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/paymongo_config.php';
 require_once __DIR__ . '/mailer.php';

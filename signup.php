@@ -82,37 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!move_uploaded_file($file_tmp, $upload_path)) {
                     $error = 'Failed to upload file. Please try again.';
                 } else {
-                    // ── OCR: scan business permit for DTI/Mayor's Permit number ──
-                    $ocr_verified = 0;
-                    if (defined('GOOGLE_VISION_API_KEY') && GOOGLE_VISION_API_KEY) {
-                        $img_data    = base64_encode(file_get_contents($upload_path));
-                        $ocr_payload = json_encode(['requests' => [['image' => ['content' => $img_data], 'features' => [['type' => 'DOCUMENT_TEXT_DETECTION', 'maxResults' => 1]]]]]);
-                        $ch = curl_init('https://vision.googleapis.com/v1/images:annotate?key=' . urlencode(GOOGLE_VISION_API_KEY));
-                        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_POSTFIELDS => $ocr_payload, CURLOPT_TIMEOUT => 20]);
-                        $ocr_raw  = curl_exec($ch);
-                        curl_close($ch);
-                        $ocr_res  = json_decode($ocr_raw, true);
-                        $ocr_text = $ocr_res['responses'][0]['fullTextAnnotation']['text']
-                                 ?? $ocr_res['responses'][0]['textAnnotations'][0]['description']
-                                 ?? '';
-                        if ($ocr_text) {
-                            $ph_patterns = [
-                                '/DTI[\s\-#:]*[\d\-]{5,}/i',
-                                '/SEC[\s\-#:]*[\d\-]{5,}/i',
-                                '/CDA[\s\-#:]*[\d\-]{5,}/i',
-                                '/(?:MAYOR.{0,3}PERMIT|BUSINESS\s*PERMIT)\s*(?:NO|NUMBER|#)?[\s.:]*[\w\-]{4,}/i',
-                                '/PERMIT\s*(?:NO|NUMBER|#)[\s.:]*[\w\-]{4,}/i',
-                                '/LICENSE\s*(?:NO|NUMBER|#)[\s.:]*[\w\-]{4,}/i',
-                                '/REGISTRATION\s*(?:NO|NUMBER|#)[\s.:]*[\w\-]{4,}/i',
-                                '/CERTIFICATE\s+OF\s+REGISTRATION/i',
-                                '/BIR.*\d{3,}/i',
-                            ];
-                            foreach ($ph_patterns as $pat) {
-                                if (preg_match($pat, $ocr_text)) { $ocr_verified = 1; break; }
-                            }
-                        }
-                        error_log("[Signup OCR] {$biz_name}: verified={$ocr_verified}");
-                    }
 
                     // Starter is free — use 'free' so the ENUM doesn't truncate.
                     // Pro / Enterprise start as 'unpaid' until the PayMongo webhook sets 'paid'.
@@ -122,10 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
                             ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $payment_status, $permit_url]);
                         $new_tid = $pdo->lastInsertId();
-                        // Save OCR verification result (non-fatal if column doesn't exist yet)
-                        try {
-                            $pdo->prepare("UPDATE tenants SET ocr_verified = ? WHERE id = ?")->execute([$ocr_verified, $new_tid]);
-                        } catch (PDOException $e) { /* column may not exist yet — run: ALTER TABLE tenants ADD COLUMN ocr_verified TINYINT(1) DEFAULT 0; */ }
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                             ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
                         $new_uid = $pdo->lastInsertId();
@@ -308,11 +273,6 @@ input, select, textarea { font-size: max(16px, 1rem) !important; }
 /* Smooth scrolling on mobile */
 html { scroll-behavior: smooth; }
 
-/* OCR spinner */
-@keyframes ocrSpin {
-  to { transform: rotate(360deg); }
-}
-
 /* Form mobile fixes */
 @media (max-width: 480px) {
     .panel, .card { 
@@ -456,9 +416,7 @@ html { scroll-behavior: smooth; }
             </div>
           </div>
           <!-- OCR Status Banner (hidden until file selected) -->
-          <div id="ocrBanner" style="display:none;align-items:flex-start;gap:8px;margin-top:10px;padding:10px 14px;border-radius:10px;border:1px solid;font-size:0.78rem;line-height:1.5;transition:all 0.3s;">
-            <span id="ocrStatus"></span>
-          </div>
+
           <p style="font-size:0.71rem;color:rgba(255,255,255,0.3);margin-top:6px;">📌 This will be reviewed by the Super Admin before your account is approved.</p>
         </div>
 
@@ -634,25 +592,18 @@ function selectPlan(name) {
   if (btn) btn.textContent = isPaid ? 'Continue to Payment →' : 'Submit Application →';
 }
 
-// ── Business Permit File Handling + OCR Auto-fill ─────────────
+// ── Business Permit File Handling ────────────────────────────
 function handlePermitFile(input) {
   const file = input.files[0];
   if (!file) return;
 
-  // Client-side type guard — reject non-image/PDF immediately
+  // Client-side type guard
   const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
   if (!allowed.includes(file.type)) {
-    const ocrBanner = document.getElementById('ocrBanner');
-    const ocrStatus = document.getElementById('ocrStatus');
-    // Reset file input
     input.value = '';
     document.getElementById('permitPlaceholder').style.display = 'block';
     document.getElementById('permitPreview').style.display = 'none';
-    ocrBanner.style.display = 'flex';
-    ocrBanner.style.background = 'rgba(220,38,38,0.12)';
-    ocrBanner.style.borderColor = 'rgba(220,38,38,0.35)';
-    ocrStatus.innerHTML = '❌ <strong style="color:#fca5a5;">Invalid file type.</strong> Please upload your business permit as a <strong style="color:#fca5a5;">JPG, PNG, WEBP, or PDF</strong> — not a Word document or other file.';
-    ocrStatus.style.color = '#fca5a5';
+    alert('Invalid file type. Please upload your business permit as a JPG, PNG, WEBP, or PDF.');
     return;
   }
 
@@ -660,89 +611,6 @@ function handlePermitFile(input) {
   document.getElementById('permitPlaceholder').style.display = 'none';
   document.getElementById('permitFileName').textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
   document.getElementById('permitPreview').style.display = 'block';
-
-  // Show OCR loading banner
-  const ocrBanner = document.getElementById('ocrBanner');
-  const ocrStatus = document.getElementById('ocrStatus');
-  ocrBanner.style.display = 'flex';
-  ocrBanner.style.background = 'rgba(59,130,246,0.12)';
-  ocrBanner.style.borderColor = 'rgba(59,130,246,0.35)';
-  ocrStatus.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(147,197,253,0.4);border-top-color:#93c5fd;border-radius:50%;animation:ocrSpin 0.7s linear infinite;margin-right:8px;vertical-align:middle;"></span>Reading your permit...';
-  ocrStatus.style.color = '#93c5fd';
-
-  // Send file to ocr_public.php via AJAX
-  const formData = new FormData();
-  formData.append('permit', file);
-
-  fetch('ocr_public.php', { method: 'POST', body: formData })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success && data.fields) {
-        const f = data.fields;
-        let filled = [];
-
-        // Auto-fill Business Name (only if empty)
-        if (f.business_name) {
-          const bizInput = document.querySelector('input[name="business_name"]');
-          if (bizInput && !bizInput.value.trim()) {
-            bizInput.value = f.business_name;
-            flashField(bizInput);
-            filled.push('Business Name');
-          }
-        }
-
-        // Auto-fill Full Name / Owner Name (only if empty)
-        if (f.owner_name) {
-          const nameInput = document.querySelector('input[name="fullname"]');
-          if (nameInput && !nameInput.value.trim()) {
-            nameInput.value = f.owner_name;
-            flashField(nameInput);
-            filled.push('Full Name');
-          }
-        }
-
-        // Auto-fill Address (only if empty)
-        if (f.address) {
-          const addrInput = document.querySelector('input[name="address"]');
-          if (addrInput && !addrInput.value.trim()) {
-            addrInput.value = f.address;
-            flashField(addrInput);
-            filled.push('Address');
-          }
-        }
-
-        if (filled.length > 0) {
-          ocrBanner.style.background = 'rgba(34,197,94,0.1)';
-          ocrBanner.style.borderColor = 'rgba(34,197,94,0.3)';
-          ocrStatus.innerHTML = '✅ Auto-filled from permit: <strong style="color:#86efac;">' + filled.join(', ') + '</strong> — please review and correct if needed.';
-          ocrStatus.style.color = '#86efac';
-        } else {
-          ocrBanner.style.background = 'rgba(234,179,8,0.1)';
-          ocrBanner.style.borderColor = 'rgba(234,179,8,0.3)';
-          ocrStatus.innerHTML = '⚠️ Permit scanned but fields were already filled. Please verify the information below.';
-          ocrStatus.style.color = '#fde047';
-        }
-      } else {
-        ocrBanner.style.background = 'rgba(234,179,8,0.1)';
-        ocrBanner.style.borderColor = 'rgba(234,179,8,0.3)';
-        ocrStatus.innerHTML = '⚠️ ' + (data.error || 'Could not read permit — please fill in the fields manually.');
-        ocrStatus.style.color = '#fde047';
-      }
-    })
-    .catch(() => {
-      ocrBanner.style.display = 'none';
-    });
-}
-
-// Flash a field green briefly to show it was auto-filled
-function flashField(el) {
-  el.style.transition = 'border-color 0.3s, box-shadow 0.3s';
-  el.style.borderColor = 'rgba(34,197,94,0.8)';
-  el.style.boxShadow   = '0 0 0 3px rgba(34,197,94,0.2)';
-  setTimeout(() => {
-    el.style.borderColor = '';
-    el.style.boxShadow   = '';
-  }, 2500);
 }
 
 // Drag & drop
