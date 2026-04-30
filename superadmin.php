@@ -1348,15 +1348,23 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td><?= $pmt_badge ?></td>
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
           <td>
-            <?php if (!$is_free && $pmt_status !== 'paid'): ?>
-            <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
-              <input type="hidden" name="action" value="send_payment_link"/>
-              <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-              <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
-            </form>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+            <?php if ($is_free): ?>
+              <!-- Starter plan is free — SA manually approves, no payment needed -->
+              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.69rem;padding:4px 9px;margin:0;">✓ Approve</button>
+            <?php elseif ($pmt_status === 'paid'): ?>
+              <!-- Already paid via a link — webhook auto-approves; this is a fallback -->
+              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.69rem;padding:4px 9px;margin:0;">✓ Approve</button>
+            <?php else: ?>
+              <!-- Paid plan, not yet paid — SA sends payment link; webhook auto-approves on payment -->
+              <form method="POST" action="paymongo_send_link.php" style="margin:0;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+                <input type="hidden" name="action" value="send_payment_link"/>
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+                <button type="submit" class="btn-sm" style="font-size:.69rem;padding:4px 9px;margin:0;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
+              </form>
             <?php endif; ?>
-            <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
-            <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
+            <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;padding:4px 9px;margin:0;">✗ Reject</button>
+            </div>
           </td>
         </tr>
         <?php endforeach;?></tbody></table></div>
@@ -1433,8 +1441,19 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <button type="submit" class="btn-sm btn-success" style="font-size:.67rem;padding:4px 9px;margin:0;">Activate</button>
               </form>
               <button onclick="openPlanModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>','<?=$t['plan']?>')" class="btn-sm btn-warning" style="font-size:.67rem;padding:4px 9px;margin:0;">⭐ Plan</button>
-            <?php elseif($t['status']==='pending'):?>
-              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.67rem;padding:4px 9px;margin:0;">✓ Approve</button>
+            <?php elseif($t['status']==='pending'):
+              $t_is_free = ($t['plan'] === 'Starter');
+              $t_paid    = (($t['payment_status'] ?? '') === 'paid');
+            ?>
+              <?php if ($t_is_free || $t_paid): ?>
+                <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.67rem;padding:4px 9px;margin:0;">✓ Approve</button>
+              <?php else: ?>
+                <form method="POST" action="paymongo_send_link.php" style="margin:0;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+                  <input type="hidden" name="action" value="send_payment_link"/>
+                  <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+                  <button type="submit" class="btn-sm" style="font-size:.67rem;padding:4px 9px;margin:0;background:#7c3aed;color:#fff;border:none;">📧 Send Link</button>
+                </form>
+              <?php endif; ?>
               <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.67rem;padding:4px 9px;margin:0;">✗ Reject</button>
             <?php else:?><span style="font-size:.7rem;color:var(--text-dim);">—</span><?php endif;?>
             </div>
