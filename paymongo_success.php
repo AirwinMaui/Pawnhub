@@ -31,7 +31,7 @@ unset(
 // Fetch tenant info for display
 $tenant = null;
 if ($tenant_id) {
-    $stmt = $pdo->prepare("SELECT business_name, plan, status, payment_status FROM tenants WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT business_name, plan, status, payment_status, email FROM tenants WHERE id = ?");
     $stmt->execute([$tenant_id]);
     $tenant = $stmt->fetch();
 }
@@ -65,7 +65,7 @@ $plan     = htmlspecialchars($tenant['plan'] ?? '');
   <h1 class="text-2xl font-extrabold mb-2">Payment Received! 🎉</h1>
   <p class="text-gray-400 text-sm leading-relaxed mb-6">
     Thank you, <strong class="text-white"><?= $biz_name ?></strong>!<br>
-    Your <strong class="text-blue-400"><?= $plan ?> Plan</strong> payment has been recorded.
+    Your <strong class="text-blue-400"><?= $plan ?> Plan</strong> is now active. Check your email to set up your account!
   </p>
 
   <!-- Step indicator -->
@@ -81,29 +81,31 @@ $plan     = htmlspecialchars($tenant['plan'] ?? '');
       </div>
       <div>
         <p class="text-sm font-semibold text-white">Payment confirmed</p>
-        <p class="text-xs text-gray-400 mt-0.5">Your payment has been received and recorded.</p>
+        <p class="text-xs text-gray-400 mt-0.5">Your payment has been received and your account is now active.</p>
       </div>
     </div>
 
-    <!-- Step 2: Pending -->
+    <!-- Step 2: Done -->
     <div class="flex items-start gap-3 mb-4">
-      <div class="w-7 h-7 rounded-full bg-yellow-500/20 border-2 border-yellow-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
+      <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
       </div>
       <div>
-        <p class="text-sm font-semibold text-yellow-300">Super Admin review</p>
-        <p class="text-xs text-gray-400 mt-0.5">Our admin will verify your Business Permit and payment details.</p>
+        <p class="text-sm font-semibold text-white">Account setup email sent</p>
+        <p class="text-xs text-gray-400 mt-0.5">A setup link was sent to <strong class="text-blue-300"><?= htmlspecialchars($tenant['email'] ?? '') ?></strong> — click it to set your username &amp; password.</p>
       </div>
     </div>
 
-    <!-- Step 3: Upcoming -->
+    <!-- Step 3: Action needed -->
     <div class="flex items-start gap-3">
-      <div class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <span class="text-gray-400 text-xs font-bold">3</span>
+      <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
       </div>
       <div>
-        <p class="text-sm font-semibold text-gray-300">Account activated</p>
-        <p class="text-xs text-gray-500 mt-0.5">Once approved, you'll receive your login link by email.</p>
+        <p class="text-sm font-semibold text-blue-300">Check your email &amp; set up your account</p>
+        <p class="text-xs text-gray-400 mt-0.5">Open the setup link in your email to create your login credentials and access your PawnHub dashboard.</p>
       </div>
     </div>
   </div>
@@ -113,8 +115,7 @@ $plan     = htmlspecialchars($tenant['plan'] ?? '');
     <div class="flex items-start gap-2">
       <span class="text-base mt-0.5">📧</span>
       <span>
-        You'll receive a confirmation email once your account is approved — usually <strong>within 24 hours</strong>.
-        Check your spam folder if you don't see it.
+        Can't find the email? Check your <strong>spam or junk folder</strong>. The setup link expires in <strong>24 hours</strong>.
       </span>
     </div>
   </div>
