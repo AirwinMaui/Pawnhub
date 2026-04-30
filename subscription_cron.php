@@ -39,32 +39,50 @@ $log = [];
 $now = new DateTime();
 
 // ── 1. Expiry reminder emails: 7 days, 3 days, 1 day ─────────
+//
+// IMPORTANT: We use a RANGE query (subscription_end BETWEEN today and +N days)
+// instead of an exact date match. This way, if the cron was not triggered
+// on exactly the right day (e.g. server restart, missed ping), the reminder
+// will still be sent the next time the cron runs.
+//
+// Deduplication uses renewal_reminded_Xd flags on the tenants row as the
+// PRIMARY check (always available), with subscription_notifications as an
+// optional secondary check (table may not exist in all environments).
+
 $reminder_windows = [
-    7 => 'expiring_7d',
-    3 => 'expiring_3d',
-    1 => 'expiring_1d',
+    7 => ['flag' => 'renewal_reminded_7d', 'notif_type' => 'expiring_7d'],
+    3 => ['flag' => 'renewal_reminded_3d', 'notif_type' => 'expiring_3d'],
+    1 => ['flag' => 'renewal_reminded_1d', 'notif_type' => 'expiring_1d'],
 ];
 
-foreach ($reminder_windows as $days => $notif_type) {
-    $target_date = (clone $now)->modify("+{$days} days")->format('Y-m-d');
+foreach ($reminder_windows as $days => $cfg) {
+    $flag       = $cfg['flag'];
+    $notif_type = $cfg['notif_type'];
 
-    $stmt = $pdo->prepare("
-        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug
-        FROM tenants t
-        WHERE t.status = 'active'
-          AND t.subscription_end IS NOT NULL
-          AND DATE(t.subscription_end) = ?
-          AND NOT EXISTS (
-              SELECT 1 FROM subscription_notifications sn
-              WHERE sn.tenant_id = t.id
-                AND sn.notif_type = ?
-                AND DATE(sn.sent_at) = CURDATE()
-          )
-    ");
-    $stmt->execute([$target_date, $notif_type]);
-    $tenants_to_notify = $stmt->fetchAll();
+    // Fetch tenants whose subscription_end is within the next N days
+    // AND who have NOT yet received this reminder (flag = 0)
+    try {
+        $stmt = $pdo->prepare("
+            SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug
+            FROM tenants t
+            WHERE t.status = 'active'
+              AND t.plan != 'Starter'
+              AND t.subscription_end IS NOT NULL
+              AND DATE(t.subscription_end) >= CURDATE()
+              AND DATE(t.subscription_end) <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+              AND t.`{$flag}` = 0
+        ");
+        $stmt->execute([$days]);
+        $tenants_to_notify = $stmt->fetchAll();
+    } catch (Throwable $e) {
+        $log[] = "[ERROR] Query failed for {$days}d reminder: " . $e->getMessage();
+        continue;
+    }
 
     foreach ($tenants_to_notify as $tenant) {
+        // Calculate actual days remaining for the email copy
+        $days_left = max(0, (int)ceil((strtotime($tenant['subscription_end']) - time()) / 86400));
+
         if (function_exists('sendSubscriptionExpiring')) {
             $sent = sendSubscriptionExpiring(
                 $tenant['email'],
@@ -72,7 +90,7 @@ foreach ($reminder_windows as $days => $notif_type) {
                 $tenant['business_name'],
                 $tenant['plan'],
                 $tenant['subscription_end'],
-                $days,
+                $days_left,
                 $tenant['slug']
             );
         } else {
@@ -81,11 +99,19 @@ foreach ($reminder_windows as $days => $notif_type) {
         }
 
         if ($sent) {
-            $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, ?)")
-                ->execute([$tenant['id'], $notif_type]);
-            $pdo->prepare("UPDATE tenants SET subscription_status='expiring_soon' WHERE id=?")
-                ->execute([$tenant['id']]);
-            $log[] = "[OK] Sent {$days}d warning to {$tenant['business_name']} ({$tenant['email']})";
+            // Mark flag so we never send this tier of reminder again
+            try {
+                $pdo->prepare("UPDATE tenants SET `{$flag}` = 1, subscription_status = 'expiring_soon' WHERE id = ?")
+                    ->execute([$tenant['id']]);
+            } catch (Throwable $e) {}
+
+            // Also log to subscription_notifications if the table exists
+            try {
+                $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, ?)")
+                    ->execute([$tenant['id'], $notif_type]);
+            } catch (Throwable $e) {} // silently ignore — table may not exist
+
+            $log[] = "[OK] Sent {$days}d warning to {$tenant['business_name']} ({$tenant['email']}) — {$days_left}d left";
         } else {
             $log[] = "[FAIL] Could not send {$days}d warning to {$tenant['email']}";
         }
@@ -93,16 +119,22 @@ foreach ($reminder_windows as $days => $notif_type) {
 }
 
 // ── 2. Mark & notify expired tenants ─────────────────────────
-$expired_stmt = $pdo->prepare("
-    SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug
-    FROM tenants t
-    WHERE t.status = 'active'
-      AND t.subscription_end IS NOT NULL
-      AND DATE(t.subscription_end) < CURDATE()
-      AND t.subscription_status != 'expired'
-");
-$expired_stmt->execute();
-$expired_tenants = $expired_stmt->fetchAll();
+try {
+    $expired_stmt = $pdo->prepare("
+        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug
+        FROM tenants t
+        WHERE t.status = 'active'
+          AND t.plan != 'Starter'
+          AND t.subscription_end IS NOT NULL
+          AND DATE(t.subscription_end) < CURDATE()
+          AND (t.subscription_status IS NULL OR t.subscription_status NOT IN ('expired', 'cancelled'))
+    ");
+    $expired_stmt->execute();
+    $expired_tenants = $expired_stmt->fetchAll();
+} catch (Throwable $e) {
+    $expired_tenants = [];
+    $log[] = "[ERROR] Could not query expired tenants: " . $e->getMessage();
+}
 
 foreach ($expired_tenants as $tenant) {
     // Mark as expired

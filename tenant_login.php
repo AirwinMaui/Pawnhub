@@ -206,6 +206,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
                 $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'USER_LOGIN','user',?,?,?,NOW())")
                     ->execute([$user['tenant_id'], $user['id'], $user['username'], $user['role'], (string)$user['id'], $login_msg, $_SERVER['REMOTE_ADDR'] ?? '::1']);
             } catch (Throwable $e) {}
+
+            // ── Subscription cron: run on admin login (max once per 12h) ──
+            // This is the fallback trigger when no external cron (cron-job.org,
+            // Azure WebJob) is configured. It checks subscription reminders,
+            // marks expired tenants, and sends emails silently in the background.
+            if ($user['role'] === 'admin') {
+                try {
+                    $cron_flag = sys_get_temp_dir() . '/pawnhub_cron_last_run.txt';
+                    $last_run  = file_exists($cron_flag) ? (int)file_get_contents($cron_flag) : 0;
+                    if ((time() - $last_run) > 43200) { // 12 hours
+                        file_put_contents($cron_flag, time());
+                        // Run cron silently — errors are swallowed so login is never blocked
+                        @include_once __DIR__ . '/subscription_cron_runner.php';
+                    }
+                } catch (Throwable $e) {}
+            }
             if ($user['role'] === 'admin')   { header('Location: tenant.php');  exit; }
             if ($user['role'] === 'manager') { header('Location: manager.php'); exit; }
             if ($user['role'] === 'staff')   { header('Location: staff.php');   exit; }
@@ -460,7 +476,6 @@ html { scroll-behavior: smooth; }
       <?php else: ?>
 
         <?php if ($is_deactivated):
-            // Fetch tenant id for the reactivation link
             $deact_tenant_id = $tenant['id'] ?? 0;
             $deact_plan      = $tenant['plan'] ?? 'Pro';
         ?>
@@ -483,7 +498,6 @@ html { scroll-behavior: smooth; }
         </div>
 
         <?php if ($deact_tenant_id): ?>
-        <!-- ── PRIMARY ACTION: Direct PayMongo Reactivation ──── -->
         <a href="/paymongo_reactivate.php?tenant=<?= $deact_tenant_id ?>&plan=<?= urlencode($deact_plan) ?>"
            style="display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;border-radius:13px;padding:15px 20px;margin-bottom:12px;font-weight:700;font-size:.92rem;box-shadow:0 5px 16px rgba(37,99,235,.35);transition:all .18s;"
            onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 7px 22px rgba(37,99,235,.45)'"
@@ -497,7 +511,6 @@ html { scroll-behavior: smooth; }
         <?php endif; ?>
 
         <?php if ($sa_contact_email): ?>
-        <!-- ── SECONDARY: Email admin as fallback ─────────────── -->
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px;">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b;margin-bottom:9px;">📬 Or contact admin directly</div>
           <a href="mailto:<?= htmlspecialchars($sa_contact_email) ?>?subject=Subscription%20Renewal%20Request%20—%20<?= urlencode($bizName) ?>&body=Hi%20<?= urlencode($sa_contact_name) ?>%2C%0A%0AI%20would%20like%20to%20renew%20the%20subscription%20for%20<?= urlencode($bizName) ?>.%0A%0APlease%20assist%20us%20with%20reactivating%20our%20account.%0A%0AThank%20you."
