@@ -127,7 +127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
 
-                    $success = true;
+                    // Starter plan (free) — redirect to AI permit verification page
+                    header('Location: permit_verify_starter.php?tenant=' . $new_tid . '&user=' . $new_uid);
+                    exit;
                     end_processing:
                 }
             }
