@@ -1,18 +1,19 @@
 <?php
 /**
  * ocr_public.php
- * Uses Tesseract OCR — free, no API key, runs on server.
- * Uses full binary paths to work under PHP-FPM's restricted PATH.
+ * Uses OCR.space free API — no billing, no server install needed.
+ * Free tier: 25,000 requests/month, max 1MB per image.
+ * API key: get free key at https://ocr.space/ocrapi (takes 1 min)
+ *
+ * Set OCR_SPACE_API_KEY in paymongo_config.php:
+ *   define('OCR_SPACE_API_KEY', 'helloworld'); // 'helloworld' = free demo key (limited)
  */
+
+require_once __DIR__ . '/paymongo_config.php';
 
 header('Content-Type: application/json');
 
-// ── Full binary paths (PHP-FPM has different PATH than SSH) ───
-define('TESSERACT_BIN', '/usr/bin/tesseract');
-define('PDFTOPPM_BIN',  '/usr/bin/pdftoppm');
-define('CONVERT_BIN',   '/usr/bin/convert');
-
-// ── Rate limiting ─────────────────────────────────────────────
+// ── Rate limiting (file-based, no session conflict) ───────────
 $rate_file = sys_get_temp_dir() . '/ocr_rl_' . md5($_SERVER['REMOTE_ADDR'] ?? 'x');
 $now  = time();
 $last = @file_get_contents($rate_file);
@@ -36,72 +37,62 @@ if (!in_array($mime, $allowed)) {
     echo json_encode(['success' => false, 'error' => 'Invalid file type. Upload JPG, PNG, WEBP, or PDF.']);
     exit;
 }
-if ($file['size'] > 10 * 1024 * 1024) {
-    echo json_encode(['success' => false, 'error' => 'File too large. Max 10MB.']);
+if ($file['size'] > 5 * 1024 * 1024) {
+    echo json_encode(['success' => false, 'error' => 'File too large. Max 5MB.']);
     exit;
 }
 
-// ── Temp paths ────────────────────────────────────────────────
-$tmp_dir    = sys_get_temp_dir();
-$unique     = 'ocr_' . uniqid('', true);
-$input_file = $tmp_dir . '/' . $unique . '_input';
-$out_base   = $tmp_dir . '/' . $unique . '_out';
-$out_txt    = $out_base . '.txt';
+// ── Get API key ───────────────────────────────────────────────
+// 'helloworld' is OCR.space's free demo key — works but rate-limited
+// Get your own free key at: https://ocr.space/ocrapi
+$api_key = defined('OCR_SPACE_API_KEY') ? OCR_SPACE_API_KEY : 'helloworld';
 
-move_uploaded_file($file['tmp_name'], $input_file);
+// ── Call OCR.space API ────────────────────────────────────────
+$post_fields = [
+    'apikey'          => $api_key,
+    'language'        => 'eng',
+    'isOverlayRequired' => 'false',
+    'detectOrientation' => 'true',
+    'scale'           => 'true',
+    'OCREngine'       => '2',   // Engine 2 = better for structured documents
+    'file'            => new CURLFile($file['tmp_name'], $mime, $file['name']),
+];
 
-// ── PDF → PNG conversion ──────────────────────────────────────
-$ocr_input = $input_file;
-$pdf_page  = $tmp_dir . '/' . $unique . '_page';
+$ch = curl_init('https://api.ocr.space/parse/image');
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => $post_fields,
+    CURLOPT_TIMEOUT        => 30,
+    CURLOPT_SSL_VERIFYPEER => true,
+]);
+$raw      = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr  = curl_error($ch);
+curl_close($ch);
 
-if ($mime === 'application/pdf') {
-    exec(PDFTOPPM_BIN . ' -r 200 -png -l 1 ' . escapeshellarg($input_file) . ' ' . escapeshellarg($pdf_page) . ' 2>&1');
-    $candidates = glob($pdf_page . '*.png');
-    if (!empty($candidates)) {
-        $ocr_input = $candidates[0];
-    } elseif (file_exists(CONVERT_BIN)) {
-        $fallback = $tmp_dir . '/' . $unique . '_fb.png';
-        exec(CONVERT_BIN . ' -density 200 ' . escapeshellarg($input_file . '[0]') . ' ' . escapeshellarg($fallback) . ' 2>&1');
-        if (file_exists($fallback)) $ocr_input = $fallback;
-    }
-}
-
-// ── Detect installed language packs ──────────────────────────
-exec(TESSERACT_BIN . ' --list-langs 2>&1', $lang_list);
-$lang = 'eng';
-if (in_array('fil', $lang_list)) $lang = 'eng+fil';
-elseif (in_array('tgl', $lang_list)) $lang = 'eng+tgl';
-
-// ── Run Tesseract with full path ──────────────────────────────
-$cmd = TESSERACT_BIN . ' '
-     . escapeshellarg($ocr_input) . ' '
-     . escapeshellarg($out_base)
-     . ' -l ' . escapeshellarg($lang)
-     . ' --psm 3 --oem 3 2>&1';
-
-exec($cmd, $tess_out, $tess_ret);
-
-// ── Cleanup temp files ────────────────────────────────────────
-@unlink($input_file);
-foreach (glob($pdf_page . '*.png') as $f) @unlink($f);
-@unlink($tmp_dir . '/' . $unique . '_fb.png');
-
-// ── Read OCR result ───────────────────────────────────────────
-if ($tess_ret !== 0 || !file_exists($out_txt)) {
-    @unlink($out_txt);
-    echo json_encode(['success' => false, 'error' => 'OCR failed (exit ' . $tess_ret . '). Try a clearer photo.']);
+if ($curlErr || $httpCode !== 200 || !$raw) {
+    echo json_encode(['success' => false, 'error' => 'Could not connect to OCR service. Please fill in the fields manually.']);
     exit;
 }
 
-$raw_text = file_get_contents($out_txt);
-@unlink($out_txt);
+$result = json_decode($raw, true);
+
+// Check for OCR.space errors
+if (!empty($result['IsErroredOnProcessing']) || empty($result['ParsedResults'])) {
+    $msg = $result['ErrorMessage'][0] ?? 'OCR processing failed.';
+    echo json_encode(['success' => false, 'error' => 'Could not read permit. Please fill in manually. (' . $msg . ')']);
+    exit;
+}
+
+$raw_text = $result['ParsedResults'][0]['ParsedText'] ?? '';
 
 if (!trim($raw_text)) {
     echo json_encode(['success' => false, 'error' => 'No text found. Please upload a clearer photo of your business permit.']);
     exit;
 }
 
-// ── Parse fields ──────────────────────────────────────────────
+// ── Parse fields from extracted text ─────────────────────────
 $fields = parsePermitText($raw_text);
 
 echo json_encode(['success' => true, 'fields' => $fields]);
@@ -113,7 +104,7 @@ function parsePermitText(string $text): array
     $lines  = array_values(array_filter(array_map('trim', explode("\n", $text)), fn($l) => strlen($l) > 1));
     $fields = ['business_name' => '', 'owner_name' => '', 'address' => ''];
 
-    // Business Name — matches "Business Name: XXXXX" and variations
+    // Business Name
     foreach ([
         '/Business\s+Name\s*[:\-]\s*(.+)/i',
         '/(?:TRADE\s+NAME|NAME\s+OF\s+BUSINESS|ESTABLISHMENT\s+NAME|REGISTERED\s+NAME)\s*[:\-]\s*(.+)/i',
@@ -124,7 +115,7 @@ function parsePermitText(string $text): array
         }
     }
 
-    // Owner — matches "Owner / Proprietor: XXXXX" and variations
+    // Owner
     foreach ([
         '/Owner\s*[\/\\\\]?\s*Proprietor\s*[:\-]\s*(.+)/i',
         '/(?:OWNER|PROPRIETOR|REGISTERED\s+OWNER|APPLICANT|LICENSEE|ISSUED\s+TO|GRANTED\s+TO)\s*[:\-]\s*(.+)/i',
@@ -138,7 +129,7 @@ function parsePermitText(string $text): array
         }
     }
 
-    // Address — matches "Business Address: XXXXX" and variations
+    // Address
     foreach ([
         '/Business\s+Address\s*[:\-]\s*(.+)/i',
         '/(?:ADDRESS|LOCATION|PLACE\s+OF\s+BUSINESS)\s*[:\-]\s*(.+)/i',
@@ -150,7 +141,7 @@ function parsePermitText(string $text): array
         }
     }
 
-    // Fallback: prominent ALL-CAPS line = business name
+    // Fallback: ALL-CAPS line = business name
     if (empty($fields['business_name'])) {
         foreach ($lines as $line) {
             if (strlen($line) < 5 || strlen($line) > 60) continue;
