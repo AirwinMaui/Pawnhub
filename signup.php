@@ -677,6 +677,7 @@ function handlePermitFile(input) {
   fetch('ocr_public.php', { method: 'POST', body: formData })
     .then(r => r.json())
     .then(data => {
+      console.log('[OCR DEBUG]', JSON.stringify(data));
       if (data.success && data.fields) {
         const f = data.fields;
         let filled = [];
@@ -725,7 +726,7 @@ function handlePermitFile(input) {
       } else {
         ocrBanner.style.background = 'rgba(234,179,8,0.1)';
         ocrBanner.style.borderColor = 'rgba(234,179,8,0.3)';
-        ocrStatus.innerHTML = '⚠️ Could not read permit automatically — please fill in the fields manually.';
+        ocrStatus.innerHTML = '⚠️ ' + (data.error || 'Could not read permit automatically — please fill in the fields manually.');
         ocrStatus.style.color = '#fde047';
       }
     })
