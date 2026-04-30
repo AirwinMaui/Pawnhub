@@ -67,10 +67,10 @@ $biz_name = $tenant['business_name'];
 $owner    = $tenant['owner_name'];
 $plan     = $tenant['plan'];
 
-// Find the admin user for this tenant (for user_id in success_url)
+// Find the admin user for this tenant (may be 0 for SA-added tenants not yet registered)
 $u_stmt = $pdo->prepare("SELECT id FROM users WHERE tenant_id = ? AND role = 'admin' LIMIT 1");
 $u_stmt->execute([$tenant_id]);
-$t_user = $u_stmt->fetch();
+$t_user  = $u_stmt->fetch();
 $user_id = $t_user['id'] ?? 0;
 
 // ── Plan pricing (centavos) ───────────────────────────────────
