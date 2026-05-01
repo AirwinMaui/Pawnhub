@@ -136,8 +136,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $pre_ai_status = 'manual_review';
                         }
 
-                        // Hard block: AI explicitly rejected the permit
-                        if ($pre_ai_status === 'ai_rejected') {
+                        // Block if AI rejected OR could not fully verify (manual_review).
+                        // We require ai_approved before allowing payment.
+                        if ($pre_ai_status !== 'ai_approved') {
                             // Rollback: delete tenant + user records and uploaded file
                             try {
                                 $pdo->prepare("DELETE FROM users   WHERE id = ?")->execute([$new_uid]);
@@ -145,8 +146,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             } catch (Throwable $e) {}
                             @unlink($upload_path);
 
-                            $reject_reason = $pre_result['reason'] ?? 'Your business permit did not pass verification.';
-                            $error = '❌ Permit rejected: ' . $reject_reason . ' Please re-upload a valid, current business permit.';
+                            if ($pre_ai_status === 'ai_rejected') {
+                                $reject_reason = $pre_result['reason'] ?? 'Your business permit did not pass verification.';
+                                $error = '❌ Permit rejected: ' . $reject_reason . ' Please upload a valid, current business permit.';
+                            } else {
+                                // manual_review — AI uncertain (low confidence, name mismatch, etc.)
+                                $mismatch_note = $pre_result['reason'] ?? '';
+                                $error = '⚠️ We could not automatically verify your business permit. ' . ($mismatch_note ? $mismatch_note . ' ' : '') . 'Please ensure your permit is clear, unexpired, shows a pawnshop-related nature of business, and the business name matches exactly what you entered. Then try again.';
+                            }
                             goto end_processing;
                         }
 

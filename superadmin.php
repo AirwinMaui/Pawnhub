@@ -180,6 +180,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             goto end_approve;
         }
 
+        // ── Guard: block approval if permit not ai_approved ────
+        $permit_status_chk = $t_row['business_permit_status'] ?? 'pending';
+        if ($permit_status_chk !== 'ai_approved') {
+            $status_labels = [
+                'ai_rejected'   => 'AI Rejected',
+                'manual_review' => 'Could Not Auto-Verify',
+                'pending'       => 'Not Yet Verified',
+            ];
+            $status_label  = $status_labels[$permit_status_chk] ?? ucfirst($permit_status_chk);
+            $rejection_note = htmlspecialchars($t_row['rejection_reason'] ?? '');
+            $error_msg = "⛔ Cannot approve — permit status is <strong>{$status_label}</strong>."
+                . ($rejection_note ? " Reason: {$rejection_note}" : '')
+                . " A valid AI-verified permit is required before approving this tenant.";
+            $active_page = 'tenants';
+            goto end_approve;
+        }
+
         // ── Generate / ensure slug ─────────────────────────────
         $slug = $t_row['slug'] ?? '';
         if (empty($slug) && !empty($t_row['business_name'])) {
