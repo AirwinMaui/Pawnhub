@@ -278,10 +278,18 @@ $bgImg   = !empty($rawBg)
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { width: 100%; height: 100%; font-family: 'Inter', sans-serif; }
 body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; }
-.bg { position: fixed; inset: 0; z-index: 0; }
-.bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.52); }
-.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 36px; background: rgba(255,255,255,0.07); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.bg {
+  position: fixed; inset: 0; z-index: 0;
+  background-image: url('<?= $bgImg ?>');
+  background-size: cover; background-position: center;
+  filter: blur(7px) brightness(0.4) saturate(0.65);
+  transform: scale(1.06);
+}
+.bg-ov {
+  position: fixed; inset: 0; z-index: 1;
+  background: radial-gradient(ellipse at center, rgba(5,10,30,0.4) 0%, rgba(5,10,30,0.85) 100%);
+}
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 36px; background: rgba(255,255,255,0.07); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
 .nav-logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
 .nav-logo-text { font-size: 1.15rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
@@ -361,10 +369,8 @@ html { scroll-behavior: smooth; }
 </head>
 <body>
 
-<div class="bg">
-  <img src="<?= $bgImg ?>" alt="<?= $bizName ?>"/>
-  <div class="bg-ov"></div>
-</div>
+<div class="bg"></div>
+<div class="bg-ov"></div>
 
 <header class="nav">
   <?php
