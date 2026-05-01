@@ -117,47 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         goto end_processing;
                     }
 
-                    // ── PRE-PAYMENT PERMIT VERIFICATION (Pro / Enterprise) ──────────────
-                    // Run Gemini AI permit check BEFORE sending user to PayMongo.
-                    // Rejected or mismatch → rollback DB records + delete uploaded file, show error.
+                    // ── Pro / Enterprise → go straight to PayMongo ──────────────────
                     if ($needs_payment) {
-                        require_once __DIR__ . '/permit_verify.php';
-
-                        $pre_result    = null;
-                        $pre_ai_status = 'manual_review';
-
-                        try {
-                            $pre_result    = verifyBusinessPermit($new_tid, $pdo);
-                            $pre_ai_status = $pre_result['status'];
-                            saveVerificationResult($new_tid, $pre_result, $pdo);
-                        } catch (Throwable $aiErr) {
-                            error_log('[Signup] Permit pre-verify AI error: ' . $aiErr->getMessage());
-                            // AI unavailable → allow through, SA will review after payment
-                            $pre_ai_status = 'manual_review';
-                        }
-
-                        // Block if AI rejected OR could not fully verify (manual_review).
-                        // We require ai_approved before allowing payment.
-                        if ($pre_ai_status !== 'ai_approved') {
-                            // Rollback: delete tenant + user records and uploaded file
-                            try {
-                                $pdo->prepare("DELETE FROM users   WHERE id = ?")->execute([$new_uid]);
-                                $pdo->prepare("DELETE FROM tenants WHERE id = ?")->execute([$new_tid]);
-                            } catch (Throwable $e) {}
-                            @unlink($upload_path);
-
-                            if ($pre_ai_status === 'ai_rejected') {
-                                $reject_reason = $pre_result['reason'] ?? 'Your business permit did not pass verification.';
-                                $error = '❌ Permit rejected: ' . $reject_reason . ' Please upload a valid, current business permit.';
-                            } else {
-                                // manual_review — AI uncertain (low confidence, name mismatch, etc.)
-                                $mismatch_note = $pre_result['reason'] ?? '';
-                                $error = '⚠️ We could not automatically verify your business permit. ' . ($mismatch_note ? $mismatch_note . ' ' : '') . 'Please ensure your permit is clear, unexpired, shows a pawnshop-related nature of business, and the business name matches exactly what you entered. Then try again.';
-                            }
-                            goto end_processing;
-                        }
-
-                        // Permit passed (ai_approved) or needs manual review → proceed to payment
                         $_SESSION['pending_tenant_id'] = $new_tid;
                         $_SESSION['pending_user_id']   = $new_uid;
                         $_SESSION['pending_plan']      = $plan;
@@ -167,9 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
 
-                    // Starter plan (free) — redirect to AI permit verification page
-                    header('Location: permit_verify_starter.php?tenant=' . $new_tid . '&user=' . $new_uid);
-                    exit;
+                    // Starter plan (free) — application submitted, pending SA review
+                    $success = 'application_submitted';
                     end_processing:
                 }
             }
@@ -563,8 +523,20 @@ html { scroll-behavior: smooth; }
           </div>
         </div>
 
+        <!-- Permit warning — prominent for paid plans -->
+        <div id="permit_warning" style="display:none;background:rgba(239,68,68,0.08);border:1.5px solid rgba(239,68,68,0.35);border-radius:12px;padding:14px 16px;margin-bottom:4px;">
+          <p style="font-size:0.78rem;color:#fca5a5;line-height:1.7;margin:0;">
+            ⚠️ <strong style="color:#f87171;">Important — Business Permit Policy:</strong><br>
+            Your account will be <strong style="color:#f87171;">automatically activated</strong> right after payment.
+            However, your Business Permit will still be reviewed by our Super Admin.<br><br>
+            If your permit is found to be <strong style="color:#f87171;">fake, expired, or does not match your registered business name</strong>,
+            your account will be <strong style="color:#f87171;">immediately deactivated without any refund</strong>.
+            Make sure your permit is <strong style="color:#fcd34d;">valid, current, and clearly readable</strong> before submitting.
+          </p>
+        </div>
+
         <p style="font-size:0.74rem;color:rgba(255,255,255,0.35);font-style:italic;line-height:1.6;">
-          ℹ️ The Super Admin will review your Business Permit and Payment details. Once verified and approved, you'll receive your login link.
+          ℹ️ Pro &amp; Enterprise accounts are activated automatically after payment. Business Permit is reviewed by the Super Admin after activation.
         </p>
 
         <!-- Terms & Conditions -->
@@ -577,9 +549,10 @@ html { scroll-behavior: smooth; }
             <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">2. No Mid-Cycle Cancellation.</strong> Once your subscription is active, you <strong style="color:#fca5a5;">cannot cancel or request a refund</strong> mid-subscription period. Your access will remain active until the end of your paid billing period. You may choose not to renew after your current period ends.</p>
             <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">3. Plan Downgrades.</strong> If you wish to downgrade to a lower plan, you may submit a downgrade request <strong style="color:#fcd34d;">only after your current subscription has expired</strong>. Downgrade requests submitted while a subscription is still active will not be processed until the expiry date.</p>
             <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">4. Plan Upgrades.</strong> You may request an upgrade to a higher plan at any time. Unused days from your current plan will be credited as proration toward the new plan cost, subject to admin approval.</p>
-            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">5. Account Approval.</strong> All registrations are subject to review and approval by the PawnHub Super Admin. Submission does not guarantee activation.</p>
-            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">6. Business Permit.</strong> You are required to upload a valid Business Permit. Providing false or invalid documents may result in account rejection or termination without refund.</p>
-            <p><strong style="color:rgba(255,255,255,0.65);">7. Changes to Terms.</strong> PawnHub reserves the right to update these terms at any time. Continued use of the service constitutes acceptance of any revised terms.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">5. Auto-Activation.</strong> Pro and Enterprise accounts are <strong style="color:#86efac;">activated automatically</strong> upon confirmed payment. No waiting period — you can log in immediately after paying.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">6. Business Permit Review.</strong> You are required to upload a <strong style="color:#fcd34d;">valid, current, and authentic Business Permit</strong>. Your permit will be reviewed by the Super Admin after activation. If your permit is found to be <strong style="color:#fca5a5;">fake, expired, or invalid</strong>, your account will be <strong style="color:#fca5a5;">immediately deactivated without refund</strong>. You will not be able to dispute this decision.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">7. Starter Plan.</strong> Starter plan registrations are subject to review and approval by the PawnHub Super Admin before activation.</p>
+            <p><strong style="color:rgba(255,255,255,0.65);">8. Changes to Terms.</strong> PawnHub reserves the right to update these terms at any time. Continued use of the service constitutes acceptance of any revised terms.</p>
           </div>
           <!-- Checkbox -->
           <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
@@ -588,8 +561,9 @@ html { scroll-behavior: smooth; }
               onchange="document.getElementById('submit_btn').style.opacity = this.checked ? '1' : '0.45';">
             <span style="font-size:0.79rem;color:rgba(255,255,255,0.65);line-height:1.6;">
               I have read and agree to the <strong style="color:#93c5fd;">PawnHub Terms &amp; Conditions</strong>, including the
-              <strong style="color:#fca5a5;">no-cancellation policy</strong> — I understand that once my subscription is active,
-              I cannot cancel or get a refund mid-period. I may only opt out of renewal after my current period ends.
+              <strong style="color:#fca5a5;">no-cancellation and no-refund policy</strong> — I understand that submitting a
+              <strong style="color:#fca5a5;">fake or expired Business Permit</strong> will result in
+              <strong style="color:#fca5a5;">immediate account deactivation without refund</strong>.
             </span>
           </label>
         </div>
@@ -638,10 +612,12 @@ function selectPlan(name) {
     document.getElementById('pill-' + n).classList.toggle('active', n === name);
   });
 
-  // Show/hide payment section for paid plans
-  const paySection = document.getElementById('payment_section');
-  const isPaid     = (name === 'Pro' || name === 'Enterprise');
-  paySection.style.display = isPaid ? 'block' : 'none';
+  // Show/hide payment section and permit warning for paid plans
+  const paySection    = document.getElementById('payment_section');
+  const permitWarning = document.getElementById('permit_warning');
+  const isPaid        = (name === 'Pro' || name === 'Enterprise');
+  paySection.style.display    = isPaid ? 'block' : 'none';
+  permitWarning.style.display = isPaid ? 'block' : 'none';
 
   // Update submit button label
   const btn = document.getElementById('submit_btn');
@@ -681,11 +657,12 @@ dz.addEventListener('drop', e => {
   handlePermitFile(document.getElementById('business_permit'));
 });
 
-// On page load, show payment section for paid plans
+// On page load, show payment section and permit warning for paid plans
 (function() {
   const plan = document.getElementById('plan_input').value;
   if (plan === 'Pro' || plan === 'Enterprise') {
     document.getElementById('payment_section').style.display = 'block';
+    document.getElementById('permit_warning').style.display  = 'block';
   }
 })();
 

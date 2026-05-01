@@ -180,23 +180,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             goto end_approve;
         }
 
-        // ── Guard: block approval if permit not ai_approved ────
-        $permit_status_chk = $t_row['business_permit_status'] ?? 'pending';
-        if ($permit_status_chk !== 'ai_approved') {
-            $status_labels = [
-                'ai_rejected'   => 'AI Rejected',
-                'manual_review' => 'Could Not Auto-Verify',
-                'pending'       => 'Not Yet Verified',
-            ];
-            $status_label  = $status_labels[$permit_status_chk] ?? ucfirst($permit_status_chk);
-            $rejection_note = htmlspecialchars($t_row['rejection_reason'] ?? '');
-            $error_msg = "⛔ Cannot approve — permit status is <strong>{$status_label}</strong>."
-                . ($rejection_note ? " Reason: {$rejection_note}" : '')
-                . " A valid AI-verified permit is required before approving this tenant.";
-            $active_page = 'tenants';
-            goto end_approve;
-        }
-
         // ── Generate / ensure slug ─────────────────────────────
         $slug = $t_row['slug'] ?? '';
         if (empty($slug) && !empty($t_row['business_name'])) {
@@ -1376,7 +1359,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td><?= $pmt_badge ?></td>
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
           <td>
-            <?php if (!$is_free && $pmt_status !== 'paid'): ?>
+            <?php if (!$is_free && $pmt_status !== 'paid' && !empty($t['invite_status'])): ?>
             <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
               <input type="hidden" name="action" value="send_payment_link"/>
               <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
