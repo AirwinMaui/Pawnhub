@@ -78,12 +78,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { width: 100%; height: 100%; font-family: 'Inter', sans-serif; }
-body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; }
-.bg { position: fixed; inset: 0; z-index: 0; }
-.bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bg-ov { position: absolute; inset: 0; background: rgba(10,20,60,0.48); }
+body { width: 100%; min-height: 100vh; font-family: 'Inter', sans-serif; overflow-x: hidden; overflow-y: auto; background: #0b1120; }
+
+/* ── Blurred background ── */
+.bg {
+  position: fixed; inset: 0; z-index: 0;
+  background-image: url('https://images.unsplash.com/photo-1553729459-efe14ef6055d?w=1600&q=80');
+  background-size: cover; background-position: center;
+  filter: blur(7px) brightness(0.4) saturate(0.65);
+  transform: scale(1.06);
+}
+.bg-ov {
+  position: fixed; inset: 0; z-index: 1;
+  background: radial-gradient(ellipse at center, rgba(5,10,30,0.4) 0%, rgba(5,10,30,0.85) 100%);
+}
 .nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: 64px;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: 64px;
   display: flex; align-items: center; justify-content: space-between; padding: 0 36px;
   background: rgba(255,255,255,0.07); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -95,8 +105,19 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 .nav-links a { font-size: 0.8rem; font-weight: 500; color: rgba(255,255,255,0.6); text-decoration: none; transition: color .2s; }
 .nav-links a:hover { color: #fff; }
 .page { position: relative; z-index: 10; width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding-top: 84px; padding-bottom: 24px; padding-left: 16px; padding-right: 16px; }
-.panel { width: 100%; max-width: 460px; display: flex; flex-direction: column; align-items: center; padding: 0; }
-.card { width: 100%; background: rgba(255,255,255,0.91); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-radius: 22px; padding: 34px 30px 26px; box-shadow: 0 18px 48px rgba(10,20,60,0.20); border: 1px solid rgba(255,255,255,0.26); }
+.panel {
+  width: 100%; max-width: 460px;
+  display: flex; flex-direction: column; align-items: center; padding: 0;
+  filter: drop-shadow(0 0 40px rgba(59,130,246,0.15));
+}
+.card {
+  width: 100%;
+  background: rgba(255,255,255,0.93);
+  backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px);
+  border-radius: 22px; padding: 36px 32px 28px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.28);
+}
 .card-icon { margin-bottom: 12px; }
 .material-symbols-outlined { font-variation-settings: 'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24; }
 .sa-badge { display: inline-flex; align-items: center; gap: 5px; background: linear-gradient(135deg,#1d4ed8,#7c3aed); color: #fff; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 100px; margin-bottom: 14px; }
@@ -148,10 +169,8 @@ body { width: 100%; min-height: 100%; font-family: 'Inter', sans-serif; overflow
 </head>
 <body>
 
-<div class="bg">
-  <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5_TIJZ7gPS7TJbOhT3mlXkiGTUvK43P5Q8JmtLOQPLEnW8MKgHVTqL5442kQYiDWY2QRo_pnnF1X6G1YizmlZKqXAbLflQBQVaeL_HbIOwxlElZ3gGQ_OPy-TLgjSmD_GDGGtrS4x6rwlP9ctf92uKuFXsjFkkcdS5LHGxcoOTSJskN5b3c9_KXjKPDKJjJgRT9FPsydoU9KGPFwWC1sGixVh4AqRUtT9Yfj6XN0cZG7WRmxqeAScFuFEr6EXTcva1GIdW5wthlI" alt="PawnHub background"/>
-  <div class="bg-ov"></div>
-</div>
+<div class="bg"></div>
+<div class="bg-ov"></div>
 
 <header class="nav">
   <a href="home.php" class="nav-logo">
