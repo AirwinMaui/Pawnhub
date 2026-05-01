@@ -180,6 +180,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             goto end_approve;
         }
 
+        // ── Guard: block approval if permit not ai_approved ────
+        $permit_status_chk = $t_row['business_permit_status'] ?? 'pending';
+        if ($permit_status_chk !== 'ai_approved') {
+            $status_labels = [
+                'ai_rejected'   => 'AI Rejected',
+                'manual_review' => 'Could Not Auto-Verify',
+                'pending'       => 'Not Yet Verified',
+            ];
+            $status_label  = $status_labels[$permit_status_chk] ?? ucfirst($permit_status_chk);
+            $rejection_note = htmlspecialchars($t_row['rejection_reason'] ?? '');
+            $error_msg = "⛔ Cannot approve — permit status is <strong>{$status_label}</strong>."
+                . ($rejection_note ? " Reason: {$rejection_note}" : '')
+                . " A valid AI-verified permit is required before approving this tenant.";
+            $active_page = 'tenants';
+            goto end_approve;
+        }
+
         // ── Generate / ensure slug ─────────────────────────────
         $slug = $t_row['slug'] ?? '';
         if (empty($slug) && !empty($t_row['business_name'])) {
@@ -277,6 +294,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE users SET status='rejected', rejected_reason=? WHERE id=?")->execute([$reason, $uid]);
         try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'REJECT_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Rejected tenant ID $tid. Reason: $reason",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
         $success_msg = 'Tenant application rejected.';
+        $active_page = 'tenants';
+    }
+
+    // ── APPROVE BUSINESS PERMIT ───────────────────────────────
+    if ($_POST['action'] === 'approve_permit') {
+        $tid = intval($_POST['tenant_id']);
+        $t_stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+        $t_stmt->execute([$tid]);
+        $t_row = $t_stmt->fetch();
+        if ($t_row) {
+            $pdo->prepare("UPDATE tenants SET business_permit_status = 'sa_approved' WHERE id = ?")->execute([$tid]);
+            try {
+                require_once __DIR__ . '/mailer.php';
+                sendPermitApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $t_row['slug'] ?? '');
+            } catch (Throwable $e) { error_log('[ApprovePermit] Email error: ' . $e->getMessage()); }
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PERMIT_APPROVED','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Business permit approved for tenant ID $tid ({$t_row['business_name']}).",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = "✅ Business permit approved for <strong>{$t_row['business_name']}</strong>. Tenant notified by email.";
+        } else { $error_msg = 'Tenant not found.'; }
+        $active_page = 'tenants';
+    }
+
+    // ── REJECT BUSINESS PERMIT → auto-deactivate tenant ──────
+    if ($_POST['action'] === 'reject_permit') {
+        $tid    = intval($_POST['tenant_id']);
+        $reason = trim($_POST['reject_reason'] ?? 'Your business permit was found to be invalid or expired.');
+        $t_stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+        $t_stmt->execute([$tid]);
+        $t_row = $t_stmt->fetch();
+        if ($t_row) {
+            $pdo->prepare("UPDATE tenants SET business_permit_status = 'sa_rejected', status = 'inactive', rejection_reason = ? WHERE id = ?")->execute([$reason, $tid]);
+            $pdo->prepare("UPDATE users SET is_suspended = 1, suspended_at = NOW(), suspension_reason = ? WHERE tenant_id = ?")->execute(["Account deactivated: business permit rejected. Reason: $reason", $tid]);
+            try {
+                require_once __DIR__ . '/mailer.php';
+                sendPermitRejected($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $reason);
+            } catch (Throwable $e) { error_log('[RejectPermit] Email error: ' . $e->getMessage()); }
+            try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PERMIT_REJECTED','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Business permit rejected for tenant ID $tid ({$t_row['business_name']}). Reason: $reason. Account deactivated.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+            $success_msg = "⛔ Permit rejected. <strong>{$t_row['business_name']}</strong> has been deactivated and notified by email.";
+        } else { $error_msg = 'Tenant not found.'; }
         $active_page = 'tenants';
     }
 
@@ -1359,7 +1414,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td><?= $pmt_badge ?></td>
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
           <td>
-            <?php if (!$is_free && $pmt_status !== 'paid' && !empty($t['invite_status'])): ?>
+            <?php if (!$is_free && $pmt_status !== 'paid'): ?>
             <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
               <input type="hidden" name="action" value="send_payment_link"/>
               <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
@@ -1373,6 +1428,56 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <?php endforeach;?></tbody></table></div>
       </div>
       <?php endif;?>
+
+      <?php
+      // Pending Permit Review: active tenants (Pro/Enterprise, self-signup) whose permit not yet reviewed
+      $permit_review_tenants = array_filter($tenants, fn($t) =>
+          $t['status'] === 'active' &&
+          in_array($t['plan'], ['Pro','Enterprise']) &&
+          empty($t['invite_status']) &&
+          !empty($t['business_permit_url']) &&
+          !in_array($t['business_permit_status'] ?? 'pending', ['sa_approved','sa_rejected'])
+      );
+      if (!empty($permit_review_tenants)): ?>
+      <div class="card" style="border-color:#fb923c;">
+        <div class="card-hdr"><span class="card-title" style="color:#c2410c;">🔍 Pending Permit Review (<?=count($permit_review_tenants)?>)</span><span style="font-size:.73rem;color:#92400e;">Review business permits of newly activated tenants</span></div>
+        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Plan</th><th>Permit</th><th>Paid</th><th>Actions</th></tr></thead><tbody>
+        <?php foreach($permit_review_tenants as $t): ?>
+        <tr>
+          <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
+          <td style="font-size:.78rem;color:var(--text-dim);"><?=htmlspecialchars($t['owner_name'])?></td>
+          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':'plan-pro'?>"><?=$t['plan']?></span></td>
+          <td>
+            <?php if (!empty($t['business_permit_url'])): ?>
+              <?php $ext = strtolower(pathinfo($t['business_permit_url'], PATHINFO_EXTENSION)); ?>
+              <?php if ($ext === 'pdf'): ?>
+                <a href="<?=htmlspecialchars($t['business_permit_url'])?>" target="_blank" class="btn-sm" style="font-size:.69rem;background:#0f172a;color:#fff;border:none;">📄 View PDF</a>
+              <?php else: ?>
+                <a href="<?=htmlspecialchars($t['business_permit_url'])?>" target="_blank" class="btn-sm" style="font-size:.69rem;background:#0f172a;color:#fff;border:none;">🖼 View Image</a>
+              <?php endif; ?>
+            <?php else: ?>
+              <span style="font-size:.72rem;color:#94a3b8;">No file</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <?php if ($t['payment_status'] === 'paid'): ?>
+              <span class="badge b-green" style="font-size:.68rem;">💳 Paid</span>
+            <?php else: ?>
+              <span class="badge b-yellow" style="font-size:.68rem;">⏳ Unpaid</span>
+            <?php endif; ?>
+          </td>
+          <td style="white-space:nowrap;">
+            <form method="POST" style="display:inline;" onsubmit="return confirm('Approve business permit for <?=htmlspecialchars(addslashes($t['business_name']))?> ?');">
+              <input type="hidden" name="action" value="approve_permit"/>
+              <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+              <button type="submit" class="btn-sm btn-success" style="font-size:.69rem;">✓ Approve Permit</button>
+            </form>
+            <button onclick="openRejectPermitModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;">✗ Reject Permit</button>
+          </td>
+        </tr>
+        <?php endforeach;?></tbody></table></div>
+      </div>
+      <?php endif; ?>
 
       <div class="card">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
@@ -2425,6 +2530,30 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
   </div>
 </div>
 
+<!-- ── REJECT PERMIT MODAL ─────────────────────────────── -->
+<div class="modal-overlay" id="rejectPermitModal">
+  <div class="modal">
+    <div class="mhdr"><div><div class="mtitle">✗ Reject Business Permit</div><div class="msub" id="reject_permit_sub"></div></div><button class="mclose" onclick="document.getElementById('rejectPermitModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="mbody">
+      <form method="POST">
+        <input type="hidden" name="action" value="reject_permit"/>
+        <input type="hidden" name="tenant_id" id="reject_permit_tid"/>
+        <div style="margin-bottom:13px;">
+          <label class="flabel">Reason for Rejection</label>
+          <textarea name="reject_reason" class="finput" rows="3" placeholder="e.g. Permit is expired, fake document, business name does not match..." style="resize:vertical;"></textarea>
+        </div>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 13px;font-size:.78rem;color:#dc2626;margin-bottom:14px;">
+          ⚠️ This will <strong>immediately deactivate</strong> the tenant account and notify them by email. This action cannot be undone.
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;">
+          <button type="button" class="btn-sm" onclick="document.getElementById('rejectPermitModal').classList.remove('open')">Cancel</button>
+          <button type="submit" class="btn-sm btn-danger">✗ Reject &amp; Deactivate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
 // Close modals when clicking backdrop
 document.querySelectorAll('.modal-overlay').forEach(el => {
@@ -2550,6 +2679,11 @@ function openApproveModal(tid,uid,name){
   document.getElementById('approveModal').classList.add('open');
 }
 function openRejectModal(tid,uid,name){document.getElementById('reject_tid').value=tid;document.getElementById('reject_uid').value=uid;document.getElementById('reject_sub').textContent='Business: '+name;document.getElementById('rejectModal').classList.add('open');}
+function openRejectPermitModal(tid,name){
+  document.getElementById('reject_permit_tid').value=tid;
+  document.getElementById('reject_permit_sub').textContent='Business: '+name;
+  document.getElementById('rejectPermitModal').classList.add('open');
+}
 function openPlanModal(tid,name,currentPlan){
   document.getElementById('plan_tid').value=tid;
   document.getElementById('plan_modal_sub').textContent=name;
