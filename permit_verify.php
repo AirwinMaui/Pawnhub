@@ -255,7 +255,9 @@ if ($is_cli) {
 }
 
 // ── HTTP POST mode (Super Admin re-verify trigger) ────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Only execute this block when permit_verify.php is accessed DIRECTLY
+// (not when included by signup.php or paymongo_success.php)
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'permit_verify.php' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Auth check — only super_admin
     require_once __DIR__ . '/session_helper.php';
     pawnhub_session_start('super_admin');
