@@ -2,18 +2,12 @@
 /**
  * permit_verify_starter.php
  * ─────────────────────────────────────────────────────────────
- * Called automatically after Starter plan signup (free plan).
- * Since Starter is free — walang PayMongo, so i-verify natin
- * ang permit dito agad after form submit.
+ * Called after Starter plan signup (free plan).
  *
- * Flow:
- *  1. Tenant submits signup form (Starter plan)
- *  2. DB insert happens in signup.php
- *  3. Redirect to this page with ?tenant=X&user=Y
- *  4. AI verifies permit via Gemini
- *  5. If approved → tenant status = 'active', user = 'approved'
- *  6. If rejected → tenant status = 'pending', flag for SA review
- *  7. Show result UI
+ * RESULTS:
+ *   ai_approved   → auto-activate tenant ✅
+ *   ai_rejected   → block activation, show error ❌
+ *   manual_review → block activation, SA will review 🔍
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -40,13 +34,14 @@ if (!$tenant) {
     exit;
 }
 
-// Only process if still pending
-$already_processed = ($tenant['status'] === 'active');
-$permit_ai_status  = $tenant['business_permit_status'] ?? 'pending';
-$permit_result     = null;
+$permit_result    = null;
+$permit_ai_status = 'pending';
+$is_active        = false;
 
-if (!$already_processed) {
-    // Run Gemini AI verification
+// Only run AI if not yet processed
+if ($tenant['status'] !== 'active') {
+
+    // ── Run Gemini AI Verification ────────────────────────────
     try {
         $permit_result    = verifyBusinessPermit($tenant_id, $pdo);
         $permit_ai_status = $permit_result['status'];
@@ -54,23 +49,28 @@ if (!$already_processed) {
     } catch (Throwable $e) {
         error_log("[StarterVerify] AI error: " . $e->getMessage());
         $permit_ai_status = 'manual_review';
-        $permit_result    = ['status' => 'manual_review', 'reason' => 'AI verification failed. Flagged for manual review.', 'data' => []];
+        $permit_result    = [
+            'status' => 'manual_review',
+            'reason' => 'AI verification unavailable. Flagged for manual review.',
+            'data'   => []
+        ];
         saveVerificationResult($tenant_id, $permit_result, $pdo);
     }
 
+    // ── ONLY activate if AI APPROVED ─────────────────────────
+    // ai_rejected = blocked ❌
+    // manual_review = blocked, pending SA review 🔍
     if ($permit_ai_status === 'ai_approved') {
+
         // Generate slug
-        $slug = $tenant['slug'] ?? '';
-        if (empty($slug)) {
-            $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $tenant['business_name']));
-            $slug      = $base_slug;
-            $ctr       = 1;
-            while (true) {
-                $chk = $pdo->prepare("SELECT id FROM tenants WHERE slug = ? AND id != ?");
-                $chk->execute([$slug, $tenant_id]);
-                if (!$chk->fetch()) break;
-                $slug = $base_slug . $ctr++;
-            }
+        $base_slug = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $tenant['business_name']));
+        $slug      = $base_slug;
+        $ctr       = 1;
+        while (true) {
+            $chk = $pdo->prepare("SELECT id FROM tenants WHERE slug = ? AND id != ?");
+            $chk->execute([$slug, $tenant_id]);
+            if (!$chk->fetch()) break;
+            $slug = $base_slug . $ctr++;
         }
 
         // Activate tenant
@@ -91,7 +91,7 @@ if (!$already_processed) {
             WHERE id = ?
         ")->execute([$user_id]);
 
-        // Send email
+        // Send welcome email
         try {
             require_once __DIR__ . '/mailer.php';
             sendTenantApproved(
@@ -104,23 +104,32 @@ if (!$already_processed) {
             error_log("[StarterVerify] Email error: " . $e->getMessage());
         }
 
-        $already_processed = true;
+        $is_active = true;
 
     } else {
-        // Keep as pending — SA will review
-        // No activation yet
-        $already_processed = false;
+        // ── ai_rejected OR manual_review → DO NOT ACTIVATE ───
+        // Tenant stays as 'pending'
+        // User stays as 'pending'
+        // SA will see it in dashboard with permit_status badge
+        $is_active = false;
     }
 
-    // Re-fetch
-    $stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
-    $stmt->execute([$tenant_id]);
-    $tenant = $stmt->fetch();
+} else {
+    // Already active
+    $permit_ai_status = 'ai_approved';
+    $is_active        = true;
 }
+
+// Re-fetch for display
+$stmt = $pdo->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+$stmt->execute([$tenant_id]);
+$tenant = $stmt->fetch();
 
 $biz_name_display = htmlspecialchars($tenant['business_name'] ?? 'Your Business');
 $tenant_email     = htmlspecialchars($tenant['email'] ?? '');
-$rejection_reason = htmlspecialchars($permit_result['reason'] ?? $tenant['rejection_reason'] ?? '');
+$rejection_reason = htmlspecialchars(
+    $permit_result['reason'] ?? $tenant['rejection_reason'] ?? ''
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -137,151 +146,171 @@ $rejection_reason = htmlspecialchars($permit_result['reason'] ?? $tenant['reject
 <div class="bg-gray-900 border border-gray-800 rounded-3xl p-10 max-w-lg w-full text-center shadow-2xl">
 
   <!-- Icon -->
-  <div class="w-20 h-20 <?= $already_processed ? 'bg-green-500/15' : ($permit_ai_status === 'ai_rejected' ? 'bg-red-500/15' : 'bg-yellow-500/15') ?> rounded-full flex items-center justify-center mx-auto mb-6">
-    <?php if ($already_processed): ?>
-    <svg class="w-10 h-10 text-green-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-    </svg>
+  <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6
+    <?php if ($is_active): ?>bg-green-500/15
+    <?php elseif ($permit_ai_status === 'ai_rejected'): ?>bg-red-500/15
+    <?php else: ?>bg-yellow-500/15<?php endif; ?>">
+    <?php if ($is_active): ?>
+      <svg class="w-10 h-10 text-green-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+      </svg>
     <?php elseif ($permit_ai_status === 'ai_rejected'): ?>
-    <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-    </svg>
+      <svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
     <?php else: ?>
-    <svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
+      <svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
     <?php endif; ?>
   </div>
 
+  <!-- Title -->
   <h1 class="text-2xl font-extrabold mb-2">
-    <?php if ($already_processed): ?>Account Activated! 🎉
-    <?php elseif ($permit_ai_status === 'ai_rejected'): ?>Permit Issue Detected ⚠️
-    <?php else: ?>Application Submitted! 🔍
+    <?php if ($is_active): ?>Account Activated! 🎉
+    <?php elseif ($permit_ai_status === 'ai_rejected'): ?>Permit Rejected ❌
+    <?php else: ?>Application Under Review 🔍
     <?php endif; ?>
   </h1>
 
+  <!-- Subtitle -->
   <p class="text-gray-400 text-sm leading-relaxed mb-6">
-    <?php if ($already_processed): ?>
+    <?php if ($is_active): ?>
       Welcome, <strong class="text-white"><?= $biz_name_display ?></strong>!
-      Your <strong class="text-green-400">Starter Plan</strong> account is now active.
+      Your <strong class="text-green-400">Starter Plan</strong> is now active.
       Check your email to log in!
     <?php elseif ($permit_ai_status === 'ai_rejected'): ?>
-      Your application for <strong class="text-white"><?= $biz_name_display ?></strong>
-      was received but there's an issue with your business permit.
+      Sorry, <strong class="text-white"><?= $biz_name_display ?></strong>.
+      Your business permit was <strong class="text-red-400">not accepted</strong>.
+      Your account has <strong class="text-red-400">not been activated</strong>.
     <?php else: ?>
-      Your application for <strong class="text-white"><?= $biz_name_display ?></strong>
-      has been submitted and is under review by our admin team.
+      Thank you, <strong class="text-white"><?= $biz_name_display ?></strong>!
+      Your application is pending manual review.
+      Your account will be activated once our admin approves it.
     <?php endif; ?>
   </p>
 
-  <!-- Status steps -->
-  <div class="bg-gray-800 rounded-2xl p-6 mb-6 text-left">
-    <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Verification Status</p>
+  <!-- Steps -->
+  <div class="bg-gray-800 rounded-2xl p-6 mb-6 text-left space-y-4">
+    <p class="text-xs font-bold uppercase tracking-widest text-gray-500">Verification Status</p>
 
     <!-- Step 1: Registration -->
-    <div class="flex items-start gap-3 mb-4">
+    <div class="flex items-start gap-3">
       <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
         </svg>
       </div>
       <div>
-        <p class="text-sm font-semibold text-white">Registration received ✅</p>
-        <p class="text-xs text-gray-400 mt-0.5">Your account details have been saved successfully.</p>
+        <p class="text-sm font-semibold text-white">Registration saved ✅</p>
+        <p class="text-xs text-gray-400 mt-0.5">Your account details were saved successfully.</p>
       </div>
     </div>
 
-    <!-- Step 2: Permit AI Check -->
-    <div class="flex items-start gap-3 mb-4">
-      <?php if ($already_processed): ?>
-      <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-        </svg>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-white">Business permit verified ✅</p>
-        <p class="text-xs text-gray-400 mt-0.5">AI automatically verified your business permit.</p>
-      </div>
+    <!-- Step 2: AI Permit Check -->
+    <div class="flex items-start gap-3">
+      <?php if ($is_active): ?>
+        <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-white">Business permit verified ✅</p>
+          <p class="text-xs text-gray-400 mt-0.5">AI confirmed your permit is valid and pawnshop-related.</p>
+        </div>
       <?php elseif ($permit_ai_status === 'ai_rejected'): ?>
-      <div class="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-red-300">Permit issue found ❌</p>
-        <p class="text-xs text-gray-400 mt-0.5"><?= $rejection_reason ?></p>
-      </div>
+        <div class="w-7 h-7 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-red-300">Permit rejected by AI ❌</p>
+          <p class="text-xs text-red-400 mt-0.5 font-medium"><?= $rejection_reason ?: 'Your permit did not pass verification.' ?></p>
+        </div>
       <?php else: ?>
-      <div class="w-7 h-7 rounded-full bg-yellow-500/20 border-2 border-yellow-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-yellow-300">Permit flagged for manual review 🔍</p>
-        <p class="text-xs text-gray-400 mt-0.5">Our admin will verify your permit — usually within 24 hours.</p>
-      </div>
+        <div class="w-7 h-7 rounded-full bg-yellow-500/20 border-2 border-yellow-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-yellow-300">Flagged for manual review 🔍</p>
+          <p class="text-xs text-gray-400 mt-0.5"><?= $rejection_reason ?: 'Admin will manually verify your permit within 24 hours.' ?></p>
+        </div>
       <?php endif; ?>
     </div>
 
     <!-- Step 3: Account Access -->
     <div class="flex items-start gap-3">
-      <?php if ($already_processed): ?>
-      <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-blue-300">Check your email</p>
-        <p class="text-xs text-gray-400 mt-0.5">Login link sent to <strong class="text-white"><?= $tenant_email ?></strong></p>
-      </div>
+      <?php if ($is_active): ?>
+        <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-blue-300">Check your email 📧</p>
+          <p class="text-xs text-gray-400 mt-0.5">Login link sent to <strong class="text-white"><?= $tenant_email ?></strong></p>
+        </div>
+      <?php elseif ($permit_ai_status === 'ai_rejected'): ?>
+        <div class="w-7 h-7 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span class="text-red-400 text-xs font-bold">✕</span>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-red-300">Account NOT activated</p>
+          <p class="text-xs text-gray-500 mt-0.5">Please re-register with a valid, current business permit.</p>
+        </div>
       <?php else: ?>
-      <div class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <span class="text-gray-400 text-xs font-bold">3</span>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-gray-300">Account activation</p>
-        <p class="text-xs text-gray-500 mt-0.5">
-          <?= $permit_ai_status === 'ai_rejected'
-            ? 'Please contact support to resolve the permit issue.'
-            : 'You\'ll receive an email once your account is approved.' ?>
-        </p>
-      </div>
+        <div class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span class="text-gray-400 text-xs font-bold">3</span>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-gray-400">Waiting for admin approval</p>
+          <p class="text-xs text-gray-500 mt-0.5">Email will be sent to <strong class="text-gray-300"><?= $tenant_email ?></strong> once approved.</p>
+        </div>
       <?php endif; ?>
     </div>
   </div>
 
-  <!-- Info box -->
-  <?php if ($already_processed): ?>
-  <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-sm text-green-300 mb-6 text-left">
-    <div class="flex items-start gap-2">
-      <span>📧</span>
-      <span>Can't find the email? Check your <strong>spam folder</strong>.</span>
+  <!-- Info / action box -->
+  <?php if ($is_active): ?>
+    <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-sm text-green-300 mb-6 text-left">
+      <div class="flex items-start gap-2">
+        <span>📧</span>
+        <span>Can't find the email? Check your <strong>spam or junk folder</strong>.</span>
+      </div>
     </div>
-  </div>
-  <?php elseif ($permit_ai_status === 'ai_rejected'): ?>
-  <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-300 mb-6 text-left">
-    <div class="flex items-start gap-2">
-      <span>⚠️</span>
-      <span>Please <strong>re-register</strong> with a valid, current Business Permit issued for the current year with pawnshop as nature of business.</span>
-    </div>
-  </div>
-  <?php else: ?>
-  <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-sm text-yellow-300 mb-6 text-left">
-    <div class="flex items-start gap-2">
-      <span>🔍</span>
-      <span>Our admin is reviewing your permit. You'll receive an email at <strong><?= $tenant_email ?></strong> once approved — usually <strong>within 24 hours</strong>.</span>
-    </div>
-  </div>
-  <?php endif; ?>
+    <a href="login.php" class="block bg-green-600 hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm text-center">
+      Go to Login →
+    </a>
 
-  <?php if ($permit_ai_status === 'ai_rejected'): ?>
-  <a href="signup.php" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm">
-    ← Re-register with valid permit
-  </a>
+  <?php elseif ($permit_ai_status === 'ai_rejected'): ?>
+    <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-300 mb-6 text-left">
+      <div class="flex items-start gap-2">
+        <span>⚠️</span>
+        <div>
+          <p class="font-semibold mb-1">Common reasons for rejection:</p>
+          <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
+            <li>Permit is expired — must be valid for <?= date('Y') ?></li>
+            <li>Not a Philippine Business / Mayor's Permit</li>
+            <li>Nature of Business is not pawnshop-related</li>
+            <li>Document is blurry or unreadable</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="signup.php" class="block bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm text-center">
+      ← Re-register with Valid Permit
+    </a>
+
   <?php else: ?>
-  <a href="login.php" class="inline-block bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm">
-    ← Back to Login
-  </a>
+    <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-sm text-yellow-300 mb-6 text-left">
+      <div class="flex items-start gap-2">
+        <span>🔍</span>
+        <span>Our admin will review your permit and activate your account within <strong>24 hours</strong>. Check your email at <strong><?= $tenant_email ?></strong>.</span>
+      </div>
+    </div>
+    <a href="login.php" class="block bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm text-center">
+      ← Back to Login
+    </a>
   <?php endif; ?>
 
 </div>
