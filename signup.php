@@ -117,7 +117,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         goto end_processing;
                     }
 
+                    // ── PRE-PAYMENT PERMIT VERIFICATION (Pro / Enterprise) ──────────────
+                    // Run Gemini AI permit check BEFORE sending user to PayMongo.
+                    // Rejected or mismatch → rollback DB records + delete uploaded file, show error.
                     if ($needs_payment) {
+                        require_once __DIR__ . '/permit_verify.php';
+
+                        $pre_result    = null;
+                        $pre_ai_status = 'manual_review';
+
+                        try {
+                            $pre_result    = verifyBusinessPermit($new_tid, $pdo);
+                            $pre_ai_status = $pre_result['status'];
+                            saveVerificationResult($new_tid, $pre_result, $pdo);
+                        } catch (Throwable $aiErr) {
+                            error_log('[Signup] Permit pre-verify AI error: ' . $aiErr->getMessage());
+                            // AI unavailable → allow through, SA will review after payment
+                            $pre_ai_status = 'manual_review';
+                        }
+
+                        // Hard block: AI explicitly rejected the permit
+                        if ($pre_ai_status === 'ai_rejected') {
+                            // Rollback: delete tenant + user records and uploaded file
+                            try {
+                                $pdo->prepare("DELETE FROM users   WHERE id = ?")->execute([$new_uid]);
+                                $pdo->prepare("DELETE FROM tenants WHERE id = ?")->execute([$new_tid]);
+                            } catch (Throwable $e) {}
+                            @unlink($upload_path);
+
+                            $reject_reason = $pre_result['reason'] ?? 'Your business permit did not pass verification.';
+                            $error = '❌ Permit rejected: ' . $reject_reason . ' Please re-upload a valid, current business permit.';
+                            goto end_processing;
+                        }
+
+                        // Permit passed (ai_approved) or needs manual review → proceed to payment
                         $_SESSION['pending_tenant_id'] = $new_tid;
                         $_SESSION['pending_user_id']   = $new_uid;
                         $_SESSION['pending_plan']      = $plan;
