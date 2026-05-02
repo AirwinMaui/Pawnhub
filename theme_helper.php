@@ -53,6 +53,20 @@ function renderThemeCSS(array $theme): string {
         ? "color-mix(in srgb, {$s} 95%, #0a0a0a)"
         : "#0f172a"; // dark navy fallback when secondary is light/white
 
+    // On-primary text color: black for light primaries (e.g. yellow), white for dark ones
+    $isDarkPrimary = colorIsDark($p);
+    $onPrimary     = $isDarkPrimary ? '#ffffff' : '#0f172a';
+    $onPrimaryMid  = $isDarkPrimary ? 'rgba(255,255,255,.6)'  : 'rgba(0,0,0,.55)';
+    $onPrimaryDim  = $isDarkPrimary ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.35)';
+
+    // Topbar text: always white unless primary is very light
+    $topbarText    = $isDarkPrimary ? '#ffffff' : '#0f172a';
+    $topbarIcon    = $isDarkPrimary ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.12)';
+    $topbarIconHov = $isDarkPrimary ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.2)';
+    $topbarBorder  = $isDarkPrimary ? 'rgba(255,255,255,.2)'  : 'rgba(0,0,0,.15)';
+    $chipBg        = $isDarkPrimary ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.1)';
+    $chipBorder    = $isDarkPrimary ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.2)';
+
     // When tenant picks a dark sidebar color, inject dark-mode sidebar overrides
     $isDarkSidebar = colorIsDark($sb);
 
@@ -87,14 +101,26 @@ function renderThemeCSS(array $theme): string {
     return "
     <style id='tenant-theme'>
     :root {
-        --t-primary:   {$p};
-        --t-primary-d: {$pDark};
-        --t-secondary: {$s};
-        --t-accent:    {$a};
-        --t-accent-d:  {$aDark};
-        --t-sidebar:   {$sb};
-        --t-page-bg:   {$pageBg};
+        --t-primary:    {$p};
+        --t-primary-d:  {$pDark};
+        --t-secondary:  {$s};
+        --t-accent:     {$a};
+        --t-accent-d:   {$aDark};
+        --t-sidebar:    {$sb};
+        --t-page-bg:    {$pageBg};
+        --t-on-primary: {$onPrimary};
+        --t-on-primary-mid: {$onPrimaryMid};
+        --t-on-primary-dim: {$onPrimaryDim};
     }
+
+    /* ── Branch hero card — text adapts to light/dark primary ── */
+    .branch-hero *, [class*='branch-card'] * { color: inherit !important; }
+    .branch-hero [data-label], .branch-hero-label { color: {$onPrimaryDim} !important; }
+    .branch-hero-title  { color: {$onPrimary} !important; }
+    .branch-hero-sub    { color: {$onPrimaryMid} !important; }
+
+    /* Inline branch banner (manager/staff/cashier dashboard) */
+    [style*='linear-gradient'][style*='--t-secondary'] { color: {$onPrimary} !important; }
 
     /* ── Logo & primary backgrounds ── */
     .sb-logo, .theme-primary-bg { background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important; }
@@ -103,11 +129,11 @@ function renderThemeCSS(array $theme): string {
     .btn-primary, .btn-sm.btn-primary { background: var(--t-primary) !important; border-color: var(--t-primary) !important; color: #fff !important; }
     .btn-primary:hover { background: var(--t-primary-d) !important; border-color: var(--t-primary-d) !important; }
 
-    /* ── Topbar chips — white pill on colored topbar ── */
+    /* ── Topbar chips — contrast-aware pill ── */
     .topbar .tenant-chip, .topbar .cashier-chip, .topbar .mgr-chip {
-        background: rgba(255,255,255,.18) !important;
-        color: #fff !important;
-        border-color: rgba(255,255,255,.35) !important;
+        background: {$chipBg} !important;
+        color: {$topbarText} !important;
+        border-color: {$chipBorder} !important;
     }
     /* Topbar avatar uses primary gradient */
     .topbar-avatar { background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important; }
@@ -128,23 +154,23 @@ function renderThemeCSS(array $theme): string {
     /* ── Page header / section highlights ── */
     a[style*='background:var(--blue-acc)'] { background: var(--t-primary) !important; }
 
-    /* ── Topbar background ── */
+    /* ── Topbar background + contrast-aware text ── */
     .topbar {
         background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important;
         border-bottom-color: color-mix(in srgb, var(--t-secondary) 80%, #000) !important;
     }
-    .topbar-title { color: #fff !important; }
+    .topbar-title { color: {$topbarText} !important; }
     .topbar-icon {
-        background: rgba(255,255,255,.15) !important;
-        color: #fff !important;
+        background: {$topbarIcon} !important;
+        color: {$topbarText} !important;
     }
     .topbar-icon:hover {
-        background: rgba(255,255,255,.25) !important;
-        color: #fff !important;
+        background: {$topbarIconHov} !important;
+        color: {$topbarText} !important;
     }
-    .topbar-user { border-left-color: rgba(255,255,255,.2) !important; }
-    .topbar-user-name { color: #fff !important; }
-    .topbar-user-role { color: rgba(255,255,255,.7) !important; }
+    .topbar-user { border-left-color: {$topbarBorder} !important; }
+    .topbar-user-name { color: {$topbarText} !important; }
+    .topbar-user-role { color: {$onPrimaryMid} !important; }
 
     /* ── Links that use primary color ── */
     .page-hdr a, .topbar-title { color: #fff; }

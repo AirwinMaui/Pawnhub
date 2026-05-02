@@ -974,28 +974,28 @@ $notif_count = count($notifs);
     </div>
 
     <!-- Branch banner -->
-    <div style="background:linear-gradient(135deg,var(--t-secondary,#064e3b),var(--t-primary,#059669));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(255,255,255,.1);">
+    <div style="background:linear-gradient(135deg,var(--t-secondary,#064e3b),var(--t-primary,#059669));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
       <div>
-        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px;">Your Branch</div>
-        <div style="font-size:1.05rem;font-weight:800;color:#fff;"><?=htmlspecialchars($tenant['business_name']??'—')?></div>
-        <div style="font-size:.76rem;color:rgba(255,255,255,.5);margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Manager</div>
-        <div style="font-size:.72rem;color:rgba(255,255,255,.35);margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.5));margin-bottom:4px;">Your Branch</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=htmlspecialchars($tenant['business_name']??'—')?></div>
+        <div style="font-size:.76rem;color:var(--t-on-primary-mid,rgba(255,255,255,.5));margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Manager</div>
+        <div style="font-size:.72rem;color:var(--t-on-primary-dim,rgba(255,255,255,.35));margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
         <?php if(!empty($tenant['phone'])):?>
-        <div style="font-size:.74rem;color:rgba(255,255,255,.6);margin-top:5px;display:flex;align-items:center;gap:5px;">
+        <div style="font-size:.74rem;color:var(--t-on-primary-mid,rgba(255,255,255,.6));margin-top:5px;display:flex;align-items:center;gap:5px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
           <?=htmlspecialchars($tenant['phone'])?>
         </div>
         <?php endif;?>
         <?php if(!empty($tenant['address'])):?>
-        <div style="font-size:.74rem;color:rgba(255,255,255,.6);margin-top:3px;display:flex;align-items:center;gap:5px;">
+        <div style="font-size:.74rem;color:var(--t-on-primary-mid,rgba(255,255,255,.6));margin-top:3px;display:flex;align-items:center;gap:5px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
           <?=htmlspecialchars($tenant['address'])?>
         </div>
         <?php endif;?>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:.65rem;color:rgba(255,255,255,.4);margin-bottom:3px;">Team Members</div>
-        <div style="font-size:1.5rem;font-weight:800;color:#fff;"><?=count($my_team)?></div>
+        <div style="font-size:.65rem;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:3px;">Team Members</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=count($my_team)?></div>
       </div>
     </div>
 

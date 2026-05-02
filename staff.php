@@ -705,15 +705,15 @@ $notif_count = count($notifs);
     </div>
 
     <!-- Branch Banner -->
-    <div style="background:linear-gradient(135deg,var(--t-sidebar,#0f172a),var(--t-secondary,#1e3a8a));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(255,255,255,.08);">
+    <div style="background:linear-gradient(135deg,var(--t-sidebar,#0f172a),var(--t-secondary,#1e3a8a));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
       <div>
-        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:4px;">Your Branch</div>
-        <div style="font-size:1.05rem;font-weight:800;color:#fff;"><?=htmlspecialchars($tenant['business_name'])?></div>
-        <div style="font-size:.76rem;color:rgba(255,255,255,.5);margin-top:2px;"><?=$tenant['plan']?> Plan · <?=$tenant['branches']?> Branch<?=$tenant['branches']>1?'es':''?></div>
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:4px;">Your Branch</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=htmlspecialchars($tenant['business_name'])?></div>
+        <div style="font-size:.76rem;color:var(--t-on-primary-mid,rgba(255,255,255,.5));margin-top:2px;"><?=$tenant['plan']?> Plan · <?=$tenant['branches']?> Branch<?=$tenant['branches']>1?'es':''?></div>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:.65rem;color:rgba(255,255,255,.4);margin-bottom:3px;">Tenant ID</div>
-        <div style="font-size:1.5rem;font-weight:800;color:#fff;">#<?=$tid?></div>
+        <div style="font-size:.65rem;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:3px;">Tenant ID</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--t-on-primary,#fff);">#<?=$tid?></div>
       </div>
     </div>
 
