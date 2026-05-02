@@ -492,7 +492,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 /* ── SIDEBAR ── */
 .sidebar{
   width:var(--sw);min-height:100vh;
-  background:#ffffff;
+  background:var(--t-sidebar,#ffffff);
   border-right:1px solid #e4e6eb;
   display:flex;flex-direction:column;
   position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
@@ -1344,9 +1344,9 @@ tr:hover td{background:#f7f8fa;}
             <div style="margin-bottom:12px;"><label class="flabel">System Name (title & browser tab)</label><input type="text" name="system_name" class="finput" placeholder="PawnHub" value="<?=htmlspecialchars($theme['system_name']??'PawnHub')?>"></div>
             <div style="margin-bottom:12px;"><label class="flabel">Logo Text (shown in sidebar)</label><input type="text" name="logo_text" class="finput" placeholder="e.g. GoldKing" value="<?=htmlspecialchars($theme['logo_text']??'')?>"></div>
 
-            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
-              <div style="font-size:.72rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
-              <div style="font-size:.72rem;color:rgba(255,255,255,.35);margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
+              <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+              <div style="font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
+              <div style="font-size:.72rem;color:#9ca3af;margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
               <div style="margin-bottom:10px;">
                 <label class="flabel">Main Heading (line 1)</label>
                 <input type="text" name="hero_title" class="finput" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
@@ -1359,17 +1359,17 @@ tr:hover td{background:#f7f8fa;}
             <div>
               <label class="flabel">Logo Image</label>
               <?php if($logo_url): ?>
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 13px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px 13px;">
                 <img src="<?=htmlspecialchars($logo_url)?>" style="width:40px;height:40px;object-fit:cover;border-radius:8px;">
-                <div style="flex:1;"><div style="font-size:.76rem;font-weight:600;color:rgba(255,255,255,.6);">Current Logo</div><div style="font-size:.69rem;color:rgba(255,255,255,.3);">Upload a new one to replace</div></div>
-                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:.7rem;color:#fca5a5;font-weight:600;"><input type="checkbox" name="remove_logo" value="1" style="margin:0;"> Remove</label>
+                <div style="flex:1;"><div style="font-size:.76rem;font-weight:600;color:#6b7280;">Current Logo</div><div style="font-size:.69rem;color:#9ca3af;">Upload a new one to replace</div></div>
+                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:.7rem;color:#ef4444;font-weight:600;"><input type="checkbox" name="remove_logo" value="1" style="margin:0;"> Remove</label>
               </div>
               <?php endif; ?>
-              <div id="logo-drop-zone" style="border:2px dashed rgba(255,255,255,.12);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.03);" onclick="document.getElementById('logo_file_input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--t-primary,#3b82f6)';" ondragleave="this.style.borderColor='rgba(255,255,255,.12)'" ondrop="handleLogoDrop(event)">
-                <div id="logo-preview-wrap" style="display:none;margin-bottom:10px;"><img id="logo-preview-img" style="width:60px;height:60px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.1);margin:0 auto;display:block;"></div>
-                <span class="material-symbols-outlined" style="font-size:28px;color:rgba(255,255,255,.25);display:block;margin-bottom:8px;">upload</span>
-                <div style="font-size:.8rem;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:3px;">Click to upload or drag & drop</div>
-                <div style="font-size:.71rem;color:rgba(255,255,255,.25);">PNG, JPG, WebP, SVG · Max 2MB</div>
+              <div id="logo-drop-zone" style="border:2px dashed #d1d5db;border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:#f9fafb;" onclick="document.getElementById('logo_file_input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--t-primary,#3b82f6)';" ondragleave="this.style.borderColor='#d1d5db'" ondrop="handleLogoDrop(event)">
+                <div id="logo-preview-wrap" style="display:none;margin-bottom:10px;"><img id="logo-preview-img" style="width:60px;height:60px;object-fit:cover;border-radius:10px;border:1px solid #e4e6eb;margin:0 auto;display:block;"></div>
+                <span class="material-symbols-outlined" style="font-size:28px;color:#9ca3af;display:block;margin-bottom:8px;">upload</span>
+                <div style="font-size:.8rem;font-weight:600;color:#6b7280;margin-bottom:3px;">Click to upload or drag &amp; drop</div>
+                <div style="font-size:.71rem;color:#9ca3af;">PNG, JPG, WebP, SVG · Max 2MB</div>
                 <input type="file" id="logo_file_input" name="logo_file" accept="image/*" style="display:none;" onchange="previewLogo(this)">
               </div>
             </div>
@@ -1378,8 +1378,8 @@ tr:hover td{background:#f7f8fa;}
           <!-- Background Image Card -->
           <div class="card">
             <div class="card-hdr"><span class="card-title">🖼️ Admin, Staff &amp; Login Background</span></div>
-            <div style="font-size:.76rem;color:rgba(255,255,255,.4);margin-bottom:12px;line-height:1.6;">
-              This image appears on the <strong style="color:rgba(255,255,255,.6);">Tenant Login</strong>, <strong style="color:rgba(255,255,255,.6);">Admin Dashboard</strong>, <strong style="color:rgba(255,255,255,.6);">Staff</strong>, and <strong style="color:rgba(255,255,255,.6);">Cashier</strong> dashboards.
+            <div style="font-size:.76rem;color:#6b7280;margin-bottom:12px;line-height:1.6;">
+              This image appears on the <strong style="color:#374151;">Tenant Login</strong>, <strong style="color:#374151;">Admin Dashboard</strong>, <strong style="color:#374151;">Staff</strong>, and <strong style="color:#374151;">Cashier</strong> dashboards.
             </div>
 
             <?php
@@ -1399,17 +1399,17 @@ tr:hover td{background:#f7f8fa;}
             </label>
             <?php endif; ?>
 
-            <div style="border:2px dashed rgba(255,255,255,.12);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.03);"
+            <div style="border:2px dashed #d1d5db;border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:#f9fafb;"
               onclick="document.getElementById('bg_file_input').click()"
               ondragover="event.preventDefault();this.style.borderColor='var(--t-primary,#3b82f6)';"
-              ondragleave="this.style.borderColor='rgba(255,255,255,.12)'"
+              ondragleave="this.style.borderColor='#d1d5db'"
               ondrop="handleBgDrop(event)">
               <div id="bg-preview-wrap" style="display:none;margin-bottom:10px;">
-                <img id="bg-preview-img" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.1);">
+                <img id="bg-preview-img" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;border:1px solid #e4e6eb;">
               </div>
-              <span class="material-symbols-outlined" style="font-size:28px;color:rgba(255,255,255,.25);display:block;margin-bottom:8px;">image</span>
-              <div style="font-size:.8rem;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:3px;">Click to upload or drag & drop</div>
-              <div style="font-size:.71rem;color:rgba(255,255,255,.25);">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
+              <span class="material-symbols-outlined" style="font-size:28px;color:#9ca3af;display:block;margin-bottom:8px;">image</span>
+              <div style="font-size:.8rem;font-weight:600;color:#6b7280;margin-bottom:3px;">Click to upload or drag &amp; drop</div>
+              <div style="font-size:.71rem;color:#9ca3af;">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
               <input type="file" id="bg_file_input" name="bg_file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="previewBg(this)">
             </div>
           </div>
@@ -1417,8 +1417,8 @@ tr:hover td{background:#f7f8fa;}
           <!-- Public Shop / Home Page Background -->
           <div class="card">
             <div class="card-hdr"><span class="card-title">🏪 Public Shop Page Background</span></div>
-            <div style="font-size:.76rem;color:rgba(255,255,255,.4);margin-bottom:12px;line-height:1.6;">
-              This image appears as the background on your <strong style="color:rgba(255,255,255,.6);">Public Shop Page</strong> — what customers see when they visit your store link. If not set, the Admin &amp; Login background will be used instead.
+            <div style="font-size:.76rem;color:#6b7280;margin-bottom:12px;line-height:1.6;">
+              This image appears as the background on your <strong style="color:#374151;">Public Shop Page</strong> — what customers see when they visit your store link. If not set, the Admin &amp; Login background will be used instead.
             </div>
 
             <?php
@@ -1438,17 +1438,17 @@ tr:hover td{background:#f7f8fa;}
             </label>
             <?php endif; ?>
 
-            <div style="border:2px dashed rgba(255,255,255,.12);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.03);"
+            <div style="border:2px dashed #d1d5db;border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:#f9fafb;"
               onclick="document.getElementById('shop_bg_file_input').click()"
               ondragover="event.preventDefault();this.style.borderColor='var(--t-primary,#3b82f6)';"
-              ondragleave="this.style.borderColor='rgba(255,255,255,.12)'"
+              ondragleave="this.style.borderColor='#d1d5db'"
               ondrop="handleShopBgDrop(event)">
               <div id="shop-bg-preview-wrap" style="display:none;margin-bottom:10px;">
-                <img id="shop-bg-preview-img" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.1);">
+                <img id="shop-bg-preview-img" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;border:1px solid #e4e6eb;">
               </div>
-              <span class="material-symbols-outlined" style="font-size:28px;color:rgba(255,255,255,.25);display:block;margin-bottom:8px;">storefront</span>
-              <div style="font-size:.8rem;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:3px;">Click to upload or drag & drop</div>
-              <div style="font-size:.71rem;color:rgba(255,255,255,.25);">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
+              <span class="material-symbols-outlined" style="font-size:28px;color:#9ca3af;display:block;margin-bottom:8px;">storefront</span>
+              <div style="font-size:.8rem;font-weight:600;color:#6b7280;margin-bottom:3px;">Click to upload or drag &amp; drop</div>
+              <div style="font-size:.71rem;color:#9ca3af;">PNG, JPG, WebP · Recommended 1920×1080 · Max 5MB</div>
               <input type="file" id="shop_bg_file_input" name="shop_bg_file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="previewShopBg(this)">
             </div>
           </div>
@@ -1833,6 +1833,27 @@ function updatePreview() {
   document.documentElement.style.setProperty('--t-secondary', s);
   document.documentElement.style.setProperty('--t-accent',    a);
   document.documentElement.style.setProperty('--t-sidebar',   sb);
+
+  // Live sidebar overrides on the actual sidebar element
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    if (dark) {
+      sidebar.style.background = `linear-gradient(175deg,${sb},${s})`;
+      sidebar.style.borderRight = '1px solid rgba(255,255,255,.06)';
+    } else {
+      sidebar.style.background = sb;
+      sidebar.style.borderRight = '1px solid #e4e6eb';
+    }
+    // Update text colors in sidebar
+    const isDarkSb = dark;
+    sidebar.querySelectorAll('.sb-name,.sb-uname').forEach(el => el.style.color = isDarkSb ? '#fff' : '#1c1e21');
+    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = isDarkSb ? 'rgba(255,255,255,.35)' : '#8a8d91');
+    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => el.style.color = isDarkSb ? 'rgba(255,255,255,.45)' : '#65676b');
+    sidebar.querySelectorAll('.sb-item.active').forEach(el => {
+      el.style.color = isDarkSb ? '#fff' : p;
+      el.style.background = isDarkSb ? 'rgba(255,255,255,.15)' : `color-mix(in srgb,${p} 12%,transparent)`;
+    });
+  }
 }
 
 function applyPreset(p, s, a, sb) {

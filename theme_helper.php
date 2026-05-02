@@ -88,19 +88,59 @@ function renderThemeCSS(array $theme): string {
         --t-accent-d:  {$aDark};
         --t-sidebar:   {$sb};
     }
+
+    /* ── Logo & primary backgrounds ── */
     .sb-logo, .theme-primary-bg { background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important; }
-    .btn-primary, .btn-sm.btn-primary { background: var(--t-primary) !important; border-color: var(--t-primary) !important; }
-    .btn-primary:hover { background: var(--t-primary-d) !important; }
+
+    /* ── Buttons ── */
+    .btn-primary, .btn-sm.btn-primary { background: var(--t-primary) !important; border-color: var(--t-primary) !important; color: #fff !important; }
+    .btn-primary:hover { background: var(--t-primary-d) !important; border-color: var(--t-primary-d) !important; }
+
+    /* ── Topbar chips ── */
     .topbar .tenant-chip, .topbar .cashier-chip, .topbar .mgr-chip {
         background: color-mix(in srgb, var(--t-primary) 10%, transparent) !important;
         color: var(--t-primary) !important;
         border-color: color-mix(in srgb, var(--t-primary) 25%, transparent) !important;
     }
+    /* Topbar avatar uses primary gradient */
+    .topbar-avatar { background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important; }
+
+    /* ── Sidebar active item ── */
     .sb-item.active { color: var(--t-primary) !important; background: color-mix(in srgb, var(--t-primary) 12%, transparent) !important; }
+
+    /* ── Form inputs focus ring ── */
     .finput:focus { border-color: var(--t-primary) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-primary) 15%, transparent) !important; }
+
+    /* ── Ticket tags ── */
     .ticket-tag { color: var(--t-primary) !important; }
+
+    /* ── Stat card icons ── */
     .stat-card .stat-icon svg { stroke: var(--t-primary); }
+    .stat-card .stat-icon-wrap svg { stroke: var(--t-primary); }
+
+    /* ── Page header / section highlights ── */
     a[style*='background:var(--blue-acc)'] { background: var(--t-primary) !important; }
+
+    /* ── Links that use primary color ── */
+    .page-hdr a, .topbar-title { color: var(--t-text, #1c1e21); }
+
+    /* ── Modal submit/primary buttons ── */
+    button[style*='background:linear-gradient'][style*='#2563eb'],
+    button[style*='background:linear-gradient'][style*='#1d4ed8'],
+    button[style*='background:linear-gradient'][style*='#1e3a8a'] {
+        background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important;
+    }
+
+    /* ── Save Theme & Branding button ── */
+    form[enctype] button[type=submit] {
+        background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important;
+    }
+
+    /* ── Dashboard branch card gradient ── */
+    .branch-hero, [class*='branch-card'] {
+        background: linear-gradient(135deg, var(--t-secondary), var(--t-primary)) !important;
+    }
+
     {$sidebarCSS}
     </style>";
 }
