@@ -413,7 +413,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-logo img{width:100%;height:100%;object-fit:cover;}
 .sb-logo svg{width:19px;height:19px;}
 .sb-name{font-size:.92rem;font-weight:800;color:#ffffff;letter-spacing:-.02em;}
-.sb-subtitle{font-size:.58rem;color:#8a8d91;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-top:1px;}
+.sb-subtitle{font-size:.58rem;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-top:1px;}
 
 .sb-tenant-card{margin:10px 10px 0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px 14px;}border-radius:12px;padding:12px 14px;}
 .sb-tenant-label{font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:5px;}
@@ -480,7 +480,7 @@ table{width:100%;border-collapse:collapse;}
 th{font-size:.63rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.45);padding:8px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,.1);}
 td{padding:11px 12px;font-size:.81rem;color:#ffffff;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:rgba(255,255,255,.07);}
+tr:hover td{background:rgba(255,255,255,.05);}
 .ticket-tag{font-family:monospace;font-size:.76rem;color:var(--t-primary,#2563eb);font-weight:700;}
 .badge{display:inline-flex;align-items:center;gap:3px;font-size:.63rem;font-weight:700;padding:3px 9px;border-radius:100px;}
 .b-blue{background:rgba(37,99,235,.12);color:#1d4ed8;}.b-green{background:rgba(16,185,129,.12);color:#059669;}.b-red{background:rgba(239,68,68,.12);color:#dc2626;}.b-yellow{background:rgba(245,158,11,.12);color:#d97706;}.b-gray{background:#e4e6eb;color:#65676b;}
@@ -488,7 +488,7 @@ tr:hover td{background:rgba(255,255,255,.07);}
 
 .btn-xs{padding:5px 11px;border-radius:7px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid #e4e6eb;background:#f0f2f5;color:#1c1e21;text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:all .15s;margin-right:3px;font-family:inherit;}
 .btn-xs:hover{background:#e4e6eb;}
-.btn-primary-xs{background:var(--t-primary,#2563eb) !important;color:var(--t-on-primary,#fff) !important;border-color:transparent !important;}
+.btn-primary-xs{background:var(--t-primary,#2563eb);color:var(--t-on-primary,#fff);border-color:transparent;}
 .btn-danger-xs{background:rgba(239,68,68,.9);color:#fff;border-color:transparent;}
 
 .qa-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;font-family:inherit;font-size:.83rem;font-weight:600;cursor:pointer;border:none;width:100%;text-align:left;transition:all .18s;margin-bottom:8px;text-decoration:none;color:#fff;}
@@ -517,11 +517,11 @@ tr:hover td{background:rgba(255,255,255,.07);}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .modal-overlay.open{display:flex;}
-.modal{background:#1e293b;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:580px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.15);animation:mIn .25s ease both;}
+.modal{background:#ffffff;border:1px solid #e4e6eb;border-radius:20px;width:580px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.15);animation:mIn .25s ease both;}
 @keyframes mIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .mhdr{padding:22px 24px 0;display:flex;align-items:center;justify-content:space-between;}
-.mtitle{font-size:1rem;font-weight:800;color:#ffffff;}
-.mclose{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);}
+.mtitle{font-size:1rem;font-weight:800;color:#1c1e21;}
+.mclose{width:30px;height:30px;border-radius:8px;border:1px solid #e4e6eb;background:#f0f2f5;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#65676b;}
 .mclose .material-symbols-outlined{font-size:16px;}
 .mbody{padding:18px 24px 24px;}
 .card-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8d91;margin-bottom:14px;}
