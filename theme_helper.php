@@ -121,8 +121,26 @@ function renderThemeCSS(array $theme): string {
     /* ── Page header / section highlights ── */
     a[style*='background:var(--blue-acc)'] { background: var(--t-primary) !important; }
 
+    /* ── Topbar background ── */
+    .topbar {
+        background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important;
+        border-bottom-color: color-mix(in srgb, var(--t-secondary) 80%, #000) !important;
+    }
+    .topbar-title { color: #fff !important; }
+    .topbar-icon {
+        background: rgba(255,255,255,.15) !important;
+        color: #fff !important;
+    }
+    .topbar-icon:hover {
+        background: rgba(255,255,255,.25) !important;
+        color: #fff !important;
+    }
+    .topbar-user { border-left-color: rgba(255,255,255,.2) !important; }
+    .topbar-user-name { color: #fff !important; }
+    .topbar-user-role { color: rgba(255,255,255,.7) !important; }
+
     /* ── Links that use primary color ── */
-    .page-hdr a, .topbar-title { color: var(--t-text, #1c1e21); }
+    .page-hdr a, .topbar-title { color: #fff; }
 
     /* ── Modal submit/primary buttons ── */
     button[style*='background:linear-gradient'][style*='#2563eb'],
