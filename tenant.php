@@ -481,22 +481,6 @@ $notif_count = count($notifs);
   --danger:#ef4444;
   --warning:#f59e0b;
   --sidebar-bg:#ffffff;
-  /* sidebar text tokens */
-  --sb-bg:#ffffff;
-  --sb-border:#e4e6eb;
-  --sb-text:#1c1e21;
-  --sb-text-dim:#65676b;
-  --sb-text-section:#8a8d91;
-  --sb-item-hover:#f2f2f2;
-  --sb-item-active-bg:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);
-  --sb-item-active-color:var(--t-primary,#2563eb);
-  --sb-logout-color:#65676b;
-  --sb-logout-hover:#ef4444;
-  --tb-bg:#ffffff;
-  --tb-border:#e4e6eb;
-  --tb-text:#1c1e21;
-  --tb-icon-bg:#e4e6eb;
-  --tb-icon-color:#65676b;
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;overflow:hidden;}
 
@@ -508,48 +492,48 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 /* ── SIDEBAR ── */
 .sidebar{
   width:var(--sw);min-height:100vh;
-  background:var(--sb-bg);
-  border-right:1px solid var(--sb-border);
+  background:#ffffff;
+  border-right:1px solid #e4e6eb;
   display:flex;flex-direction:column;
   position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
 }
-.sb-brand{padding:22px 18px 16px;border-bottom:1px solid var(--sb-border);display:flex;align-items:center;gap:11px;}
-.sb-logo{width:40px;height:40px;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#1e3a8a));border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 4px 16px rgba(37,99,235,.25);}
+.sb-brand{padding:22px 18px 16px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;gap:11px;}
+.sb-logo{width:40px;height:40px;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#1e3a8a));border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 4px 16px rgba(37,99,235,.2);}
 .sb-logo img{width:100%;height:100%;object-fit:cover;}
 .sb-logo svg{width:20px;height:20px;}
-.sb-name{font-size:.95rem;font-weight:800;color:var(--sb-text);letter-spacing:-.02em;}
-.sb-subtitle{font-size:.6rem;color:var(--sb-text-dim);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-top:1px;}
-.sb-user{padding:12px 18px;border-bottom:1px solid var(--sb-border);display:flex;align-items:center;gap:9px;}
-.sb-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#1e3a8a));display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff;flex-shrink:0;}
-.sb-uname{font-size:.8rem;font-weight:700;color:var(--sb-text);}
-.sb-urole{font-size:.62rem;color:var(--sb-text-dim);margin-top:1px;}
+.sb-name{font-size:.95rem;font-weight:800;color:#1c1e21;letter-spacing:-.02em;}
+.sb-subtitle{font-size:.6rem;color:#8a8d91;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-top:1px;}
+.sb-user{padding:12px 18px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;gap:9px;}
+.sb-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--t-primary,#3b82f6),var(--t-secondary,#8b5cf6));display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff;flex-shrink:0;}
+.sb-uname{font-size:.8rem;font-weight:700;color:#1c1e21;}
+.sb-urole{font-size:.62rem;color:#65676b;margin-top:1px;}
 .sb-nav{flex:1;padding:10px 0;}
-.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--sb-text-section);padding:12px 16px 4px;}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;cursor:pointer;color:var(--sb-text-dim);font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
-.sb-item:hover{background:var(--sb-item-hover);color:var(--sb-text);}
-.sb-item.active{background:var(--sb-item-active-bg);color:var(--sb-item-active-color);font-weight:600;}
+.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a8d91;padding:12px 16px 4px;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;cursor:pointer;color:#65676b;font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
+.sb-item:hover{background:#f2f2f2;color:#1c1e21;}
+.sb-item.active{background:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);color:var(--t-primary,#2563eb);font-weight:600;}
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;opacity:.7;}
 .sb-item.active .material-symbols-outlined{opacity:1;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:100px;}
-.sb-footer{padding:12px 14px;border-top:1px solid var(--sb-border);}
-.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:var(--sb-logout-color);text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
-.sb-logout:hover{color:var(--sb-logout-hover);background:rgba(239,68,68,.08);}
+.sb-footer{padding:12px 14px;border-top:1px solid #e4e6eb;}
+.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#65676b;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
+.sb-logout:hover{color:#ef4444;background:rgba(239,68,68,.08);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
 /* ── MAIN ── */
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;position:relative;z-index:10;height:100vh;overflow-y:auto;}
-.topbar{height:64px;padding:0 28px;background:var(--tb-bg);border-bottom:1px solid var(--tb-border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
-.topbar-title{font-size:1rem;font-weight:700;color:var(--tb-text);letter-spacing:-.02em;}
+.topbar{height:64px;padding:0 28px;background:#ffffff;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.topbar-title{font-size:1rem;font-weight:700;color:#1c1e21;letter-spacing:-.02em;}
 .tenant-chip{font-size:.69rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);color:var(--t-primary,#2563eb);padding:4px 12px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 25%,transparent);}
 .topbar-right{display:flex;align-items:center;gap:12px;}
-.topbar-icon{width:36px;height:36px;border-radius:50%;background:var(--tb-icon-bg);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tb-icon-color);transition:all .15s;position:relative;}
-.topbar-icon:hover{background:#d8dadf;color:var(--tb-text);}
+.topbar-icon{width:36px;height:36px;border-radius:50%;background:#e4e6eb;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#65676b;transition:all .15s;position:relative;}
+.topbar-icon:hover{background:#d8dadf;color:#1c1e21;}
 .topbar-icon .material-symbols-outlined{font-size:18px;}
 .notif-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;background:#ef4444;border-radius:50%;border:2px solid #ffffff;animation:notifPulse 2s infinite;}
 @keyframes notifPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5);}50%{box-shadow:0 0 0 4px rgba(239,68,68,0);}}
 .notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:#ef4444;border-radius:100px;border:2px solid #ffffff;font-size:.6rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
 /* Notification Panel */
-.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:340px;background:#ffffff;border:1px solid #e4e6eb;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
+.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:340px;background:#ffffff;border:1px solid #e4e6eb;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
 .notif-panel.open{display:block;}
 @keyframes panelIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .notif-panel-head{padding:14px 16px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;justify-content:space-between;}
@@ -557,8 +541,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .notif-panel-clear{font-size:.72rem;color:#65676b;cursor:pointer;background:none;border:none;font-family:inherit;transition:color .15s;}
 .notif-panel-clear:hover{color:#1c1e21;}
 .notif-list{max-height:320px;overflow-y:auto;}
-.notif-item{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid #e4e6eb;transition:background .15s;cursor:default;}
-.notif-item:hover{background:#f2f2f2;}
+.notif-item{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid #f0f2f5;transition:background .15s;cursor:default;}
+.notif-item:hover{background:#f7f8fa;}
 .notif-item:last-child{border-bottom:none;}
 .notif-icon{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .notif-icon .material-symbols-outlined{font-size:15px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;}
@@ -567,7 +551,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .notif-text-sub{font-size:.69rem;color:#65676b;line-height:1.4;}
 .notif-empty{padding:28px 16px;text-align:center;color:#8a8d91;font-size:.8rem;}
 /* Settings Dropdown */
-.settings-dropdown{position:absolute;top:calc(100% + 10px);right:0;width:200px;background:#ffffff;border:1px solid #e4e6eb;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
+.settings-dropdown{position:absolute;top:calc(100% + 10px);right:0;width:200px;background:#ffffff;border:1px solid #e4e6eb;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
 .settings-dropdown.open{display:block;}
 .settings-dd-item{display:flex;align-items:center;gap:10px;padding:11px 14px;color:#1c1e21;font-size:.83rem;font-weight:500;text-decoration:none;transition:all .15s;cursor:pointer;}
 .settings-dd-item:hover{background:#f2f2f2;color:#1c1e21;}
@@ -636,9 +620,9 @@ tr:hover td{background:#f7f8fa;}
 .card-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#65676b;}
 
 /* ── MODAL ── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
 .modal-overlay.open{display:flex;}
-.modal{background:#ffffff;border:1px solid #e4e6eb;border-radius:20px;width:500px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.15);animation:mIn .25s ease both;}
+.modal{background:#ffffff;border:1px solid #e4e6eb;border-radius:20px;width:500px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.12);animation:mIn .25s ease both;}
 @keyframes mIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .mhdr{padding:22px 24px 0;display:flex;align-items:center;justify-content:space-between;}
 .mtitle{font-size:1rem;font-weight:800;color:#1c1e21;}
@@ -657,10 +641,10 @@ tr:hover td{background:#f7f8fa;}
 .theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
 .color-picker-wrap{display:flex;align-items:center;gap:10px;}
 .color-picker-wrap input[type=color]{width:44px;height:36px;border:1.5px solid #e4e6eb;border-radius:8px;padding:2px;cursor:pointer;background:transparent;}
-.color-preview{width:100%;height:36px;border-radius:8px;border:1px solid #e4e6eb;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);}
+.color-preview{width:100%;height:36px;border-radius:8px;border:1px solid rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);}
 .preset-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
 .preset{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s;}
-.preset:hover,.preset.active{border-color:#1c1e21;box-shadow:0 0 0 2px rgba(0,0,0,.2);}
+.preset:hover,.preset.active{border-color:#1c1e21;box-shadow:0 0 0 2px rgba(0,0,0,.15);}
 
 /* ── QUICK ACTIONS ── */
 .quick-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:14px;background:#f0f2f5;border:1px solid #e4e6eb;cursor:pointer;text-decoration:none;font-size:.81rem;font-weight:600;color:#1c1e21;transition:all .2s;flex-direction:column;}
@@ -669,11 +653,11 @@ tr:hover td{background:#f7f8fa;}
 .quick-actions-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
 
 /* ── ATTENTION ALERTS ── */
-.attn-card{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px 16px;text-decoration:none;text-align:center;display:block;}
-.attn-card:hover{background:rgba(245,158,11,.15);}
+.attn-card{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:14px 16px;text-decoration:none;text-align:center;display:block;}
+.attn-card:hover{background:rgba(245,158,11,.14);}
 .attn-val{font-size:1.6rem;font-weight:800;color:#d97706;}
 .attn-label{font-size:.74rem;color:#65676b;font-weight:600;margin-top:3px;}
-.attn-card.blue{background:rgba(37,99,235,.08);border-color:rgba(37,99,235,.2);}
+.attn-card.blue{background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.2);}
 .attn-card.blue .attn-val{color:#1d4ed8;}
 
 @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(2,1fr);}.theme-grid{grid-template-columns:1fr;}}
@@ -1332,21 +1316,26 @@ tr:hover td{background:#f7f8fa;}
             <div style="margin-bottom:18px;">
               <div class="flabel" style="margin-bottom:8px;">Quick Presets</div>
               <div class="preset-row">
-                <div class="preset" style="background:#2563eb;" onclick="applyPreset('#2563eb','#1e3a8a','#10b981','#0f172a')" title="Blue"></div>
-                <div class="preset" style="background:#7c3aed;" onclick="applyPreset('#7c3aed','#4c1d95','#f59e0b','#1a0533')" title="Purple"></div>
-                <div class="preset" style="background:#059669;" onclick="applyPreset('#059669','#064e3b','#3b82f6','#022c22')" title="Green"></div>
-                <div class="preset" style="background:#dc2626;" onclick="applyPreset('#dc2626','#7f1d1d','#f59e0b','#1c0a0a')" title="Red"></div>
-                <div class="preset" style="background:#d97706;" onclick="applyPreset('#d97706','#78350f','#2563eb','#1c1207')" title="Amber"></div>
-                <div class="preset" style="background:#0891b2;" onclick="applyPreset('#0891b2','#164e63','#10b981','#061a20')" title="Cyan"></div>
-                <div class="preset" style="background:#be185d;" onclick="applyPreset('#be185d','#500724','#f59e0b','#200010')" title="Pink"></div>
-                <div class="preset" style="background:#374151;" onclick="applyPreset('#374151','#111827','#6ee7b7','#030712')" title="Dark"></div>
+                <div class="preset" style="background:#2563eb;" onclick="applyPreset('#2563eb','#1e3a8a','#10b981','#0f172a')" title="Blue Dark"></div>
+                <div class="preset" style="background:#7c3aed;" onclick="applyPreset('#7c3aed','#4c1d95','#f59e0b','#1a0533')" title="Purple Dark"></div>
+                <div class="preset" style="background:#059669;" onclick="applyPreset('#059669','#064e3b','#3b82f6','#022c22')" title="Green Dark"></div>
+                <div class="preset" style="background:#dc2626;" onclick="applyPreset('#dc2626','#7f1d1d','#f59e0b','#1c0a0a')" title="Red Dark"></div>
+                <div class="preset" style="background:#d97706;" onclick="applyPreset('#d97706','#78350f','#2563eb','#1c1207')" title="Amber Dark"></div>
+                <div class="preset" style="background:#0891b2;" onclick="applyPreset('#0891b2','#164e63','#10b981','#061a20')" title="Cyan Dark"></div>
+                <div class="preset" style="background:#be185d;" onclick="applyPreset('#be185d','#500724','#f59e0b','#200010')" title="Pink Dark"></div>
+                <div class="preset" style="background:#374151;" onclick="applyPreset('#374151','#111827','#6ee7b7','#030712')" title="Charcoal Dark"></div>
+              </div>
+              <div style="margin-top:8px;">
+                <button type="button" onclick="resetToDefault()" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:8px;border:1.5px solid #e4e6eb;background:#f0f2f5;color:#1c1e21;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;" onmouseover="this.style.background='#e4e6eb'" onmouseout="this.style.background='#f0f2f5'">
+                  <span class="material-symbols-outlined" style="font-size:15px;">restart_alt</span> Reset to White (Default)
+                </button>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px;">
               <div><label class="flabel">Primary Color</label><div class="color-picker-wrap"><input type="color" name="primary_color" id="cp_primary" value="<?=htmlspecialchars($theme['primary_color']??'#2563eb')?>" oninput="updatePreview()"><div class="color-preview" id="prev_primary" style="background:<?=htmlspecialchars($theme['primary_color']??'#2563eb')?>;">Primary</div></div></div>
               <div><label class="flabel">Secondary Color</label><div class="color-picker-wrap"><input type="color" name="secondary_color" id="cp_secondary" value="<?=htmlspecialchars($theme['secondary_color']??'#1e3a8a')?>" oninput="updatePreview()"><div class="color-preview" id="prev_secondary" style="background:<?=htmlspecialchars($theme['secondary_color']??'#1e3a8a')?>;">Secondary</div></div></div>
               <div><label class="flabel">Accent Color</label><div class="color-picker-wrap"><input type="color" name="accent_color" id="cp_accent" value="<?=htmlspecialchars($theme['accent_color']??'#10b981')?>" oninput="updatePreview()"><div class="color-preview" id="prev_accent" style="background:<?=htmlspecialchars($theme['accent_color']??'#10b981')?>;">Accent</div></div></div>
-              <div><label class="flabel">Sidebar Color</label><div class="color-picker-wrap"><input type="color" name="sidebar_color" id="cp_sidebar" value="<?=htmlspecialchars($theme['sidebar_color']??'#0f172a')?>" oninput="updatePreview()"><div class="color-preview" id="prev_sidebar" style="background:<?=htmlspecialchars($theme['sidebar_color']??'#0f172a')?>;">Sidebar</div></div></div>
+              <div><label class="flabel">Sidebar Color</label><div class="color-picker-wrap"><input type="color" name="sidebar_color" id="cp_sidebar" value="<?=htmlspecialchars($theme['sidebar_color']??'#ffffff')?>" oninput="updatePreview()"><div class="color-preview" id="prev_sidebar" style="background:<?=htmlspecialchars($theme['sidebar_color']??'#0f172a')?>;">Sidebar</div></div></div>
             </div>
           </div>
 
@@ -1468,40 +1457,40 @@ tr:hover td{background:#f7f8fa;}
         <div>
           <div class="card" style="margin-bottom:16px;">
             <div class="card-hdr"><span class="card-title">👁️ Live Preview</span></div>
-            <div id="theme-preview-box" style="border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.1);">
-              <div id="prev_sidebar_box" style="background:linear-gradient(135deg,<?=htmlspecialchars($theme['sidebar_color']??'#0f172a')?>,<?=htmlspecialchars($theme['secondary_color']??'#1e3a8a')?>);padding:16px;">
+            <div id="theme-preview-box" style="border-radius:14px;overflow:hidden;border:1px solid #e4e6eb;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+              <div id="prev_sidebar_box" style="background:<?=htmlspecialchars($theme['sidebar_color']??'#ffffff')==='#ffffff'?'#ffffff':'linear-gradient(135deg,'.htmlspecialchars($theme['sidebar_color']??'#ffffff').','.htmlspecialchars($theme['secondary_color']??'#1e3a8a').')'?>;padding:16px;border-bottom:1px solid #e4e6eb;">
                 <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;">
                   <div id="prev_logo_box" style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,<?=htmlspecialchars($theme['primary_color']??'#3b82f6')?>,<?=htmlspecialchars($theme['secondary_color']??'#8b5cf6')?>);display:flex;align-items:center;justify-content:center;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="width:16px;height:16px;"><rect x="3" y="9" width="18" height="12"/><polyline points="3 9 12 3 21 9"/></svg>
                   </div>
-                  <div><div style="font-size:.84rem;font-weight:800;color:#fff;" id="prev_sysname"><?=htmlspecialchars($theme['system_name']??'PawnHub')?></div><div style="font-size:.61rem;color:rgba(255,255,255,.35);">Admin Terminal</div></div>
+                  <div><div style="font-size:.84rem;font-weight:800;" id="prev_sysname"><?=htmlspecialchars($theme['system_name']??'PawnHub')?></div><div style="font-size:.61rem;color:rgba(128,128,128,.7);" id="prev_subtitle">Admin Terminal</div></div>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px;">
-                  <div id="prev_active_item" style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.15);color:#fff;font-size:.78rem;font-weight:600;">
+                  <div id="prev_active_item" style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;font-size:.78rem;font-weight:600;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/></svg>Dashboard
                   </div>
-                  <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;color:rgba(255,255,255,.4);font-size:.78rem;">
+                  <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;font-size:.78rem;" id="prev_inactive_item">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>Pawn Tickets
                   </div>
                 </div>
               </div>
-              <div style="padding:14px;background:rgba(255,255,255,.03);">
+              <div style="padding:14px;background:#f0f2f5;" id="prev_content_area">
                 <div id="prev_btn" style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;background:<?=htmlspecialchars($theme['primary_color']??'#2563eb')?>;color:#fff;font-size:.77rem;font-weight:700;">
                   + Add Staff / Cashier
                 </div>
-                <div style="margin-top:11px;background:rgba(255,255,255,.04);border-radius:8px;padding:11px 13px;border:1px solid rgba(255,255,255,.07);">
-                  <div style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.3);margin-bottom:6px;">Sample Ticket</div>
+                <div style="margin-top:11px;background:#ffffff;border-radius:8px;padding:11px 13px;border:1px solid #e4e6eb;">
+                  <div style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a8d91;margin-bottom:6px;">Sample Ticket</div>
                   <div style="display:flex;align-items:center;gap:8px;">
                     <span style="font-family:monospace;font-size:.76rem;font-weight:700;color:<?=htmlspecialchars($theme['primary_color']??'#2563eb')?>" id="prev_ticket_tag">TP-20240314-AB1C</span>
-                    <span style="font-size:.65rem;background:rgba(59,130,246,.2);color:#93c5fd;padding:2px 7px;border-radius:100px;font-weight:700;">Stored</span>
+                    <span style="font-size:.65rem;background:rgba(37,99,235,.12);color:#1d4ed8;padding:2px 7px;border-radius:100px;font-weight:700;">Stored</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:14px 16px;font-size:.78rem;color:rgba(147,197,253,.8);margin-bottom:16px;line-height:1.7;">
-            ℹ️ <strong style="color:#93c5fd;">How it works:</strong><br>
+          <div style="background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.15);border-radius:12px;padding:14px 16px;font-size:.78rem;color:#1d4ed8;margin-bottom:16px;line-height:1.7;">
+            ℹ️ <strong>How it works:</strong><br>
             When you save, your Staff and Cashier dashboards will automatically use these colors and branding.
           </div>
 
@@ -1782,22 +1771,64 @@ tr:hover td{background:#f7f8fa;}
 <script>
 document.getElementById('addUserModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 
+// Returns true if hex color is dark (luminance < 0.4)
+function colorIsDark(hex) {
+  hex = hex.replace('#', '');
+  if (hex.length !== 6) return false;
+  const r = parseInt(hex.slice(0,2),16)/255;
+  const g = parseInt(hex.slice(2,4),16)/255;
+  const b = parseInt(hex.slice(4,6),16)/255;
+  return (0.2126*r + 0.7152*g + 0.0722*b) < 0.4;
+}
+
 function updatePreview() {
   const p  = document.getElementById('cp_primary').value;
   const s  = document.getElementById('cp_secondary').value;
   const a  = document.getElementById('cp_accent').value;
   const sb = document.getElementById('cp_sidebar').value;
+  const dark = colorIsDark(sb);
 
+  // Color swatch previews
   document.getElementById('prev_primary').style.background   = p;
   document.getElementById('prev_secondary').style.background = s;
   document.getElementById('prev_accent').style.background    = a;
   document.getElementById('prev_sidebar').style.background   = sb;
 
-  document.getElementById('prev_sidebar_box').style.background = `linear-gradient(135deg,${sb},${s})`;
-  document.getElementById('prev_logo_box').style.background    = `linear-gradient(135deg,${p},${s})`;
-  document.getElementById('prev_btn').style.background         = p;
-  document.getElementById('prev_ticket_tag').style.color       = p;
+  // Sidebar preview box
+  const sidebarBox = document.getElementById('prev_sidebar_box');
+  if (dark) {
+    sidebarBox.style.background = `linear-gradient(135deg,${sb},${s})`;
+    sidebarBox.style.borderBottom = '1px solid rgba(255,255,255,.07)';
+  } else {
+    sidebarBox.style.background = sb;
+    sidebarBox.style.borderBottom = '1px solid #e4e6eb';
+  }
 
+  // Sidebar text colors — flip based on darkness
+  const nameColor    = dark ? '#ffffff' : '#1c1e21';
+  const subtitleColor= dark ? 'rgba(255,255,255,.35)' : '#8a8d91';
+  const inactiveColor= dark ? 'rgba(255,255,255,.4)' : '#65676b';
+  const activeColor  = dark ? '#ffffff' : p;
+  const activeBg     = dark ? 'rgba(255,255,255,.15)' : `color-mix(in srgb,${p} 12%,transparent)`;
+  const contentBg    = dark ? 'rgba(255,255,255,.03)' : '#f0f2f5';
+
+  const sysname = document.getElementById('prev_sysname');
+  if (sysname) sysname.style.color = nameColor;
+  const subtitle = document.getElementById('prev_subtitle');
+  if (subtitle) subtitle.style.color = subtitleColor;
+  const activeItem = document.getElementById('prev_active_item');
+  if (activeItem) { activeItem.style.color = activeColor; activeItem.style.background = activeBg; }
+  const inactiveItem = document.getElementById('prev_inactive_item');
+  if (inactiveItem) inactiveItem.style.color = inactiveColor;
+  const contentArea = document.getElementById('prev_content_area');
+  if (contentArea) contentArea.style.background = contentBg;
+
+  // Logo, button, ticket tag
+  document.getElementById('prev_logo_box').style.background = `linear-gradient(135deg,${p},${s})`;
+  document.getElementById('prev_btn').style.background = p;
+  document.getElementById('prev_ticket_tag').style.color = p;
+
+  // Apply live to actual sidebar on this page
   document.documentElement.style.setProperty('--t-primary',   p);
   document.documentElement.style.setProperty('--t-secondary', s);
   document.documentElement.style.setProperty('--t-accent',    a);
@@ -1809,6 +1840,14 @@ function applyPreset(p, s, a, sb) {
   document.getElementById('cp_secondary').value = s;
   document.getElementById('cp_accent').value    = a;
   document.getElementById('cp_sidebar').value   = sb;
+  updatePreview();
+}
+
+function resetToDefault() {
+  document.getElementById('cp_primary').value   = '#2563eb';
+  document.getElementById('cp_secondary').value = '#1e3a8a';
+  document.getElementById('cp_accent').value    = '#10b981';
+  document.getElementById('cp_sidebar').value   = '#ffffff';
   updatePreview();
 }
 
