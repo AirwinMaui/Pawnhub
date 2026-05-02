@@ -141,10 +141,10 @@ function renderThemeCSS(array $theme): string {
         background: linear-gradient(135deg, var(--t-secondary), var(--t-primary)) !important;
     }
 
-    /* ── Cards & stat cards — tinted by tenant primary ── */
+    /* ── Cards & stat cards — tinted by tenant primary (dark glass style) ── */
     .card, .stat-card, .glass-card {
-        background: color-mix(in srgb, var(--t-primary) 4%, #ffffff) !important;
-        border-color: color-mix(in srgb, var(--t-primary) 18%, #e4e6eb) !important;
+        background: color-mix(in srgb, var(--t-primary) 8%, rgba(255,255,255,.06)) !important;
+        border-color: color-mix(in srgb, var(--t-primary) 25%, rgba(255,255,255,.1)) !important;
     }
 
     {$sidebarCSS}

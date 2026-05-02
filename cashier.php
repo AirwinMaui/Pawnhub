@@ -191,10 +191,10 @@ $business_name = $tenant['business_name'] ?? 'My Branch';
   --sw:265px;
   --green:#10b981;
   --blue-acc:var(--t-primary,#2563eb);
-  --bg:#f0f2f5;
-  --text:#1c1e21;
-  --text-m:#65676b;
-  --text-dim:#8a8d91;
+  --bg:#080d10;
+  --text:#f0f2f5;
+  --text-m:rgba(255,255,255,.55);
+  --text-dim:rgba(255,255,255,.35);
   --danger:#ef4444;
   --warning:#f59e0b;
 }
@@ -246,18 +246,18 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .cashier-chip{font-size:.68rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#10b981) 12%,transparent);color:var(--t-primary,#059669);padding:3px 11px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#10b981) 25%,transparent);}
 .content{padding:22px 26px;flex:1;}
 
-.card{background:color-mix(in srgb,var(--t-primary,#059669) 4%,#ffffff);border:1px solid color-mix(in srgb,var(--t-primary,#059669) 18%,#e4e6eb);border-radius:16px;padding:18px 20px;}
+.card{background:color-mix(in srgb,var(--t-primary,#2563eb) 8%,rgba(255,255,255,.06));border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 25%,rgba(255,255,255,.1));border-radius:16px;padding:18px 20px;}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px;}
-.stat-card{background:color-mix(in srgb,var(--t-primary,#059669) 4%,#ffffff);border:1px solid color-mix(in srgb,var(--t-primary,#059669) 18%,#e4e6eb);border-radius:14px;padding:16px 18px;}
+.stat-card{background:color-mix(in srgb,var(--t-primary,#2563eb) 8%,rgba(255,255,255,.06));border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 25%,rgba(255,255,255,.1));border-radius:14px;padding:16px 18px;}
 .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
 .stat-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
 .stat-icon .material-symbols-outlined{font-size:18px;}
-.stat-value{font-size:1.5rem;font-weight:800;color:#1c1e21;letter-spacing:-.03em;}
-.stat-label{font-size:.68rem;color:#65676b;margin-top:3px;}
+.stat-value{font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:-.03em;}
+.stat-label{font-size:.68rem;color:rgba(255,255,255,.45);margin-top:3px;}
 
 .page-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
-.page-hdr h2{font-size:1.1rem;font-weight:800;color:#1c1e21;}
-.page-hdr p{font-size:.78rem;color:#65676b;margin-top:2px;}
+.page-hdr h2{font-size:1.1rem;font-weight:800;color:#fff;}
+.page-hdr p{font-size:.78rem;color:rgba(255,255,255,.45);margin-top:2px;}
 .card-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a8d91;margin-bottom:14px;}
 
 table{width:100%;border-collapse:collapse;}
