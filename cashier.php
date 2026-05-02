@@ -241,9 +241,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;position:relative;z-index:10;height:100vh;overflow-y:auto;}
-.topbar{height:60px;padding:0 26px;background:#ffffff;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
-.topbar-title{font-size:.97rem;font-weight:700;color:#1c1e21;}
-.cashier-chip{font-size:.68rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#10b981) 12%,transparent);color:var(--t-primary,#059669);padding:3px 11px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#10b981) 25%,transparent);}
+.topbar{height:60px;padding:0 26px;background:linear-gradient(135deg,var(--t-primary,#10b981),var(--t-secondary,#059669));border-bottom:1px solid color-mix(in srgb,var(--t-secondary,#059669) 80%,#000);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.topbar-title{font-size:.97rem;font-weight:700;color:var(--t-on-primary,#fff);}
+.cashier-chip{font-size:.68rem;font-weight:700;background:rgba(255,255,255,.18);color:var(--t-on-primary,#fff);padding:3px 11px;border-radius:100px;border:1px solid rgba(255,255,255,.35);}
 .content{padding:22px 26px;flex:1;}
 
 .card{background:color-mix(in srgb,var(--t-primary,#2563eb) 8%,rgba(255,255,255,.06));border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 25%,rgba(255,255,255,.1));border-radius:16px;padding:18px 20px;}
@@ -501,11 +501,11 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
       <span class="cashier-chip">Cashier<?php if($tenant): ?> · <?=htmlspecialchars($tenant['business_name'])?><?php endif;?></span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
-      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:100px;">
-        <span style="width:9px;height:9px;border-radius:50%;background:var(--t-primary,#10b981);display:inline-block;"></span>
-        <span style="font-size:.69rem;color:rgba(255,255,255,.5);font-weight:600;"><?=htmlspecialchars($sys_name)?></span>
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:100px;">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--t-on-primary,#fff);display:inline-block;"></span>
+        <span style="font-size:.69rem;color:var(--t-on-primary,#fff);font-weight:600;"><?=htmlspecialchars($sys_name)?></span>
       </div>
-      <span style="font-size:.72rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+      <span style="font-size:.72rem;color:var(--t-on-primary-mid,rgba(255,255,255,.7));font-weight:600;">📅 <?=date('M d, Y')?></span>
     </div>
   </header>
 
@@ -528,7 +528,7 @@ $cashierBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1563013
     </div>
 
     <?php if($tenant): ?>
-    <div style="background:linear-gradient(135deg,var(--t-sidebar,#064e3b),var(--t-secondary,#059669));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
+    <div style="background:linear-gradient(135deg,var(--t-secondary,#059669),var(--t-primary,#10b981));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
       <div>
         <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.5));margin-bottom:4px;">Your Branch</div>
         <div style="font-size:1.05rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=htmlspecialchars($tenant['business_name'])?></div>

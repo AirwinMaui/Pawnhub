@@ -439,11 +439,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;position:relative;z-index:10;height:100vh;overflow-y:auto;}
-.topbar{height:60px;padding:0 26px;background:#ffffff;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
-.topbar-title{font-size:.97rem;font-weight:700;color:#1c1e21;}
-.tenant-badge{font-size:.68rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);color:var(--t-primary,#2563eb);padding:3px 11px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 25%,transparent);}
-.topbar-icon{width:34px;height:34px;border-radius:50%;background:#e4e6eb;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#65676b;transition:all .15s;position:relative;}
-.topbar-icon:hover{background:#d8dadf;color:#1c1e21;}
+.topbar{height:60px;padding:0 26px;background:linear-gradient(135deg,var(--t-primary,#2563eb),var(--t-secondary,#1e3a8a));border-bottom:1px solid color-mix(in srgb,var(--t-secondary,#1e3a8a) 80%,#000);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.topbar-title{font-size:.97rem;font-weight:700;color:var(--t-on-primary,#fff);}
+.tenant-badge{font-size:.68rem;font-weight:700;background:rgba(255,255,255,.18);color:var(--t-on-primary,#fff);padding:3px 11px;border-radius:100px;border:1px solid rgba(255,255,255,.35);}
+.topbar-icon{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.15);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t-on-primary,#fff);transition:all .15s;position:relative;}
+.topbar-icon:hover{background:rgba(255,255,255,.25);color:var(--t-on-primary,#fff);}
 .topbar-icon .material-symbols-outlined{font-size:17px;}
 .notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:#ef4444;border-radius:100px;border:2px solid #ffffff;font-size:.6rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
 .notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:310px;background:#ffffff;border:1px solid #e4e6eb;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:200;overflow:hidden;display:none;animation:panelIn .18s ease both;}
@@ -655,11 +655,11 @@ $notif_count = count($notifs);
       <?php if($tenant): ?><span class="tenant-badge"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:100px;">
-        <span style="width:9px;height:9px;border-radius:50%;background:var(--t-primary,#3b82f6);display:inline-block;"></span>
-        <span style="font-size:.69rem;color:rgba(255,255,255,.5);font-weight:600;"><?=htmlspecialchars($sys_name)?></span>
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:100px;">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--t-on-primary,#fff);display:inline-block;"></span>
+        <span style="font-size:.69rem;color:var(--t-on-primary,#fff);font-weight:600;"><?=htmlspecialchars($sys_name)?></span>
       </div>
-      <span style="font-size:.72rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+      <span style="font-size:.72rem;color:var(--t-on-primary-mid,rgba(255,255,255,.7));font-weight:600;">📅 <?=date('M d, Y')?></span>
       <div class="topbar-icon" id="notifBtn" onclick="toggleNotifPanel(event)" style="<?=$notif_count>0?'color:#fff;background:rgba(255,255,255,.08);':''?>">
         <span class="material-symbols-outlined">notifications</span>
         <?php if($notif_count>0):?><span class="notif-badge"><?=$notif_count?></span><?php endif;?>
@@ -705,7 +705,7 @@ $notif_count = count($notifs);
     </div>
 
     <!-- Branch Banner -->
-    <div style="background:linear-gradient(135deg,var(--t-sidebar,#0f172a),var(--t-secondary,#1e3a8a));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
+    <div style="background:linear-gradient(135deg,var(--t-secondary,#1e3a8a),var(--t-primary,#2563eb));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
       <div>
         <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:4px;">Your Branch</div>
         <div style="font-size:1.05rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=htmlspecialchars($tenant['business_name'])?></div>

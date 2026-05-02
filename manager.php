@@ -614,11 +614,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 
 /* MAIN */
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;position:relative;z-index:10;height:100vh;overflow-y:auto;}
-.topbar{height:60px;padding:0 26px;background:#ffffff;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
-.topbar-title{font-size:.97rem;font-weight:700;color:#1c1e21;}
-.mgr-chip{font-size:.68rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#059669) 12%,transparent);color:var(--t-primary,#059669);padding:3px 11px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#059669) 25%,transparent);}
-.topbar-icon{width:34px;height:34px;border-radius:50%;background:#e4e6eb;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#65676b;transition:all .15s;position:relative;}
-.topbar-icon:hover{background:#d8dadf;color:#1c1e21;}
+.topbar{height:60px;padding:0 26px;background:linear-gradient(135deg,var(--t-primary,#059669),var(--t-secondary,#064e3b));border-bottom:1px solid color-mix(in srgb,var(--t-secondary,#064e3b) 80%,#000);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;}
+.topbar-title{font-size:.97rem;font-weight:700;color:var(--t-on-primary,#fff);}
+.mgr-chip{font-size:.68rem;font-weight:700;background:rgba(255,255,255,.18);color:var(--t-on-primary,#fff);padding:3px 11px;border-radius:100px;border:1px solid rgba(255,255,255,.35);}
+.topbar-icon{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.15);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t-on-primary,#fff);transition:all .15s;position:relative;}
+.topbar-icon:hover{background:rgba(255,255,255,.25);color:var(--t-on-primary,#fff);}
 .topbar-icon .material-symbols-outlined{font-size:17px;}
 .notif-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;background:#ef4444;border-radius:100px;border:2px solid #ffffff;font-size:.6rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
 @keyframes notifPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5);}50%{box-shadow:0 0 0 4px rgba(239,68,68,0);}}
@@ -649,8 +649,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .stat-label{font-size:.68rem;color:rgba(255,255,255,.45);margin-top:3px;}
 
 .page-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
-.page-hdr h2{font-size:1.1rem;font-weight:800;color:#1c1e21;}
-.page-hdr p{font-size:.78rem;color:#65676b;margin-top:2px;}
+.page-hdr h2{font-size:1.1rem;font-weight:800;color:#fff;}
+.page-hdr p{font-size:.78rem;color:rgba(255,255,255,.5);margin-top:2px;}
 
 table{width:100%;border-collapse:collapse;}
 th{font-size:.63rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.35);padding:8px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,.08);}
@@ -674,10 +674,10 @@ tr:hover td{background:rgba(255,255,255,.04);}
 .btn-danger{background:rgba(239,68,68,.9);color:#fff;border-color:transparent;}
 .btn-success{background:rgba(16,185,129,.9);color:#fff;border-color:transparent;}
 
-.flabel{display:block;font-size:.73rem;font-weight:600;color:#65676b;margin-bottom:5px;}
-.finput{width:100%;border:1.5px solid #e4e6eb;border-radius:10px;padding:9px 12px;font-family:inherit;font-size:.84rem;color:#1c1e21;outline:none;background:#f7f8fa;transition:border .2s;}
-.finput:focus{border-color:var(--t-primary,#059669);box-shadow:0 0 0 3px color-mix(in srgb,var(--t-primary,#059669) 15%,transparent);background:#fff;}
-.finput::placeholder{color:#8a8d91;}
+.flabel{display:block;font-size:.73rem;font-weight:600;color:rgba(255,255,255,.55);margin-bottom:5px;}
+.finput{width:100%;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:.84rem;color:#fff;outline:none;background:rgba(255,255,255,.07);transition:border .2s;}
+.finput:focus{border-color:var(--t-primary,#059669);box-shadow:0 0 0 3px color-mix(in srgb,var(--t-primary,#059669) 15%,transparent);background:rgba(255,255,255,.1);}
+.finput::placeholder{color:rgba(255,255,255,.3);}
 .finput option{background:#0a150e;color:#fff;}
 .fgroup{margin-bottom:12px;}
 
@@ -927,11 +927,11 @@ $notif_count = count($notifs);
       <?php if($tenant):?><span class="mgr-chip"><?=htmlspecialchars($tenant['business_name'])?></span><?php endif;?>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <div style="display:flex;align-items:center;gap:7px;background:rgba(5,150,105,.1);border:1px solid rgba(5,150,105,.18);padding:5px 11px;border-radius:100px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:var(--t-primary,#059669);display:inline-block;animation:pulse 2s infinite;"></span>
-        <span style="font-size:.69rem;color:#6ee7b7;font-weight:600;">Manager</span>
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:100px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--t-on-primary,#fff);display:inline-block;animation:pulse 2s infinite;"></span>
+        <span style="font-size:.69rem;color:var(--t-on-primary,#fff);font-weight:600;">Manager</span>
       </div>
-      <span style="font-size:.72rem;color:rgba(255,255,255,.3);">📅 <?=date('M d, Y')?></span>
+      <span style="font-size:.72rem;color:var(--t-on-primary-mid,rgba(255,255,255,.7));font-weight:600;">📅 <?=date('M d, Y')?></span>
       <div class="topbar-icon" id="notifBtn" onclick="toggleNotifPanel(event)" style="<?=$notif_count>0?'color:#fff;background:rgba(255,255,255,.08);':''?>">
         <span class="material-symbols-outlined">notifications</span>
         <?php if($notif_count>0):?><span class="notif-badge"><?=$notif_count?></span><?php endif;?>
