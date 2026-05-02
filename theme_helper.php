@@ -5,10 +5,27 @@
  */
 function getTenantTheme(PDO $pdo, int $tenant_id): array {
     try {
-        $stmt = $pdo->prepare("SELECT * FROM tenant_settings WHERE tenant_id=? LIMIT 1");
+        // bg_image_url exists in BOTH tables:
+        //   tenant_settings.bg_image_url — rarely set directly
+        //   tenants.bg_image_url         — the actual uploaded bg file
+        // We alias the tenants one to avoid the column clash with ts.*,
+        // then prefer tenants.bg_image_url and fall back to tenant_settings.
+        $stmt = $pdo->prepare("
+            SELECT ts.*,
+                   t.bg_image_url AS tenant_bg_image_url
+            FROM   tenant_settings ts
+            LEFT JOIN tenants t ON t.id = ts.tenant_id
+            WHERE  ts.tenant_id = ?
+            LIMIT  1
+        ");
         $stmt->execute([$tenant_id]);
         $s = $stmt->fetch();
-        if ($s) return $s;
+        if ($s) {
+            // Merge: tenants.bg_image_url wins (it's where uploads go),
+            // fall back to tenant_settings.bg_image_url if tenants has none.
+            $s['bg_image_url'] = $s['tenant_bg_image_url'] ?: ($s['bg_image_url'] ?: null);
+            return $s;
+        }
     } catch (Exception $e) {}
 
     return [
@@ -26,7 +43,6 @@ function getTenantTheme(PDO $pdo, int $tenant_id): array {
         'font_style'      => 'Plus Jakarta Sans',
     ];
 }
-
 /**
  * Returns the background image URL for dashboards/login.
  * Falls back to a default if none is set.
