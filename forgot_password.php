@@ -12,7 +12,7 @@ pawnhub_session_start('');
 require 'db.php';
 require 'mailer.php';
 
-$slug    = trim($_GET['slug']   ?? '');
+$slug    = trim($_GET['slug'] ?? $_POST['slug'] ?? '');
 $token   = trim($_GET['token']  ?? '');
 $step    = $token ? 'reset' : 'request'; // step 1 = request, step 2 = reset
 $success = false;
@@ -185,10 +185,10 @@ require 'theme_helper.php';
 $theme    = $tenant ? getTenantTheme($pdo, $tenant['id']) : [];
 $primary  = $theme['primary_color']   ?? '#2563eb';
 $secondary= $theme['secondary_color'] ?? '#1e3a8a';
-$sys_name = $theme['system_name']     ?? ($tenant['business_name'] ?? 'PawnHub');
+$sys_name = (!empty($theme['system_name']) ? $theme['system_name'] : null) ?? ($tenant['business_name'] ?? 'PawnHub');
 $logo_url = $theme['logo_url']        ?? '';
 $bg_url   = $theme['bg_image_url']    ?? '';
-$login_href = $slug ? '/' . htmlspecialchars($slug) : '/login.php';
+$login_href = $slug ? '/' . htmlspecialchars($slug) . '?login=1' : '/login.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -319,6 +319,7 @@ h1{font-size:1.7rem;font-weight:800;color:#111827;letter-spacing:-.03em;margin-b
 
     <form method="POST" action="/forgot_password.php?slug=<?=urlencode($slug)?>">
       <input type="hidden" name="form_type" value="request">
+      <input type="hidden" name="slug" value="<?=htmlspecialchars($slug)?>">
       <div class="fgroup">
         <label class="lbl">Email Address</label>
         <input type="email" name="email" class="inp" placeholder="your@email.com" value="<?=htmlspecialchars($_POST['email']??'')?>" autocomplete="email" required>
