@@ -403,7 +403,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 
 .sidebar{
   width:var(--sw);min-height:100vh;
-  background:#ffffff;
+  background:var(--t-sidebar,#ffffff);
   border-right:1px solid #e4e6eb;
   display:flex;flex-direction:column;
   position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
@@ -478,7 +478,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 
 table{width:100%;border-collapse:collapse;}
 th{font-size:.63rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8a8d91;padding:8px 12px;text-align:left;border-bottom:1px solid #e4e6eb;}
-td{padding:11px 12px;font-size:.81rem;color:rgba(255,255,255,.8);border-bottom:1px solid rgba(255,255,255,.07);vertical-align:middle;}
+td{padding:11px 12px;font-size:.81rem;color:#1c1e21;border-bottom:1px solid #f0f2f5;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:rgba(255,255,255,.07);}
 .ticket-tag{font-family:monospace;font-size:.76rem;color:var(--t-primary,#2563eb);font-weight:700;}
@@ -867,14 +867,14 @@ $notif_count = count($notifs);
     </div>
 
   <?php elseif($active_page==='customers'): ?>
-    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div><a href="?page=register_customer" class="btn-xs" style="padding:7px 14px;background:#facc15;color:#1a1a1a;border-color:transparent;font-weight:700;">+ Register</a></div>
+    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div><a href="?page=register_customer" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ Register</a></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>ID Type</th><th>ID Photo</th><th>Registered</th></tr></thead><tbody>
       <?php foreach($customers as $c):?>
       <tr>
         <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
-        <td style="font-family:monospace;font-size:.75rem;color:rgba(255,255,255,.8);"><?=htmlspecialchars($c['contact_number'])?></td>
+        <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
         <td><?php if(!empty($c['valid_id_image'])):?>

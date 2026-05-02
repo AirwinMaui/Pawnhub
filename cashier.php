@@ -205,7 +205,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 
 .sidebar{
   width:var(--sw);min-height:100vh;
-  background:#ffffff;
+  background:var(--t-sidebar,#ffffff);
   border-right:1px solid #e4e6eb;
   display:flex;flex-direction:column;
   position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;
@@ -236,7 +236,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;}
 
 .sb-footer{padding:12px 14px;border-top:1px solid #e4e6eb;}
-.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#65676b;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
+.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#65676b;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
 .sb-logout:hover{color:#ef4444;background:rgba(239,68,68,.08);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
@@ -293,8 +293,8 @@ tr:hover td{background:rgba(255,255,255,.07);}
 .empty-state p{font-size:.82rem;}
 
 .receipt-row{display:flex;justify-content:space-between;margin-bottom:5px;font-size:.79rem;}
-.receipt-row span:first-child{color:rgba(255,255,255,.55);}
-.receipt-row span:last-child{font-weight:600;color:#fff;}
+.receipt-row span:first-child{color:#65676b;}
+.receipt-row span:last-child{font-weight:600;color:#1c1e21;}
 
 .pay-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;margin-bottom:18px;}
 
@@ -364,21 +364,6 @@ tr:hover td{background:rgba(255,255,255,.07);}
   .stats-row{grid-template-columns:repeat(2,1fr);}
   table{font-size:.73rem;}
   th,td{padding:8px 8px;}
-}
-
-@media print {
-  body * { visibility: hidden !important; }
-  #receipt-print-area, #receipt-print-area * { visibility: visible !important; }
-  #receipt-print-area {
-    position: fixed !important;
-    top: 0; left: 0;
-    width: 100%;
-    background: #fff !important;
-    color: #000 !important;
-    padding: 20px;
-    font-size: 13px;
-  }
-  #receipt-print-area .receipt-row span { color: #000 !important; }
 }
 
 /* ===== SIDEBAR LAYOUT FIX — Desktop + Mobile/iOS/Android ===== */
@@ -503,9 +488,10 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="logout.php?role=cashier&slug=<?= rawurlencode($u['tenant_slug'] ?? '') ?>" class="sb-logout">
+    <?php $logout_url = 'logout.php?role=cashier&slug=' . rawurlencode($u['tenant_slug'] ?? ''); ?>
+    <button type="button" class="sb-logout" onclick="showLogoutModal('<?= $logout_url ?>')">
       <span class="material-symbols-outlined">logout</span>Sign Out
-    </a>
+    </button>
   </div>
 </aside>
 
@@ -645,7 +631,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
 
       <div class="card" style="background:rgba(255,255,255,.02);">
         <div class="card-title">Receipt Preview</div>
-        <div id="receipt-print-area" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;font-size:.79rem;">
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;font-size:.79rem;">
           <div style="text-align:center;margin-bottom:12px;">
             <div style="font-weight:800;font-size:.94rem;color:#fff;"><?=htmlspecialchars($sys_name)?></div>
             <div style="font-size:.71rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
@@ -670,7 +656,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.3);">Cashier: <?=htmlspecialchars($u['name'])?></div>
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.25);margin-top:2px;">Thank you for choosing <?=htmlspecialchars($sys_name)?>!</div>
         </div>
-        <button onclick="printReceipt()" style="width:100%;margin-top:10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
+        <button onclick="window.print()" style="width:100%;margin-top:10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
       </div>
     </div>
 
@@ -808,53 +794,6 @@ function calcChange() {
   document.getElementById('r_cash').textContent    = '₱' + cash.toFixed(2);
   document.getElementById('r_change2').textContent = '₱' + ch.toFixed(2);
 }
-
-function printReceipt() {
-  const receiptEl = document.getElementById('receipt-print-area');
-  if (!receiptEl) { window.print(); return; }
-  const win = window.open('', '_blank', 'width=400,height=600');
-  win.document.write(`<!DOCTYPE html><html><head><title>Receipt</title>
-  <style>
-    body{font-family:Arial,sans-serif;font-size:13px;color:#000;margin:20px;}
-    .receipt-row{display:flex;justify-content:space-between;margin-bottom:5px;}
-    hr{border:none;border-top:1px dashed #ccc;margin:10px 0;}
-    .rval{font-weight:600;}
-    .rcenter{text-align:center;}
-    .rtotal{font-weight:700;font-size:15px;}
-  </style></head><body>`);
-  // Build receipt HTML for print
-  const t = window._ticket || {};
-  const sys = `<?=htmlspecialchars($sys_name)?>`;
-  const branch = `<?=htmlspecialchars($tenant['business_name']??'Branch')?>`;
-  const tid = `<?=$tid?>`;
-  const dateStr = document.getElementById('r_maturity')?.textContent || '—';
-  const orNo = document.getElementById('r_or')?.textContent || '—';
-  const cashierName = `<?=htmlspecialchars($u['name'])?>`;
-  const now = new Date().toLocaleString('en-PH',{month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  win.document.write(`
-    <div class="rcenter"><strong style="font-size:15px;">${sys}</strong><br>${branch}<br>Tenant #${tid}<br>${now}</div>
-    <hr>
-    <div class="receipt-row"><span>Ticket</span><span class="rval">${document.getElementById('r_ticket')?.textContent||'—'}</span></div>
-    <div class="receipt-row"><span>Customer</span><span class="rval">${document.getElementById('r_customer')?.textContent||'—'}</span></div>
-    <div class="receipt-row"><span>Item</span><span class="rval">${document.getElementById('r_item')?.textContent||'—'}</span></div>
-    <div class="receipt-row"><span>Maturity</span><span class="rval">${dateStr}</span></div>
-    <hr>
-    <div class="receipt-row"><span>Principal</span><span class="rval">${document.getElementById('r_loan')?.textContent||'₱0.00'}</span></div>
-    <div class="receipt-row"><span>Interest</span><span class="rval">${document.getElementById('r_interest')?.textContent||'₱0.00'}</span></div>
-    <div class="receipt-row rtotal"><span>Total Due</span><span>${document.getElementById('r_total')?.textContent||'₱0.00'}</span></div>
-    <hr>
-    <div class="receipt-row"><span>Cash Received</span><span class="rval">${document.getElementById('r_cash')?.textContent||'₱0.00'}</span></div>
-    <div class="receipt-row rtotal"><span>Change</span><span>${document.getElementById('r_change2')?.textContent||'₱0.00'}</span></div>
-    <hr>
-    <div class="receipt-row"><span>OR No.</span><span class="rval">${orNo}</span></div>
-    <hr>
-    <div class="rcenter">Cashier: ${cashierName}<br>Thank you for choosing ${sys}!</div>
-  `);
-  win.document.write('</body></html>');
-  win.document.close();
-  win.focus();
-  setTimeout(()=>{ win.print(); win.close(); }, 400);
-}
 </script>
 <!-- Mobile overlay for sidebar -->
 <div class="mob-overlay" id="mobOverlay" onclick="closeSidebar()"></div>
@@ -940,6 +879,41 @@ document.addEventListener('keydown', function(e) {
   });
 })();
 
+</script>
+
+<!-- Logout Confirmation Modal -->
+<div id="logoutModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#1a1d26;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);animation:logoutIn .22s ease both;">
+    <div style="background:linear-gradient(135deg,#7f1d1d,#991b1b);padding:24px 24px 20px;display:flex;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <span class="material-symbols-outlined" style="color:#fff;font-size:22px;">logout</span>
+      </div>
+      <div><div style="font-size:1.1rem;font-weight:700;color:#fff;">Sign Out</div><div style="font-size:.75rem;color:rgba(255,255,255,.6);margin-top:2px;">Confirm your action</div></div>
+    </div>
+    <div style="padding:22px 24px 24px;">
+      <p style="font-size:.9rem;color:rgba(240,242,247,.65);line-height:1.65;margin-bottom:22px;">Are you sure you want to log out? Any unsaved changes may be lost.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a id="logoutConfirmBtn" href="#" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#dc2626;color:#fff;font-weight:700;font-size:.9rem;border-radius:12px;text-decoration:none;">
+          <span class="material-symbols-outlined" style="font-size:17px;">logout</span>Yes, Log Out
+        </a>
+        <button onclick="hideLogoutModal()" style="width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(240,242,247,.6);font-weight:600;font-size:.9rem;border-radius:12px;cursor:pointer;font-family:inherit;">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+@keyframes logoutIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.sb-logout{background:none;border:none;cursor:pointer;font-family:inherit;width:100%;text-align:left;}
+</style>
+<script>
+function showLogoutModal(url){
+  document.getElementById('logoutConfirmBtn').href=url;
+  document.getElementById('logoutModal').style.display='flex';
+}
+function hideLogoutModal(){
+  document.getElementById('logoutModal').style.display='none';
+}
+document.getElementById('logoutModal').addEventListener('click',function(e){if(e.target===this)hideLogoutModal();});
 </script>
 </body>
 </html>

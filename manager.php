@@ -581,7 +581,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .bg-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(15,23,42,.95) 0%,rgba(15,23,42,.75) 60%,rgba(30,58,138,.15) 100%);}
 
 /* SIDEBAR */
-.sidebar{width:var(--sw);min-height:100vh;background:#ffffff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;}
+.sidebar{width:var(--sw);min-height:100vh;background:var(--t-sidebar,#ffffff);border-right:1px solid #e4e6eb;display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;}
 .sb-brand{padding:22px 18px 14px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;gap:11px;}
 .sb-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--t-primary,#059669),var(--t-secondary,#064e3b));border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,.15);}
 .sb-logo img{width:100%;height:100%;object-fit:cover;}
