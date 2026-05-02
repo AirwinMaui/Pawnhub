@@ -32,7 +32,7 @@ function getTenantTheme(PDO $pdo, int $tenant_id): array {
         'primary_color'   => '#2563eb',
         'secondary_color' => '#1e3a8a',
         'accent_color'    => '#10b981',
-        'sidebar_color'   => '#ffffff',
+        'sidebar_color'   => '#111827',
         'logo_text'       => null,
         'logo_url'        => null,
         'bg_image_url'    => null,
@@ -93,11 +93,16 @@ function renderThemeCSS(array $theme): string {
     $btnPrimaryText = $isDarkPrimary ? '#ffffff' : '#0f172a';
 
     // ── Sidebar overrides for dark sidebar colors ─────────────────
-    $isDarkSidebar = colorIsDark($sb);
+    // Force sidebar to always be dark — white sidebar looks broken on dark dashboards.
+    // If tenant picks white/light sidebar color, override it to dark neutral.
+    if (!colorIsDark($sb)) {
+        $sb = '#111827';
+    }
+    $isDarkSidebar = true; // sidebar is always dark now
 
-    // When the sidebar is dark but NOT the same as the secondary (e.g. a custom
-    // dark color), blend sidebar→secondary so the gradient looks intentional.
-    $sidebarGradEnd = $isDarkSidebar ? $s : $sb;
+    // Blend sidebar color toward secondary for a nice gradient.
+    // Since sidebar is always dark, sidebarGradEnd uses secondary color.
+    $sidebarGradEnd = colorIsDark($s) ? $s : '#111827';
 
     $sidebarCSS = '';
     if ($isDarkSidebar) {
