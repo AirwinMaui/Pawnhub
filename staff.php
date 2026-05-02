@@ -398,8 +398,8 @@ function normalize_photo_path(string $p): string {
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;overflow:hidden;}
 .bg-scene{position:fixed;inset:0;z-index:0;}
-.bg-scene img{width:100%;height:100%;object-fit:cover;opacity:.12;filter:brightness(0.5) saturate(0.8);}
-.bg-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(10,13,20,.98) 0%,rgba(10,13,20,.85) 60%,rgba(var(--t-sidebar-rgb,30,58,138),.1) 100%);}
+.bg-scene img{width:100%;height:100%;object-fit:cover;opacity:.18;filter:brightness(0.6);}
+.bg-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(15,23,42,.95) 0%,rgba(15,23,42,.75) 60%,rgba(30,58,138,.15) 100%);}
 
 .sidebar{
   width:var(--sw);min-height:100vh;
@@ -543,7 +543,11 @@ tr:hover td{background:#f7f8fa;}
 </head>
 <body>
 <?php
-$staffBg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1600&auto=format&fit=crop&q=60');
+$rawBgStaff = getTenantBgImage($theme, '');
+if ($rawBgStaff && strpos($rawBgStaff,'http') !== 0 && $rawBgStaff[0] !== '/') {
+    $rawBgStaff = '/' . $rawBgStaff;
+}
+$staffBg = $rawBgStaff ?: 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=1600&auto=format&fit=crop&q=60';
 ?>
 <div class="bg-scene">
   <img src="<?= $staffBg ?>" alt="">

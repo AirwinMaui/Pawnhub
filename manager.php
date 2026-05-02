@@ -577,8 +577,8 @@ $business_name = $tenant['business_name'] ?? 'My Branch';
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;overflow:hidden;}
 .bg-scene{position:fixed;inset:0;z-index:0;}
-.bg-scene img{width:100%;height:100%;object-fit:cover;opacity:.09;filter:brightness(.5) saturate(.5);}
-.bg-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(6,78,59,.18) 0%,rgba(7,13,10,.97) 45%);}
+.bg-scene img{width:100%;height:100%;object-fit:cover;opacity:.18;filter:brightness(0.6);}
+.bg-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(15,23,42,.95) 0%,rgba(15,23,42,.75) 60%,rgba(30,58,138,.15) 100%);}
 
 /* SIDEBAR */
 .sidebar{width:var(--sw);min-height:100vh;background:#ffffff;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;}
@@ -723,7 +723,13 @@ tr:hover td{background:rgba(255,255,255,.04);}
 </style>
 </head>
 <body>
-<?php $bgImg = getTenantBgImage($theme, 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1600&auto=format&fit=crop&q=60'); ?>
+<?php
+$rawBgMgr = getTenantBgImage($theme, '');
+if ($rawBgMgr && strpos($rawBgMgr,'http') !== 0 && $rawBgMgr[0] !== '/') {
+    $rawBgMgr = '/' . $rawBgMgr;
+}
+$bgImg = $rawBgMgr ?: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1600&auto=format&fit=crop&q=60';
+?>
 <div class="bg-scene">
   <img src="<?=$bgImg?>" alt="">
   <div class="bg-overlay"></div>
