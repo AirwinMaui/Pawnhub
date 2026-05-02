@@ -1141,10 +1141,10 @@ tr:hover td{background:rgba(255,255,255,.04);}
 
     <!-- CUSTOMER INFO MODAL -->
     <div class="modal-overlay" id="customerModal" style="z-index:9999;">
-      <div class="modal" style="width:720px;max-width:97vw;max-height:90vh;overflow-y:auto;">
+      <div class="modal" style="width:720px;max-width:97vw;max-height:90vh;overflow-y:auto;background:#070d0a;border:1px solid rgba(5,150,105,.15);box-shadow:0 24px 80px rgba(0,0,0,.7);">
         <div class="mhdr">
-          <div class="mtitle" id="cModal_title">Customer Profile</div>
-          <button class="mclose" onclick="document.getElementById('customerModal').classList.remove('open')">
+          <div class="mtitle" id="cModal_title" style="color:#fff;">Customer Profile</div>
+          <button class="mclose" style="border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.4);" onclick="document.getElementById('customerModal').classList.remove('open')">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
