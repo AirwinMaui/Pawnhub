@@ -293,8 +293,8 @@ tr:hover td{background:rgba(255,255,255,.07);}
 .empty-state p{font-size:.82rem;}
 
 .receipt-row{display:flex;justify-content:space-between;margin-bottom:5px;font-size:.79rem;}
-.receipt-row span:first-child{color:#65676b;}
-.receipt-row span:last-child{font-weight:600;color:#1c1e21;}
+.receipt-row span:first-child{color:rgba(255,255,255,.55);}
+.receipt-row span:last-child{font-weight:600;color:#fff;}
 
 .pay-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;margin-bottom:18px;}
 
@@ -364,6 +364,21 @@ tr:hover td{background:rgba(255,255,255,.07);}
   .stats-row{grid-template-columns:repeat(2,1fr);}
   table{font-size:.73rem;}
   th,td{padding:8px 8px;}
+}
+
+@media print {
+  body * { visibility: hidden !important; }
+  #receipt-print-area, #receipt-print-area * { visibility: visible !important; }
+  #receipt-print-area {
+    position: fixed !important;
+    top: 0; left: 0;
+    width: 100%;
+    background: #fff !important;
+    color: #000 !important;
+    padding: 20px;
+    font-size: 13px;
+  }
+  #receipt-print-area .receipt-row span { color: #000 !important; }
 }
 
 /* ===== SIDEBAR LAYOUT FIX — Desktop + Mobile/iOS/Android ===== */
@@ -630,7 +645,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
 
       <div class="card" style="background:rgba(255,255,255,.02);">
         <div class="card-title">Receipt Preview</div>
-        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;font-size:.79rem;">
+        <div id="receipt-print-area" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;font-size:.79rem;">
           <div style="text-align:center;margin-bottom:12px;">
             <div style="font-weight:800;font-size:.94rem;color:#fff;"><?=htmlspecialchars($sys_name)?></div>
             <div style="font-size:.71rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
@@ -655,7 +670,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.3);">Cashier: <?=htmlspecialchars($u['name'])?></div>
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.25);margin-top:2px;">Thank you for choosing <?=htmlspecialchars($sys_name)?>!</div>
         </div>
-        <button onclick="window.print()" style="width:100%;margin-top:10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
+        <button onclick="printReceipt()" style="width:100%;margin-top:10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
       </div>
     </div>
 
@@ -792,6 +807,53 @@ function calcChange() {
   document.getElementById('p_change').textContent  = '₱' + ch.toFixed(2);
   document.getElementById('r_cash').textContent    = '₱' + cash.toFixed(2);
   document.getElementById('r_change2').textContent = '₱' + ch.toFixed(2);
+}
+
+function printReceipt() {
+  const receiptEl = document.getElementById('receipt-print-area');
+  if (!receiptEl) { window.print(); return; }
+  const win = window.open('', '_blank', 'width=400,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><title>Receipt</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:13px;color:#000;margin:20px;}
+    .receipt-row{display:flex;justify-content:space-between;margin-bottom:5px;}
+    hr{border:none;border-top:1px dashed #ccc;margin:10px 0;}
+    .rval{font-weight:600;}
+    .rcenter{text-align:center;}
+    .rtotal{font-weight:700;font-size:15px;}
+  </style></head><body>`);
+  // Build receipt HTML for print
+  const t = window._ticket || {};
+  const sys = `<?=htmlspecialchars($sys_name)?>`;
+  const branch = `<?=htmlspecialchars($tenant['business_name']??'Branch')?>`;
+  const tid = `<?=$tid?>`;
+  const dateStr = document.getElementById('r_maturity')?.textContent || '—';
+  const orNo = document.getElementById('r_or')?.textContent || '—';
+  const cashierName = `<?=htmlspecialchars($u['name'])?>`;
+  const now = new Date().toLocaleString('en-PH',{month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  win.document.write(`
+    <div class="rcenter"><strong style="font-size:15px;">${sys}</strong><br>${branch}<br>Tenant #${tid}<br>${now}</div>
+    <hr>
+    <div class="receipt-row"><span>Ticket</span><span class="rval">${document.getElementById('r_ticket')?.textContent||'—'}</span></div>
+    <div class="receipt-row"><span>Customer</span><span class="rval">${document.getElementById('r_customer')?.textContent||'—'}</span></div>
+    <div class="receipt-row"><span>Item</span><span class="rval">${document.getElementById('r_item')?.textContent||'—'}</span></div>
+    <div class="receipt-row"><span>Maturity</span><span class="rval">${dateStr}</span></div>
+    <hr>
+    <div class="receipt-row"><span>Principal</span><span class="rval">${document.getElementById('r_loan')?.textContent||'₱0.00'}</span></div>
+    <div class="receipt-row"><span>Interest</span><span class="rval">${document.getElementById('r_interest')?.textContent||'₱0.00'}</span></div>
+    <div class="receipt-row rtotal"><span>Total Due</span><span>${document.getElementById('r_total')?.textContent||'₱0.00'}</span></div>
+    <hr>
+    <div class="receipt-row"><span>Cash Received</span><span class="rval">${document.getElementById('r_cash')?.textContent||'₱0.00'}</span></div>
+    <div class="receipt-row rtotal"><span>Change</span><span>${document.getElementById('r_change2')?.textContent||'₱0.00'}</span></div>
+    <hr>
+    <div class="receipt-row"><span>OR No.</span><span class="rval">${orNo}</span></div>
+    <hr>
+    <div class="rcenter">Cashier: ${cashierName}<br>Thank you for choosing ${sys}!</div>
+  `);
+  win.document.write('</body></html>');
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{ win.print(); win.close(); }, 400);
 }
 </script>
 <!-- Mobile overlay for sidebar -->
