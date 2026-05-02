@@ -1885,7 +1885,7 @@ function previewLogo(input) {
 }
 function handleLogoDrop(e) {
   e.preventDefault();
-  document.getElementById('logo-drop-zone').style.borderColor = 'rgba(255,255,255,.12)';
+  document.getElementById('logo-drop-zone').style.borderColor = '#d1d5db';
   const file = e.dataTransfer.files[0];
   if (file && file.type.startsWith('image/')) {
     const dt = new DataTransfer();
@@ -1942,6 +1942,13 @@ function handleShopBgDrop(e) {
 document.querySelector('input[name="system_name"]')?.addEventListener('input', function() {
   document.getElementById('prev_sysname').textContent = this.value || 'PawnHub';
 });
+
+// Apply theme live on page load (settings page)
+if (document.getElementById('cp_primary')) {
+  document.addEventListener('DOMContentLoaded', updatePreview);
+  // Also call immediately in case DOM is already loaded
+  if (document.readyState !== 'loading') updatePreview();
+}
 </script>
 
 <!-- LOGOUT CONFIRMATION MODAL -->
