@@ -873,9 +873,9 @@ $notif_count = count($notifs);
       <?php foreach($customers as $c):?>
       <tr>
         <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
-        <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
+        <td style="font-family:monospace;font-size:.75rem;color:rgba(255,255,255,.55);"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
-        <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
+        <td style="color:rgba(255,255,255,.75);"><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
         <td><?php if(!empty($c['valid_id_image'])):?>
           <a href="<?=htmlspecialchars($c['valid_id_image'])?>" target="_blank" style="display:inline-block;">
             <img src="<?=htmlspecialchars($c['valid_id_image'])?>" style="height:36px;border-radius:5px;border:1px solid rgba(255,255,255,.1);object-fit:cover;" onerror="this.style.display='none'">
