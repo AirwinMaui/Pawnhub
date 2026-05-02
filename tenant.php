@@ -599,7 +599,7 @@ tr:hover td{background:rgba(255,255,255,.04);}
 /* ── BUTTONS ── */
 .btn-sm{padding:6px 13px;border-radius:8px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid #e4e6eb;background:#f0f2f5;color:#1c1e21;text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:all .15s;margin-right:4px;font-family:inherit;}
 .btn-sm:hover{background:#e4e6eb;}
-.btn-primary{background:var(--t-primary,#2563eb);color:#fff;border-color:var(--t-primary,#2563eb);}
+.btn-primary{background:var(--t-primary,#2563eb);color:var(--t-on-primary,#fff);border-color:var(--t-primary,#2563eb);}
 .btn-primary:hover{filter:brightness(1.1);}
 .btn-success{background:rgba(16,185,129,.9);color:#fff;border-color:transparent;}
 .btn-danger{background:rgba(239,68,68,.8);color:#fff;border-color:transparent;}

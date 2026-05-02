@@ -281,7 +281,7 @@ tr:hover td{background:rgba(255,255,255,.07);}
 .finput option{background:#ffffff;color:#1c1e21;}
 .fgroup{margin-bottom:12px;}
 
-.btn-pay{width:100%;background:linear-gradient(135deg,var(--t-primary,#059669),var(--t-secondary,#047857));color:#fff;border:none;border-radius:11px;padding:14px;font-family:inherit;font-size:.93rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(5,150,105,.2);transition:all .2s;margin-top:4px;}
+.btn-pay{width:100%;background:linear-gradient(135deg,var(--t-primary,#059669),var(--t-secondary,#047857));color:var(--t-on-primary,#fff);border:none;border-radius:11px;padding:14px;font-family:inherit;font-size:.93rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(5,150,105,.2);transition:all .2s;margin-top:4px;}
 .btn-pay:hover{transform:translateY(-1px);filter:brightness(1.08);}
 
 .alert{padding:11px 16px;border-radius:12px;font-size:.82rem;margin-bottom:18px;display:flex;align-items:center;gap:9px;}
