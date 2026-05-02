@@ -40,14 +40,8 @@ $now = new DateTime();
 
 // ── 1. Expiry reminder emails: 7 days, 3 days, 1 day ─────────
 //
-// IMPORTANT: We use a RANGE query (subscription_end BETWEEN today and +N days)
-// instead of an exact date match. This way, if the cron was not triggered
-// on exactly the right day (e.g. server restart, missed ping), the reminder
-// will still be sent the next time the cron runs.
-//
-// Deduplication uses renewal_reminded_Xd flags on the tenants row as the
-// PRIMARY check (always available), with subscription_notifications as an
-// optional secondary check (table may not exist in all environments).
+// Handles BOTH paid plans AND Starter free trial reminders.
+// For Starter: reminds them to upgrade before trial ends.
 
 $reminder_windows = [
     7 => ['flag' => 'renewal_reminded_7d', 'notif_type' => 'expiring_7d'],
@@ -59,14 +53,12 @@ foreach ($reminder_windows as $days => $cfg) {
     $flag       = $cfg['flag'];
     $notif_type = $cfg['notif_type'];
 
-    // Fetch tenants whose subscription_end is within the next N days
-    // AND who have NOT yet received this reminder (flag = 0)
+    // Fetch ALL active tenants (including Starter) expiring soon who haven't been reminded
     try {
         $stmt = $pdo->prepare("
             SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug
             FROM tenants t
             WHERE t.status = 'active'
-              AND t.plan != 'Starter'
               AND t.subscription_end IS NOT NULL
               AND DATE(t.subscription_end) >= CURDATE()
               AND DATE(t.subscription_end) <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
@@ -80,45 +72,120 @@ foreach ($reminder_windows as $days => $cfg) {
     }
 
     foreach ($tenants_to_notify as $tenant) {
-        // Calculate actual days remaining for the email copy
         $days_left = max(0, (int)ceil((strtotime($tenant['subscription_end']) - time()) / 86400));
+        $is_starter_trial = ($tenant['plan'] === 'Starter');
 
-        if (function_exists('sendSubscriptionExpiring')) {
-            $sent = sendSubscriptionExpiring(
-                $tenant['email'],
-                $tenant['owner_name'],
-                $tenant['business_name'],
-                $tenant['plan'],
-                $tenant['subscription_end'],
-                $days_left,
-                $tenant['slug']
-            );
+        if ($is_starter_trial) {
+            // Send free trial expiry reminder
+            if (function_exists('sendFreeTrialExpiring')) {
+                $sent = sendFreeTrialExpiring(
+                    $tenant['email'],
+                    $tenant['owner_name'],
+                    $tenant['business_name'],
+                    $tenant['subscription_end'],
+                    $days_left,
+                    $tenant['slug']
+                );
+            } else {
+                // Fallback: use regular expiring email if trial-specific one not in mailer.php yet
+                $sent = function_exists('sendSubscriptionExpiring')
+                    ? sendSubscriptionExpiring($tenant['email'], $tenant['owner_name'], $tenant['business_name'], 'Free Trial', $tenant['subscription_end'], $days_left, $tenant['slug'])
+                    : false;
+            }
         } else {
-            $sent = false;
-            $log[] = "[WARN] sendSubscriptionExpiring() not found — check mailer.php";
+            if (function_exists('sendSubscriptionExpiring')) {
+                $sent = sendSubscriptionExpiring(
+                    $tenant['email'],
+                    $tenant['owner_name'],
+                    $tenant['business_name'],
+                    $tenant['plan'],
+                    $tenant['subscription_end'],
+                    $days_left,
+                    $tenant['slug']
+                );
+            } else {
+                $sent = false;
+                $log[] = "[WARN] sendSubscriptionExpiring() not found — check mailer.php";
+            }
         }
 
         if ($sent) {
-            // Mark flag so we never send this tier of reminder again
             try {
-                $pdo->prepare("UPDATE tenants SET `{$flag}` = 1, subscription_status = 'expiring_soon' WHERE id = ?")
+                $status_label = $is_starter_trial ? 'trial_expiring_soon' : 'expiring_soon';
+                $pdo->prepare("UPDATE tenants SET `{$flag}` = 1, subscription_status = '{$status_label}' WHERE id = ?")
                     ->execute([$tenant['id']]);
             } catch (Throwable $e) {}
 
-            // Also log to subscription_notifications if the table exists
             try {
                 $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, ?)")
                     ->execute([$tenant['id'], $notif_type]);
-            } catch (Throwable $e) {} // silently ignore — table may not exist
+            } catch (Throwable $e) {}
 
-            $log[] = "[OK] Sent {$days}d warning to {$tenant['business_name']} ({$tenant['email']}) — {$days_left}d left";
+            $type_label = $is_starter_trial ? 'FREE TRIAL' : 'subscription';
+            $log[] = "[OK] Sent {$days}d {$type_label} warning to {$tenant['business_name']} ({$tenant['email']}) — {$days_left}d left";
         } else {
             $log[] = "[FAIL] Could not send {$days}d warning to {$tenant['email']}";
         }
     }
 }
 
-// ── 2. Mark & notify expired tenants ─────────────────────────
+// ── 1b. Mark expired Starter free trials ─────────────────────
+try {
+    $starter_expired_stmt = $pdo->prepare("
+        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug
+        FROM tenants t
+        WHERE t.status = 'active'
+          AND t.plan = 'Starter'
+          AND t.subscription_end IS NOT NULL
+          AND DATE(t.subscription_end) < CURDATE()
+          AND (t.subscription_status IS NULL OR t.subscription_status NOT IN ('expired', 'trial_expired', 'cancelled'))
+    ");
+    $starter_expired_stmt->execute();
+    $starter_expired_tenants = $starter_expired_stmt->fetchAll();
+} catch (Throwable $e) {
+    $starter_expired_tenants = [];
+    $log[] = "[ERROR] Could not query expired Starter trials: " . $e->getMessage();
+}
+
+foreach ($starter_expired_tenants as $tenant) {
+    $pdo->prepare("UPDATE tenants SET subscription_status='trial_expired' WHERE id=?")
+        ->execute([$tenant['id']]);
+
+    // Send trial ended email once
+    $already = false;
+    try {
+        $chk = $pdo->prepare("SELECT id FROM subscription_notifications WHERE tenant_id=? AND notif_type='trial_expired' AND DATE(sent_at)=CURDATE() LIMIT 1");
+        $chk->execute([$tenant['id']]);
+        $already = (bool)$chk->fetch();
+    } catch (Throwable $e) {}
+
+    if (!$already) {
+        $sent = false;
+        if (function_exists('sendFreeTrialExpired')) {
+            $sent = sendFreeTrialExpired($tenant['email'], $tenant['owner_name'], $tenant['business_name'], $tenant['slug']);
+        } elseif (function_exists('sendSubscriptionExpired')) {
+            $sent = sendSubscriptionExpired($tenant['email'], $tenant['owner_name'], $tenant['business_name'], 'Free Trial', $tenant['slug']);
+        }
+        if ($sent) {
+            try {
+                $pdo->prepare("INSERT INTO subscription_notifications (tenant_id, notif_type) VALUES (?, 'trial_expired')")->execute([$tenant['id']]);
+            } catch (Throwable $e) {}
+            $log[] = "[OK] Sent TRIAL EXPIRED notice to {$tenant['business_name']} ({$tenant['email']})";
+        } else {
+            $log[] = "[FAIL] Could not send trial expired notice to {$tenant['email']}";
+        }
+    }
+
+    try {
+        $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,NULL,'system','system','FREE_TRIAL_EXPIRED','tenant',?,?,'::1',NOW())")
+            ->execute([$tenant['id'], $tenant['id'], "Free trial expired for {$tenant['business_name']}."]);
+    } catch (Throwable $e) {}
+
+    $log[] = "[MARKED] {$tenant['business_name']} free trial marked as trial_expired.";
+}
+
+
+// ── 2. Mark & notify expired paid-plan tenants ───────────────
 try {
     $expired_stmt = $pdo->prepare("
         SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.subscription_end, t.slug

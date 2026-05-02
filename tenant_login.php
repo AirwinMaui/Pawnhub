@@ -28,10 +28,18 @@ if (!$tenant) {
 // Block login if tenant is deactivated OR subscription expired 7+ days ago
 // (covers cases where cron hasn't run yet but tenant should be locked out)
 $is_deactivated = false;
+$is_trial_ended = false;  // Starter free trial ended
 $sub_expired_days = 0;
 
 if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
     $is_deactivated = true;
+} elseif (
+    !empty($tenant['subscription_end']) &&
+    $tenant['plan'] === 'Starter' &&
+    strtotime($tenant['subscription_end']) < time()
+) {
+    // Starter trial ended — immediate lock, no grace period
+    $is_trial_ended = true;
 } elseif (
     !empty($tenant['subscription_end']) &&
     $tenant['plan'] !== 'Starter' &&
@@ -165,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
 
 // ── Handle LOGIN POST ─────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login'
-    && !$is_deactivated) {
+    && !$is_deactivated && !$is_trial_ended) {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -481,7 +489,69 @@ html { scroll-behavior: smooth; }
 
       <?php else: ?>
 
-        <?php if ($is_deactivated):
+        <?php if ($is_trial_ended):
+            $trial_tenant_id = $tenant['id'] ?? 0;
+        ?>
+        <!-- ══ FREE TRIAL ENDED SCREEN ════════════════════════ -->
+        <div style="text-align:center;margin-bottom:18px;">
+          <div style="width:64px;height:64px;border-radius:50%;background:#fefce8;border:2px solid #fde68a;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+            <span class="material-symbols-outlined" style="font-size:32px;color:#d97706;">timer_off</span>
+          </div>
+          <h1 class="card-title" style="font-size:1.35rem;color:#111827;">Free Trial Ended</h1>
+          <p class="card-sub" style="margin-bottom:0;">Your 1-month free trial for <strong><?= $bizName ?></strong> has ended. Upgrade to keep using your dashboard.</p>
+        </div>
+
+        <!-- Plan options -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #2563eb;border-radius:14px;padding:16px 14px;text-align:center;position:relative;">
+            <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#2563eb;color:#fff;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;padding:2px 10px;border-radius:100px;white-space:nowrap;">⭐ Popular</div>
+            <div style="font-size:.85rem;font-weight:800;color:#1e40af;margin-bottom:4px;">Pro</div>
+            <div style="font-size:1.3rem;font-weight:800;color:#1d4ed8;line-height:1.1;">₱999<span style="font-size:.72rem;font-weight:500;color:#60a5fa;">/mo</span></div>
+            <div style="font-size:.69rem;color:#3b82f6;margin-top:5px;line-height:1.4;">Full features · Unlimited staff · Reports</div>
+          </div>
+          <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:16px 14px;text-align:center;">
+            <div style="font-size:.85rem;font-weight:800;color:#334155;margin-bottom:4px;">Enterprise</div>
+            <div style="font-size:1.3rem;font-weight:800;color:#1e293b;line-height:1.1;">₱2,499<span style="font-size:.72rem;font-weight:500;color:#94a3b8;">/mo</span></div>
+            <div style="font-size:.69rem;color:#64748b;margin-top:5px;line-height:1.4;">Multi-branch · Priority support</div>
+          </div>
+        </div>
+
+        <?php if ($trial_tenant_id): ?>
+        <a href="/paymongo_reactivate.php?tenant=<?= $trial_tenant_id ?>&plan=Pro"
+           style="display:flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;border-radius:13px;padding:15px 20px;margin-bottom:10px;font-weight:700;font-size:.92rem;box-shadow:0 5px 16px rgba(37,99,235,.35);transition:all .18s;"
+           onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 7px 22px rgba(37,99,235,.45)'"
+           onmouseout="this.style.transform='';this.style.boxShadow='0 5px 16px rgba(37,99,235,.35)'">
+          <span class="material-symbols-outlined" style="font-size:20px;font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24;">rocket_launch</span>
+          Upgrade Now — Pay via PayMongo →
+        </a>
+        <div style="text-align:center;font-size:.73rem;color:#64748b;margin-bottom:14px;">
+          Accepts GCash · Maya · Credit/Debit Card · Online Banking · Billease
+        </div>
+        <?php endif; ?>
+
+        <?php if ($sa_contact_email): ?>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#64748b;margin-bottom:9px;">📬 Or contact admin directly</div>
+          <a href="mailto:<?= htmlspecialchars($sa_contact_email) ?>?subject=Upgrade%20Request%20—%20<?= urlencode($bizName) ?>&body=Hi%20<?= urlencode($sa_contact_name) ?>%2C%0A%0AOur%20free%20trial%20has%20ended%20and%20we%20would%20like%20to%20upgrade%20our%20subscription%20for%20<?= urlencode($bizName) ?>.%0A%0APlease%20assist%20us.%0A%0AThank%20you."
+            style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:11px 14px;text-decoration:none;transition:all .18s;"
+            onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">
+            <div style="width:32px;height:32px;background:#e2e8f0;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <span class="material-symbols-outlined" style="font-size:16px;color:#64748b;">mail</span>
+            </div>
+            <div>
+              <div style="font-size:.8rem;font-weight:600;color:#334155;"><?= htmlspecialchars($sa_contact_email) ?></div>
+              <div style="font-size:.69rem;color:#94a3b8;">Tap to send an upgrade request email</div>
+            </div>
+            <span class="material-symbols-outlined" style="font-size:15px;color:#cbd5e1;margin-left:auto;">open_in_new</span>
+          </a>
+        </div>
+        <?php endif; ?>
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 14px;font-size:.77rem;color:#92400e;line-height:1.6;">
+          ⚡ <strong>Instant activation</strong> — upgrade via PayMongo and your full access is restored immediately.
+        </div>
+
+        <?php elseif ($is_deactivated):
             $deact_tenant_id = $tenant['id'] ?? 0;
             $deact_plan      = $tenant['plan'] ?? 'Pro';
         ?>
@@ -612,7 +682,7 @@ html { scroll-behavior: smooth; }
           </div>
         </div>
 
-        <?php endif; // end $is_deactivated check ?>
+        <?php endif; // end trial_ended / deactivated / login form check ?>
 
       <?php endif; ?>
 
