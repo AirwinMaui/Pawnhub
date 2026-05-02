@@ -1413,16 +1413,36 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':($t['plan']==='Pro'?'plan-pro':'plan-starter')?>"><?=$t['plan']?></span></td>
           <td><?= $pmt_badge ?></td>
           <td style="font-size:.73rem;color:var(--text-dim);"><?=date('M d, Y',strtotime($t['created_at']))?></td>
-          <td>
-            <?php if (!$is_free && $pmt_status !== 'paid'): ?>
-            <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
-              <input type="hidden" name="action" value="send_payment_link"/>
-              <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-              <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
-            </form>
+          <td style="white-space:nowrap;">
+            <?php
+              $is_sa_added = !empty($t['invite_status']); // SA-added tenants have an invite record
+            ?>
+            <?php if ($is_sa_added): ?>
+              <?php /* SA manually added this tenant — no need to approve/reject, just send invite */ ?>
+              <?php if (!$is_free && $pmt_status !== 'paid'): ?>
+              <form method="POST" action="paymongo_send_link.php" style="display:inline;margin-bottom:4px;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+                <input type="hidden" name="action" value="send_payment_link"/>
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
+              </form>
+              <?php endif; ?>
+              <form method="POST" style="display:inline;" onsubmit="return confirm('Send invitation email to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+                <input type="hidden" name="action" value="resend_invite"/>
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#0891b2;color:#fff;border:none;">✉️ Send Invite</button>
+              </form>
+            <?php else: ?>
+              <?php /* Self-signup tenant — needs approval flow */ ?>
+              <?php if (!$is_free && $pmt_status !== 'paid'): ?>
+              <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+                <input type="hidden" name="action" value="send_payment_link"/>
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
+              </form>
+              <?php endif; ?>
+              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
+              <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
             <?php endif; ?>
-            <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
-            <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
           </td>
         </tr>
         <?php endforeach;?></tbody></table></div>
@@ -2404,18 +2424,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <form method="POST">
         <input type="hidden" name="action" value="add_tenant">
 
-        <!-- OCR Business Permit Upload -->
-        <div style="margin-bottom:18px;padding:14px 16px;background:rgba(124,58,237,.07);border:1.5px dashed rgba(124,58,237,.35);border-radius:10px;">
-          <p style="font-size:.78rem;font-weight:700;color:#a78bfa;margin:0 0 8px;">📄 Auto-fill via Business Permit OCR <span style="font-weight:400;color:rgba(255,255,255,.35);">(optional)</span></p>
-          <p style="font-size:.73rem;color:rgba(255,255,255,.4);margin:0 0 10px;line-height:1.6;">Upload the tenant's business permit (JPG, PNG, or PDF). We'll try to extract the business name, owner, and address automatically.</p>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <input type="file" id="ocr_permit_file" accept="image/*,.pdf" style="font-size:.76rem;color:rgba(255,255,255,.6);flex:1;min-width:0;"/>
-            <button type="button" id="ocr_btn" onclick="runOCR()" style="background:#7c3aed;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-              🔍 Extract Fields
-            </button>
-          </div>
-          <div id="ocr_status" style="font-size:.74rem;margin-top:8px;color:#a78bfa;display:none;"></div>
-        </div>
+
         <div style="font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;display:block;">Business Information</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
           <div style="grid-column:1/-1;"><label class="flabel">Business Name *</label><input type="text" name="business_name" class="finput" placeholder="GoldKing Pawnshop" required></div>
@@ -2800,64 +2809,6 @@ function toggleSidebar(){
 }
 </script>
 
-<script>
-// ── OCR: Extract fields from business permit image ─────────────────────────
-async function runOCR() {
-  const fileInput = document.getElementById('ocr_permit_file');
-  const statusEl  = document.getElementById('ocr_status');
-  const btn       = document.getElementById('ocr_btn');
-
-  if (!fileInput.files.length) {
-    showOcrStatus('⚠️ Please select a file first.', '#f59e0b');
-    return;
-  }
-
-  btn.disabled    = true;
-  btn.textContent = '⏳ Extracting...';
-  showOcrStatus('Uploading and reading permit...', '#a78bfa');
-
-  const formData = new FormData();
-  formData.append('permit', fileInput.files[0]);
-
-  try {
-    const res  = await fetch('ocr_permit.php', { method: 'POST', body: formData });
-    const data = await res.json();
-
-    if (!data.success) {
-      showOcrStatus('❌ ' + (data.error || 'OCR failed. Try a clearer image.'), '#f87171');
-      return;
-    }
-
-    const f = data.fields;
-    let filled = 0;
-
-    const bizInput  = document.querySelector('[name="business_name"]');
-    const ownInput  = document.querySelector('[name="owner_name"]');
-    const addrInput = document.querySelector('[name="address"]');
-
-    if (bizInput  && f.business_name) { bizInput.value  = f.business_name; filled++; }
-    if (ownInput  && f.owner_name)    { ownInput.value  = f.owner_name;    filled++; }
-    if (addrInput && f.address)       { addrInput.value = f.address;       filled++; }
-
-    if (filled > 0) {
-      showOcrStatus('✅ ' + filled + ' field(s) auto-filled. Please review and correct if needed.', '#4ade80');
-    } else {
-      showOcrStatus('⚠️ Could not detect fields automatically. Please fill in manually.', '#f59e0b');
-    }
-  } catch (err) {
-    showOcrStatus('❌ Network error. Please try again.', '#f87171');
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = '🔍 Extract Fields';
-  }
-}
-
-function showOcrStatus(msg, color) {
-  const el        = document.getElementById('ocr_status');
-  el.textContent  = msg;
-  el.style.color  = color;
-  el.style.display = 'block';
-}
 </script>
 </body>
 </html>
