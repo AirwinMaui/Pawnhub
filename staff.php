@@ -480,7 +480,7 @@ table{width:100%;border-collapse:collapse;}
 th{font-size:.63rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8a8d91;padding:8px 12px;text-align:left;border-bottom:1px solid #e4e6eb;}
 td{padding:11px 12px;font-size:.81rem;color:#1c1e21;border-bottom:1px solid #f0f2f5;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:#f7f8fa;}
+tr:hover td{background:rgba(255,255,255,.07);}
 .ticket-tag{font-family:monospace;font-size:.76rem;color:var(--t-primary,#2563eb);font-weight:700;}
 .badge{display:inline-flex;align-items:center;gap:3px;font-size:.63rem;font-weight:700;padding:3px 9px;border-radius:100px;}
 .b-blue{background:rgba(37,99,235,.12);color:#1d4ed8;}.b-green{background:rgba(16,185,129,.12);color:#059669;}.b-red{background:rgba(239,68,68,.12);color:#dc2626;}.b-yellow{background:rgba(245,158,11,.12);color:#d97706;}.b-gray{background:#e4e6eb;color:#65676b;}
@@ -488,7 +488,7 @@ tr:hover td{background:#f7f8fa;}
 
 .btn-xs{padding:5px 11px;border-radius:7px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid #e4e6eb;background:#f0f2f5;color:#1c1e21;text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:all .15s;margin-right:3px;font-family:inherit;}
 .btn-xs:hover{background:#e4e6eb;}
-.btn-primary-xs{background:var(--t-primary,#2563eb);color:#fff;border-color:transparent;}
+.btn-primary-xs{background:var(--t-primary,#2563eb);color:var(--t-on-primary,#fff);border-color:transparent;}
 .btn-danger-xs{background:rgba(239,68,68,.9);color:#fff;border-color:transparent;}
 
 .qa-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;font-family:inherit;font-size:.83rem;font-weight:600;cursor:pointer;border:none;width:100%;text-align:left;transition:all .18s;margin-bottom:8px;text-decoration:none;color:#fff;}

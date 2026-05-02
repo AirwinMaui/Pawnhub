@@ -264,7 +264,7 @@ table{width:100%;border-collapse:collapse;}
 th{font-size:.63rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8a8d91;padding:8px 12px;text-align:left;border-bottom:1px solid #e4e6eb;}
 td{padding:11px 12px;font-size:.81rem;color:#1c1e21;border-bottom:1px solid #f0f2f5;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:#f7f8fa;}
+tr:hover td{background:rgba(255,255,255,.07);}
 .ticket-tag{font-family:monospace;font-size:.76rem;color:var(--t-primary,#059669);font-weight:700;}
 .badge{display:inline-flex;align-items:center;gap:3px;font-size:.63rem;font-weight:700;padding:3px 9px;border-radius:100px;}
 .b-blue{background:rgba(37,99,235,.12);color:#1d4ed8;}.b-green{background:rgba(16,185,129,.12);color:#059669;}.b-red{background:rgba(239,68,68,.12);color:#dc2626;}.b-yellow{background:rgba(245,158,11,.12);color:#d97706;}.b-gray{background:#e4e6eb;color:#65676b;}
