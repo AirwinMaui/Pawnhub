@@ -478,7 +478,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 
 table{width:100%;border-collapse:collapse;}
 th{font-size:.63rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8a8d91;padding:8px 12px;text-align:left;border-bottom:1px solid #e4e6eb;}
-td{padding:11px 12px;font-size:.81rem;color:#1c1e21;border-bottom:1px solid #f0f2f5;vertical-align:middle;}
+td{padding:11px 12px;font-size:.81rem;color:rgba(255,255,255,.85);border-bottom:1px solid rgba(255,255,255,.07);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:rgba(255,255,255,.07);}
 .ticket-tag{font-family:monospace;font-size:.76rem;color:var(--t-primary,#2563eb);font-weight:700;}
