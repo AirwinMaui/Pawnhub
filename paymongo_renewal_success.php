@@ -77,7 +77,7 @@ unset(
     <?php if ($is_reactivation): ?>
       Your <strong class="text-green-400"><?= $plan ?> Plan</strong> has been reactivated. Your account and all staff access have been restored!
     <?php else: ?>
-      Your <strong class="text-blue-400"><?= $plan ?> Plan</strong> — <strong class="text-blue-300"><?= htmlspecialchars($cycle_label) ?></strong> renewal payment has been recorded.
+      Your <strong class="text-blue-400"><?= $plan ?> Plan</strong> — <strong class="text-blue-300"><?= htmlspecialchars($cycle_label) ?></strong> payment has been confirmed and your subscription is now updated!
     <?php endif; ?>
   </p>
 
@@ -112,8 +112,8 @@ unset(
           <p class="text-sm font-semibold text-white">Account automatically reactivated ✅</p>
           <p class="text-xs text-gray-400 mt-0.5">Your tenant account and all staff accounts have been unsuspended immediately.</p>
         <?php else: ?>
-          <p class="text-sm font-semibold text-yellow-300">Super Admin review pending</p>
-          <p class="text-xs text-gray-400 mt-0.5">Our admin will verify your payment and approve the renewal — usually within 24 hours.</p>
+          <p class="text-sm font-semibold text-white">Subscription automatically updated ✅</p>
+          <p class="text-xs text-gray-400 mt-0.5">Your subscription has been extended/updated immediately. No manual approval needed.</p>
         <?php endif; ?>
       </div>
     </div>
@@ -129,27 +129,25 @@ unset(
         <p class="text-xs text-gray-400 mt-0.5">You can now log in and resume normal operations. A confirmation email has been sent.</p>
       </div>
       <?php else: ?>
-      <div class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-        <span class="text-gray-400 text-xs font-bold">3</span>
+      <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
       </div>
       <div>
-        <p class="text-sm font-semibold text-gray-300">Subscription extended</p>
-        <p class="text-xs text-gray-500 mt-0.5">Once approved, your subscription will be extended and you'll receive a confirmation email.</p>
+        <p class="text-sm font-semibold text-blue-300">Go to your dashboard</p>
+        <p class="text-xs text-gray-400 mt-0.5">Your subscription is active. Log in and continue using PawnHub. A confirmation email has been sent.</p>
       </div>
       <?php endif; ?>
     </div>
   </div>
 
-  <!-- Info box -->
-  <div class="<?= $is_reactivation ? 'bg-green-500/10 border-green-500/20 text-green-300' : 'bg-blue-500/10 border-blue-500/20 text-blue-300' ?> border rounded-xl p-4 text-sm mb-6 text-left">
+  <div class="<?= $is_reactivation ? 'bg-green-500/10 border-green-500/20 text-green-300' : 'bg-green-500/10 border-green-500/20 text-green-300' ?> border rounded-xl p-4 text-sm mb-6 text-left">
     <div class="flex items-start gap-2">
-      <span class="text-base mt-0.5"><?= $is_reactivation ? '✅' : '📧' ?></span>
+      <span class="text-base mt-0.5">✅</span>
       <span>
         <?php if ($is_reactivation): ?>
           Your account is now <strong>fully active</strong>. You'll also receive a confirmation email shortly.
         <?php else: ?>
-          You'll receive a confirmation email once your renewal is approved — usually <strong>within 24 hours</strong>.
-          Check your spam folder if you don't see it.
+          Your subscription is now <strong>active and updated</strong>. A confirmation email has been sent to your registered address.
         <?php endif; ?>
       </span>
     </div>

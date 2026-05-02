@@ -109,79 +109,245 @@ if ($event_type === 'checkout_session.payment.paid') {
         if (!$dup->fetch()) {
 
             if ($payment_type === 'upgrade') {
-                // ── A. UPGRADE PAYMENT ────────────────────────
-                // Insert as upgrade row — SA approves to switch plan
-                $upgrade_notes = "PLAN UPGRADE: {$current_plan} → {$plan} ({$billing_cycle}) via PayMongo."
-                    . ($proration_credit_pesos > 0 ? " Proration credit: ₱{$proration_credit_pesos}." : '');
+                // ── A. UPGRADE PAYMENT — AUTO APPROVE ────────
                 try {
+                    $billing_months_map = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
+                    $months = $billing_months_map[$billing_cycle] ?? 1;
+                    $new_sub_end = date('Y-m-d', strtotime("+{$months} months"));
+
+                    // Switch plan immediately
                     $pdo->prepare("
-                        INSERT INTO subscription_renewals
-                            (tenant_id, plan, billing_cycle, payment_method, payment_reference,
-                             amount, notes, status, requested_at, is_upgrade, upgrade_from, upgrade_to, proration_credit)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), 1, ?, ?, ?)
-                    ")->execute([
-                        $tenant_id, $plan, $billing_cycle,
-                        'PayMongo — ' . $payment_method,
-                        $session_id, $amount_paid,
-                        $upgrade_notes,
-                        $current_plan, $plan, $proration_credit_pesos,
-                    ]);
-                } catch (PDOException $e) {
-                    // Fallback without new columns
-                    $pdo->prepare("
-                        INSERT INTO subscription_renewals
-                            (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, notes, status, requested_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
-                    ")->execute([
-                        $tenant_id, $plan, $billing_cycle,
-                        'PayMongo — ' . $payment_method,
-                        $session_id, $amount_paid, $upgrade_notes,
-                    ]);
+                        UPDATE tenants SET
+                            plan                = ?,
+                            status              = 'active',
+                            subscription_start  = CURDATE(),
+                            subscription_end    = ?,
+                            subscription_status = 'active',
+                            renewal_reminded_7d = 0,
+                            renewal_reminded_3d = 0,
+                            renewal_reminded_1d = 0
+                        WHERE id = ?
+                    ")->execute([$plan, $new_sub_end, $tenant_id]);
+
+                    $upgrade_notes = "PLAN UPGRADE: {$current_plan} → {$plan} ({$billing_cycle}) via PayMongo. Auto-approved."
+                        . ($proration_credit_pesos > 0 ? " Proration credit: ₱{$proration_credit_pesos}." : '');
+
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO subscription_renewals
+                                (tenant_id, plan, billing_cycle, payment_method, payment_reference,
+                                 amount, notes, status, requested_at, reviewed_at, new_subscription_end, is_upgrade, upgrade_from, upgrade_to, proration_credit)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', NOW(), NOW(), ?, 1, ?, ?, ?)
+                        ")->execute([
+                            $tenant_id, $plan, $billing_cycle,
+                            'PayMongo — ' . $payment_method,
+                            $session_id, $amount_paid,
+                            $upgrade_notes, $new_sub_end,
+                            $current_plan, $plan, $proration_credit_pesos,
+                        ]);
+                    } catch (PDOException $e) {
+                        $pdo->prepare("
+                            INSERT INTO subscription_renewals
+                                (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, notes, status, requested_at, reviewed_at, new_subscription_end)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', NOW(), NOW(), ?)
+                        ")->execute([
+                            $tenant_id, $plan, $billing_cycle,
+                            'PayMongo — ' . $payment_method,
+                            $session_id, $amount_paid, $upgrade_notes, $new_sub_end,
+                        ]);
+                    }
+
+                    // Send renewal/upgrade email
+                    try {
+                        require_once __DIR__ . '/mailer.php';
+                        $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
+                        $t_info->execute([$tenant_id]);
+                        $t_info = $t_info->fetch();
+                        if ($t_info && function_exists('sendSubscriptionRenewed')) {
+                            sendSubscriptionRenewed(
+                                $t_info['email'], $t_info['owner_name'],
+                                $t_info['business_name'], $plan,
+                                $new_sub_end, $t_info['slug']
+                            );
+                        }
+                    } catch (Throwable $mail_err) {
+                        error_log("[Webhook] Upgrade email error: " . $mail_err->getMessage());
+                    }
+
+                    // Audit log
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO audit_logs
+                                (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                            VALUES (?,NULL,'system','system','PLAN_UPGRADED','subscription',?,?,?,NOW())
+                        ")->execute([
+                            $tenant_id, $tenant_id,
+                            "Plan auto-upgraded via PayMongo: {$current_plan} → {$plan}, Cycle: {$billing_cycle}, New expiry: {$new_sub_end}, Session: {$session_id}.",
+                            '::webhook',
+                        ]);
+                    } catch (Throwable $e) {}
+
+                    error_log("[Webhook] UPGRADE AUTO-APPROVED: tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
+                } catch (Throwable $up_err) {
+                    error_log("[Webhook] Upgrade error for tenant_id={$tenant_id}: " . $up_err->getMessage());
                 }
-                error_log("[Webhook] UPGRADE payment recorded for tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
 
             } elseif ($payment_type === 'downgrade') {
-                // ── B. DOWNGRADE PAYMENT ──────────────────────
-                // Insert as downgrade row — SA approves to switch plan
-                $dg_notes = "PLAN DOWNGRADE: {$current_plan} → {$plan} ({$billing_cycle}) via PayMongo.";
+                // ── B. DOWNGRADE PAYMENT — AUTO APPROVE ──────
                 try {
+                    $billing_months_map = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
+                    $months = $billing_months_map[$billing_cycle] ?? 1;
+                    $new_sub_end = date('Y-m-d', strtotime("+{$months} months"));
+
+                    // Switch to lower plan immediately
+                    $pdo->prepare("
+                        UPDATE tenants SET
+                            plan                = ?,
+                            status              = 'active',
+                            subscription_start  = CURDATE(),
+                            subscription_end    = ?,
+                            subscription_status = 'active',
+                            renewal_reminded_7d = 0,
+                            renewal_reminded_3d = 0,
+                            renewal_reminded_1d = 0
+                        WHERE id = ?
+                    ")->execute([$plan, $new_sub_end, $tenant_id]);
+
+                    $dg_notes = "PLAN DOWNGRADE: {$current_plan} → {$plan} ({$billing_cycle}) via PayMongo. Auto-approved.";
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO subscription_renewals
+                                (tenant_id, plan, billing_cycle, payment_method, payment_reference,
+                                 amount, notes, status, requested_at, reviewed_at, new_subscription_end, is_upgrade, upgrade_from, upgrade_to, proration_credit)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', NOW(), NOW(), ?, 0, ?, ?, 0)
+                        ")->execute([
+                            $tenant_id, $plan, $billing_cycle,
+                            'PayMongo — ' . $payment_method,
+                            $session_id, $amount_paid,
+                            $dg_notes, $new_sub_end,
+                            $current_plan, $plan,
+                        ]);
+                    } catch (PDOException $e) {
+                        $pdo->prepare("
+                            INSERT INTO subscription_renewals
+                                (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, notes, status, requested_at, reviewed_at, new_subscription_end)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', NOW(), NOW(), ?)
+                        ")->execute([
+                            $tenant_id, $plan, $billing_cycle,
+                            'PayMongo — ' . $payment_method,
+                            $session_id, $amount_paid, $dg_notes, $new_sub_end,
+                        ]);
+                    }
+
+                    // Send confirmation email
+                    try {
+                        require_once __DIR__ . '/mailer.php';
+                        $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
+                        $t_info->execute([$tenant_id]);
+                        $t_info = $t_info->fetch();
+                        if ($t_info && function_exists('sendSubscriptionRenewed')) {
+                            sendSubscriptionRenewed(
+                                $t_info['email'], $t_info['owner_name'],
+                                $t_info['business_name'], $plan,
+                                $new_sub_end, $t_info['slug']
+                            );
+                        }
+                    } catch (Throwable $mail_err) {
+                        error_log("[Webhook] Downgrade email error: " . $mail_err->getMessage());
+                    }
+
+                    // Audit log
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO audit_logs
+                                (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                            VALUES (?,NULL,'system','system','PLAN_DOWNGRADED','subscription',?,?,?,NOW())
+                        ")->execute([
+                            $tenant_id, $tenant_id,
+                            "Plan auto-downgraded via PayMongo: {$current_plan} → {$plan}, Cycle: {$billing_cycle}, New expiry: {$new_sub_end}, Session: {$session_id}.",
+                            '::webhook',
+                        ]);
+                    } catch (Throwable $e) {}
+
+                    error_log("[Webhook] DOWNGRADE AUTO-APPROVED: tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
+                } catch (Throwable $dg_err) {
+                    error_log("[Webhook] Downgrade error for tenant_id={$tenant_id}: " . $dg_err->getMessage());
+                }
+
+            } elseif ($payment_type === 'renewal') {
+                // ── C. RENEWAL PAYMENT — AUTO APPROVE ────────
+                try {
+                    $billing_months_map = ['monthly' => 1, 'quarterly' => 3, 'annually' => 12];
+                    $months = $billing_months_map[$billing_cycle] ?? 1;
+
+                    // Extend from current subscription_end if still active, else from today
+                    $t_now = $pdo->prepare("SELECT subscription_end, subscription_status FROM tenants WHERE id=? LIMIT 1");
+                    $t_now->execute([$tenant_id]);
+                    $t_now = $t_now->fetch();
+                    $base_date = ($t_now && $t_now['subscription_end'] && strtotime($t_now['subscription_end']) > time())
+                        ? $t_now['subscription_end']
+                        : date('Y-m-d');
+                    $new_sub_end = date('Y-m-d', strtotime("+{$months} months", strtotime($base_date)));
+
+                    // Extend subscription
+                    $pdo->prepare("
+                        UPDATE tenants SET
+                            status              = 'active',
+                            plan                = ?,
+                            subscription_end    = ?,
+                            subscription_status = 'active',
+                            renewal_reminded_7d = 0,
+                            renewal_reminded_3d = 0,
+                            renewal_reminded_1d = 0
+                        WHERE id = ?
+                    ")->execute([$plan, $new_sub_end, $tenant_id]);
+
+                    // Record as approved
                     $pdo->prepare("
                         INSERT INTO subscription_renewals
                             (tenant_id, plan, billing_cycle, payment_method, payment_reference,
-                             amount, notes, status, requested_at, is_upgrade, upgrade_from, upgrade_to, proration_credit)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), 0, ?, ?, 0)
+                             amount, status, requested_at, reviewed_at, new_subscription_end, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, 'approved', NOW(), NOW(), ?, 'Auto-approved: Renewal via PayMongo.')
                     ")->execute([
                         $tenant_id, $plan, $billing_cycle,
                         'PayMongo — ' . $payment_method,
-                        $session_id, $amount_paid,
-                        $dg_notes,
-                        $current_plan, $plan,
+                        $session_id, $amount_paid, $new_sub_end,
                     ]);
-                } catch (PDOException $e) {
-                    $pdo->prepare("
-                        INSERT INTO subscription_renewals
-                            (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, notes, status, requested_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
-                    ")->execute([
-                        $tenant_id, $plan, $billing_cycle,
-                        'PayMongo — ' . $payment_method,
-                        $session_id, $amount_paid, $dg_notes,
-                    ]);
-                }
-                error_log("[Webhook] DOWNGRADE payment recorded for tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
 
-            } elseif ($payment_type === 'renewal') {
-                // ── C. RENEWAL PAYMENT ────────────────────────
-                $pdo->prepare("
-                    INSERT INTO subscription_renewals
-                        (tenant_id, plan, billing_cycle, payment_method, payment_reference, amount, status, requested_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
-                ")->execute([
-                    $tenant_id, $plan, $billing_cycle,
-                    'PayMongo — ' . $payment_method,
-                    $session_id, $amount_paid,
-                ]);
-                error_log("[Webhook] RENEWAL payment recorded for tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, method={$payment_method}. Awaiting SA approval.");
+                    // Send renewal confirmation email
+                    try {
+                        require_once __DIR__ . '/mailer.php';
+                        $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
+                        $t_info->execute([$tenant_id]);
+                        $t_info = $t_info->fetch();
+                        if ($t_info && function_exists('sendSubscriptionRenewed')) {
+                            sendSubscriptionRenewed(
+                                $t_info['email'], $t_info['owner_name'],
+                                $t_info['business_name'], $plan,
+                                $new_sub_end, $t_info['slug']
+                            );
+                        }
+                    } catch (Throwable $mail_err) {
+                        error_log("[Webhook] Renewal email error: " . $mail_err->getMessage());
+                    }
+
+                    // Audit log
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO audit_logs
+                                (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                            VALUES (?,NULL,'system','system','SUBSCRIPTION_RENEWED','subscription',?,?,?,NOW())
+                        ")->execute([
+                            $tenant_id, $tenant_id,
+                            "Subscription auto-renewed via PayMongo. Plan: {$plan}, Cycle: {$billing_cycle}, New expiry: {$new_sub_end}, Session: {$session_id}.",
+                            '::webhook',
+                        ]);
+                    } catch (Throwable $e) {}
+
+                    error_log("[Webhook] RENEWAL AUTO-APPROVED: tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
+                } catch (Throwable $renew_err) {
+                    error_log("[Webhook] Renewal error for tenant_id={$tenant_id}: " . $renew_err->getMessage());
+                }
 
             } elseif ($payment_type === 'reactivation') {
                 // ── D. REACTIVATION PAYMENT — AUTO APPROVE ────
