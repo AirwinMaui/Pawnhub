@@ -240,13 +240,14 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
   <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-sm text-green-300 mb-6 text-left">
     <div class="flex items-start gap-2">
       <span class="text-base mt-0.5">📧</span>
-      <span>Can't find the email? Check your <strong>spam or junk folder</strong>.</span>
+      <div>
+        <span>Your login link has been sent to your registered email address.<br>
+        Can't find it? Check your <strong>spam or junk folder</strong>.</span>
+      </div>
     </div>
   </div>
 
-  <a href="login.php" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm">
-    → Go to Login
-  </a>
+  <p class="text-xs text-gray-500">You may now close this tab and check your email to log in.</p>
 
 </div>
 </body>

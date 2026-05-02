@@ -25,13 +25,15 @@ $is_reactivation = ($payment_type === 'reactivation');
 // Fetch tenant for display
 $tenant = null;
 if ($tenant_id) {
-    $stmt = $pdo->prepare("SELECT business_name, plan, subscription_end FROM tenants WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT business_name, plan, subscription_end, slug FROM tenants WHERE id = ?");
     $stmt->execute([$tenant_id]);
     $tenant = $stmt->fetch();
 }
 
-$biz_name = htmlspecialchars($tenant['business_name'] ?? 'Your Business');
-$plan     = htmlspecialchars($tenant['plan'] ?? '');
+$biz_name  = htmlspecialchars($tenant['business_name'] ?? 'Your Business');
+$plan      = htmlspecialchars($tenant['plan'] ?? '');
+$slug      = $tenant['slug'] ?? '';
+$login_url = $slug ? '/' . rawurlencode($slug) . '?login=1' : 'login.php';
 
 // Billing label
 $billing_labels = [
@@ -153,9 +155,9 @@ unset(
     </div>
   </div>
 
-  <a href="tenant_subscription.php"
+  <a href="<?= htmlspecialchars($login_url) ?>"
      class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors text-sm">
-    <?= $is_reactivation ? '→ Go to Dashboard' : '← Back to Subscription' ?>
+    → Go to Tenant Login
   </a>
 </div>
 </body>
