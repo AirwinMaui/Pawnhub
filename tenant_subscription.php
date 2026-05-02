@@ -422,7 +422,7 @@ if ($sub_end && $days_left > 0 && $is_paid_plan) {
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{--sw:220px;}
-body{background:color-mix(in srgb,var(--t-secondary,#1e3a8a) 95%,#0a0a0a);font-family:'Plus Jakarta Sans',sans-serif;color:#f0f2f5;min-height:100vh;display:flex;}
+body{background:var(--t-page-bg,#0f172a);font-family:'Plus Jakarta Sans',sans-serif;color:#f0f2f5;min-height:100vh;display:flex;}
 .material-symbols-outlined{font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;vertical-align:middle;}
 .sidebar{width:var(--sw);min-height:100vh;background:var(--t-sidebar,#ffffff);border-right:1px solid #e4e6eb;display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;}
 .sb-brand{padding:18px 16px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;gap:9px;}

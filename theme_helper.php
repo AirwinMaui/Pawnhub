@@ -47,6 +47,12 @@ function renderThemeCSS(array $theme): string {
     $pDark = adjustColor($p, -20);
     $aDark = adjustColor($a, -20);
 
+    // Page background: if secondary is light, use a dark navy fallback so subscription page stays readable
+    $isDarkSecondary = colorIsDark($s);
+    $pageBg = $isDarkSecondary
+        ? "color-mix(in srgb, {$s} 95%, #0a0a0a)"
+        : "#0f172a"; // dark navy fallback when secondary is light/white
+
     // When tenant picks a dark sidebar color, inject dark-mode sidebar overrides
     $isDarkSidebar = colorIsDark($sb);
 
@@ -87,6 +93,7 @@ function renderThemeCSS(array $theme): string {
         --t-accent:    {$a};
         --t-accent-d:  {$aDark};
         --t-sidebar:   {$sb};
+        --t-page-bg:   {$pageBg};
     }
 
     /* ── Logo & primary backgrounds ── */
@@ -96,11 +103,11 @@ function renderThemeCSS(array $theme): string {
     .btn-primary, .btn-sm.btn-primary { background: var(--t-primary) !important; border-color: var(--t-primary) !important; color: #fff !important; }
     .btn-primary:hover { background: var(--t-primary-d) !important; border-color: var(--t-primary-d) !important; }
 
-    /* ── Topbar chips ── */
+    /* ── Topbar chips — white pill on colored topbar ── */
     .topbar .tenant-chip, .topbar .cashier-chip, .topbar .mgr-chip {
-        background: color-mix(in srgb, var(--t-primary) 10%, transparent) !important;
-        color: var(--t-primary) !important;
-        border-color: color-mix(in srgb, var(--t-primary) 25%, transparent) !important;
+        background: rgba(255,255,255,.18) !important;
+        color: #fff !important;
+        border-color: rgba(255,255,255,.35) !important;
     }
     /* Topbar avatar uses primary gradient */
     .topbar-avatar { background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important; }
