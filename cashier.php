@@ -293,8 +293,8 @@ tr:hover td{background:rgba(255,255,255,.07);}
 .empty-state p{font-size:.82rem;}
 
 .receipt-row{display:flex;justify-content:space-between;margin-bottom:5px;font-size:.79rem;}
-.receipt-row span:first-child{color:#65676b;}
-.receipt-row span:last-child{font-weight:600;color:#1c1e21;}
+.receipt-row span:first-child{color:rgba(255,255,255,.55);}
+.receipt-row span:last-child{font-weight:600;color:#fff;}
 
 .pay-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;margin-bottom:18px;}
 
