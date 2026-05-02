@@ -1391,7 +1391,20 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div class="stat-card"><div class="stat-icon" style="background:#fee2e2;"><svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div><div><div class="stat-label">Inactive</div><div class="stat-value" style="color:var(--danger);"><?=$inactive_tenants?></div></div></div>
       </div>
 
-      <?php $pts=array_filter($tenants,fn($t)=>$t['status']==='pending');if(!empty($pts)):?>
+      <?php
+      // Pending Approval: SA-added tenants + self-signup Starter + self-signup Paid but NOT yet paid
+      // Self-signup Paid+Paid tenants are auto-moved to Permit Review — no need to approve here
+      $pts = array_filter($tenants, function($t) {
+          if ($t['status'] !== 'pending') return false;
+          $is_sa_added   = !empty($t['invite_status']);
+          $is_free       = ($t['plan'] === 'Starter');
+          $is_paid_plan  = in_array($t['plan'], ['Pro','Enterprise']);
+          $has_paid      = ($t['payment_status'] === 'paid');
+          // Exclude self-signup paid-plan tenants who already paid — they belong in Permit Review
+          if (!$is_sa_added && $is_paid_plan && $has_paid) return false;
+          return true;
+      });
+      if(!empty($pts)):?>
       <div class="card" style="border-color:#fde68a;">
         <div class="card-hdr"><span class="card-title" style="color:#b45309;">⏳ Pending Approval (<?=count($pts)?>)</span></div>
         <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Payment</th><th>Applied</th><th>Actions</th></tr></thead><tbody>
@@ -1447,14 +1460,23 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <?php endif;?>
 
       <?php
-      // Pending Permit Review: active tenants (Pro/Enterprise, self-signup) whose permit not yet reviewed
-      $permit_review_tenants = array_filter($tenants, fn($t) =>
-          $t['status'] === 'active' &&
-          in_array($t['plan'], ['Pro','Enterprise']) &&
-          empty($t['invite_status']) &&
-          !empty($t['business_permit_url']) &&
-          !in_array($t['business_permit_status'] ?? 'pending', ['sa_approved','sa_rejected'])
-      );
+      // Pending Permit Review:
+      // 1. Active tenants (Pro/Enterprise, self-signup) whose permit not yet reviewed
+      // 2. ALSO pending self-signup paid-plan tenants who already paid — show here instead of Pending Approval
+      $permit_review_tenants = array_filter($tenants, function($t) {
+          $is_sa_added  = !empty($t['invite_status']);
+          $is_paid_plan = in_array($t['plan'], ['Pro','Enterprise']);
+          $has_paid     = ($t['payment_status'] === 'paid');
+          $permit_reviewed = in_array($t['business_permit_status'] ?? 'pending', ['sa_approved','sa_rejected']);
+
+          // Case 1: already active, self-signup, paid plan, has permit, not yet reviewed
+          if ($t['status'] === 'active' && $is_paid_plan && !$is_sa_added && !empty($t['business_permit_url']) && !$permit_reviewed) return true;
+
+          // Case 2: still pending, self-signup, paid plan, already paid — needs permit review + approval
+          if ($t['status'] === 'pending' && !$is_sa_added && $is_paid_plan && $has_paid) return true;
+
+          return false;
+      });
       if (!empty($permit_review_tenants)): ?>
       <div class="card" style="border-color:#fb923c;">
         <div class="card-hdr"><span class="card-title" style="color:#c2410c;">🔍 Pending Permit Review (<?=count($permit_review_tenants)?>)</span><span style="font-size:.73rem;color:#92400e;">Review business permits of newly activated tenants</span></div>
@@ -1484,12 +1506,18 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             <?php endif; ?>
           </td>
           <td style="white-space:nowrap;">
-            <form method="POST" style="display:inline;" onsubmit="return confirm('Approve business permit for <?=htmlspecialchars(addslashes($t['business_name']))?> ?');">
-              <input type="hidden" name="action" value="approve_permit"/>
-              <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-              <button type="submit" class="btn-sm btn-success" style="font-size:.69rem;">✓ Approve Permit</button>
-            </form>
-            <button onclick="openRejectPermitModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;">✗ Reject Permit</button>
+            <?php if ($t['status'] === 'pending'): ?>
+              <?php /* Self-signup paid+paid — needs permit check AND tenant approval */ ?>
+              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.69rem;">✓ Approve</button>
+              <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;">✗ Reject</button>
+            <?php else: ?>
+              <form method="POST" style="display:inline;" onsubmit="return confirm('Approve business permit for <?=htmlspecialchars(addslashes($t['business_name']))?> ?');">
+                <input type="hidden" name="action" value="approve_permit"/>
+                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
+                <button type="submit" class="btn-sm btn-success" style="font-size:.69rem;">✓ Approve Permit</button>
+              </form>
+              <button onclick="openRejectPermitModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;">✗ Reject Permit</button>
+            <?php endif; ?>
           </td>
         </tr>
         <?php endforeach;?></tbody></table></div>
