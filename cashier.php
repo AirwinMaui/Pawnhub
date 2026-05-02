@@ -246,9 +246,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .cashier-chip{font-size:.68rem;font-weight:700;background:color-mix(in srgb,var(--t-primary,#10b981) 12%,transparent);color:var(--t-primary,#059669);padding:3px 11px;border-radius:100px;border:1px solid color-mix(in srgb,var(--t-primary,#10b981) 25%,transparent);}
 .content{padding:22px 26px;flex:1;}
 
-.card{background:#ffffff;border:1px solid #e4e6eb;border-radius:16px;padding:18px 20px;}
+.card{background:color-mix(in srgb,var(--t-primary,#059669) 4%,#ffffff);border:1px solid color-mix(in srgb,var(--t-primary,#059669) 18%,#e4e6eb);border-radius:16px;padding:18px 20px;}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px;}
-.stat-card{background:#ffffff;border:1px solid #e4e6eb;border-radius:14px;padding:16px 18px;}
+.stat-card{background:color-mix(in srgb,var(--t-primary,#059669) 4%,#ffffff);border:1px solid color-mix(in srgb,var(--t-primary,#059669) 18%,#e4e6eb);border-radius:14px;padding:16px 18px;}
 .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
 .stat-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
 .stat-icon .material-symbols-outlined{font-size:18px;}

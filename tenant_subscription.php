@@ -447,7 +447,7 @@ body{background:#f0f2f5;font-family:'Plus Jakarta Sans',sans-serif;color:#1c1e21
 .content{padding:24px 28px;flex:1;}
 .page-title{font-size:1.3rem;font-weight:800;margin-bottom:4px;}
 .page-sub{color:#65676b;font-size:.82rem;margin-bottom:24px;}
-.card{background:#ffffff;border:1px solid #e4e6eb;border-radius:16px;padding:22px;margin-bottom:18px;}
+.card{background:color-mix(in srgb,var(--t-primary,#2563eb) 4%,#ffffff);border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 18%,#e4e6eb);border-radius:16px;padding:22px;margin-bottom:18px;}
 .card-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#8a8d91;margin-bottom:14px;}
 .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;}
 .stat-box{background:#f7f8fa;border:1px solid #e4e6eb;border-radius:12px;padding:16px;}
