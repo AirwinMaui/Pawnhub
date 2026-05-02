@@ -1418,26 +1418,23 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
               $is_sa_added = !empty($t['invite_status']); // SA-added tenants have an invite record
             ?>
             <?php if ($is_sa_added): ?>
-              <?php /* SA manually added this tenant — no need to approve/reject, just send invite */ ?>
+              <?php /* SA manually added — payment link only; invite auto-sends after payment */ ?>
               <?php if (!$is_free && $pmt_status !== 'paid'): ?>
-              <form method="POST" action="paymongo_send_link.php" style="display:inline;margin-bottom:4px;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+              <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
                 <input type="hidden" name="action" value="send_payment_link"/>
                 <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
+                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">💳 Pay Link</button>
               </form>
+              <?php else: ?>
+                <span style="font-size:.72rem;color:#16a34a;font-weight:600;">✓ Paid — invite will auto-send</span>
               <?php endif; ?>
-              <form method="POST" style="display:inline;" onsubmit="return confirm('Send invitation email to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
-                <input type="hidden" name="action" value="resend_invite"/>
-                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#0891b2;color:#fff;border:none;">✉️ Send Invite</button>
-              </form>
             <?php else: ?>
-              <?php /* Self-signup tenant — needs approval flow */ ?>
+              <?php /* Self-signup — needs approval flow */ ?>
               <?php if (!$is_free && $pmt_status !== 'paid'): ?>
-              <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send PayMongo payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
+              <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
                 <input type="hidden" name="action" value="send_payment_link"/>
                 <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">📧 Send Payment Link</button>
+                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">💳 Pay Link</button>
               </form>
               <?php endif; ?>
               <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
@@ -2421,9 +2418,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     </div>
     <div class="mbody">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.78rem;color:#15803d;margin-bottom:16px;line-height:1.8;">📧 <strong>Flow:</strong> Fill form → Token generated → Email sent to owner → Owner clicks link → Owner sets username & password → Owner accesses system ✅</div>
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="action" value="add_tenant">
-
 
         <div style="font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;display:block;">Business Information</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
@@ -2433,6 +2429,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <div><label class="flabel">Phone</label><input type="text" name="phone" class="finput" placeholder="09XXXXXXXXX"></div>
           <div><label class="flabel">Address</label><input type="text" name="address" class="finput" placeholder="Street, City, Province"></div>
           <div style="grid-column:1/-1;"><label class="flabel">Plan *</label><select name="plan" class="finput"><option value="Starter">Starter — Free</option><option value="Pro">Pro — ₱999/mo</option><option value="Enterprise">Enterprise — ₱2,499/mo</option></select></div>
+          <div style="grid-column:1/-1;">
+            <label class="flabel">Business Permit <span style="font-weight:400;opacity:.6;">(optional)</span></label>
+            <input type="file" name="business_permit" accept="image/*,.pdf" class="finput" style="padding:8px 12px;cursor:pointer;">
+          </div>
           <input type="hidden" name="branches" value="1">
         </div>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:.77rem;color:#1d4ed8;margin-bottom:14px;">ℹ️ No password needed — the owner will set their own via the invitation link sent to their Gmail.</div>
