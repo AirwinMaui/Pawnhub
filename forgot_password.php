@@ -55,17 +55,16 @@ if ($step === 'reset' && $token) {
 
 // ── STEP 1 POST — Request reset ───────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'request') {
-    $username = trim($_POST['username'] ?? '');
-    $email    = trim($_POST['email']    ?? '');
+    $email = trim(strtolower($_POST['email'] ?? ''));
 
-    if (!$username || !$email) {
-        $error = 'Please fill in both username and email.';
+    if (!$email) {
+        $error = 'Please enter your email address.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
-        // Find the user — must match username + email
-        $q = "SELECT u.* FROM users u WHERE u.username = ? AND u.email = ? AND u.status = 'approved' AND u.is_suspended = 0";
-        $params = [$username, $email];
+        // Find the user — email only, no username required
+        $q = "SELECT u.* FROM users u WHERE u.email = ? AND u.status = 'approved' AND u.is_suspended = 0";
+        $params = [$email];
 
         // If we have a tenant slug, scope to that tenant
         if ($tenant) {
@@ -305,7 +304,7 @@ h1{font-size:1.7rem;font-weight:800;color:#111827;letter-spacing:-.03em;margin-b
     <div class="done-icon">📧</div>
     <h1>Check Your Email</h1>
     <p class="sub">
-      If your username and email match our records, you'll receive a password reset link shortly.
+      If your email address matches our records, you'll receive a password reset link shortly.
       The link will expire in <strong>1 hour</strong>.
     </p>
     <p style="font-size:.78rem;color:#9ca3af;margin-bottom:20px;">Didn't receive it? Check your spam folder or try again.</p>
@@ -314,19 +313,15 @@ h1{font-size:1.7rem;font-weight:800;color:#111827;letter-spacing:-.03em;margin-b
     <?php else: ?>
     <!-- ── STEP 1: REQUEST RESET ── -->
     <h1>Forgot Password?</h1>
-    <p class="sub">Enter your username and registered email. We'll send you a link to reset your password.</p>
+    <p class="sub">Enter your registered email address and we'll send you a password reset link.</p>
 
     <?php if($error):?><div class="err">⚠️ <?=htmlspecialchars($error)?></div><?php endif;?>
 
     <form method="POST" action="/forgot_password.php?slug=<?=urlencode($slug)?>">
       <input type="hidden" name="form_type" value="request">
       <div class="fgroup">
-        <label class="lbl">Username</label>
-        <input type="text" name="username" class="inp" placeholder="Enter your username" value="<?=htmlspecialchars($_POST['username']??'')?>" required>
-      </div>
-      <div class="fgroup">
         <label class="lbl">Email Address</label>
-        <input type="email" name="email" class="inp" placeholder="your@email.com" value="<?=htmlspecialchars($_POST['email']??'')?>" required>
+        <input type="email" name="email" class="inp" placeholder="your@email.com" value="<?=htmlspecialchars($_POST['email']??'')?>" autocomplete="email" required>
       </div>
       <button type="submit" class="btn">Send Reset Link</button>
     </form>
