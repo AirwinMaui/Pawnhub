@@ -872,7 +872,10 @@ footer {
 .modal-overlay {
   display: none; position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,.8); backdrop-filter: blur(8px);
-  align-items: center; justify-content: center; padding: 16px;
+  align-items: flex-end; justify-content: center; padding: 0;
+}
+@media (min-width: 500px) {
+  .modal-overlay { align-items: center; padding: 16px; }
 }
 .modal-overlay.open { display: flex; }
 .modal-box {
@@ -880,7 +883,14 @@ footer {
   border: 1px solid var(--border);
   border-radius: 22px; width: 100%; max-width: 440px;
   box-shadow: 0 24px 80px rgba(0,0,0,.7);
-  animation: mIn .25s ease both; overflow: hidden;
+  animation: mIn .25s ease both; overflow: visible;
+  max-height: 90vh; display: flex; flex-direction: column;
+}
+.item-detail-modal .modal-scroll-body {
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 22px;
+  flex: 1;
 }
 @keyframes mIn { from { opacity:0; transform: translateY(16px) } to { opacity:1; transform:none } }
 
@@ -938,6 +948,15 @@ footer {
 
 /* ── ITEM DETAIL MODAL ── */
 .item-detail-modal { max-width: 540px; }
+@media (max-width: 499px) {
+  .item-detail-modal {
+    max-width: 100%; width: 100%;
+    border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+    max-height: 88vh;
+    animation: mInUp .28s ease both;
+  }
+}
+@keyframes mInUp { from { opacity:0; transform: translateY(40px) } to { opacity:1; transform:none } }
 .item-detail-img {
   width: 100%; aspect-ratio: 16/9; object-fit: cover;
   border-radius: 14px; margin-bottom: 16px;
@@ -1655,18 +1674,25 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 <!-- ITEM DETAIL MODAL -->
 <div class="modal-overlay" id="itemModal" onclick="if(event.target===this)closeItem()">
   <div class="modal-box item-detail-modal modal-box-wrap" id="itemModalBox">
-    <button class="modal-close-x" onclick="closeItem()">
+    <button class="modal-close-x" onclick="closeItem()" style="position:fixed;z-index:1001;">
       <span class="material-symbols-outlined" style="font-size:17px;">close</span>
     </button>
-    <div style="padding:24px;">
+    <div class="modal-scroll-body" style="padding:24px;">
       <div id="modalContent"></div>
-      <div id="modalSignInMsg" style="margin-bottom:12px;padding:12px 14px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:12px;font-size:.8rem;color:rgba(255,255,255,.8);line-height:1.5;display:none;">
-        <span style="font-size:1rem;">🛍️</span>
-        <strong style="color:#fff;">Interested in this item?</strong><br>
-        Sign in to your account to purchase or inquire about this item. Walk-in customers can also visit our shop directly.
+
+      <!-- App download CTA -->
+      <div style="margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(168,85,247,.1));border:1px solid rgba(99,102,241,.3);border-radius:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:1.2rem;">📱</span>
+          <span style="font-size:.85rem;font-weight:700;color:#fff;">Want to buy this item?</span>
+        </div>
+        <p style="font-size:.78rem;color:rgba(255,255,255,.65);line-height:1.55;margin:0;">
+          Download our mobile app to purchase items, pawn your valuables, and track your transactions — all in one place.
+        </p>
       </div>
-      <a href="<?= htmlspecialchars($login_url) ?>" class="modal-btn">
-        <span class="material-symbols-outlined">login</span>Sign In to Purchase
+
+      <a href="#mobile-app" class="modal-btn" onclick="closeItem()" style="text-decoration:none;">
+        <span class="material-symbols-outlined">download</span>Download the App
       </a>
       <button class="modal-btn secondary" onclick="closeItem()">Close</button>
     </div>
@@ -1716,7 +1742,6 @@ function openItem(item) {
     <div class="item-detail-meta">${badges.join('')}</div>
   `;
   document.getElementById('itemModal').classList.add('open');
-  document.getElementById('modalSignInMsg').style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
 
