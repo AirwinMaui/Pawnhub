@@ -491,12 +491,17 @@ if ($event_type === 'checkout_session.payment.paid') {
                         if (!empty($t_row['email']) && !empty($slug)) {
                             try {
                                 require_once __DIR__ . '/mailer.php';
-                                // Check for SA-invited tenant (has invitation token)
-                                $inv = $pdo->prepare("SELECT token FROM tenant_invitations WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1");
+                                // Check for SA-invited tenant (any token — renew if expired)
+                                $inv = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                                 $inv->execute([$tenant_id]);
                                 $inv_row = $inv->fetch();
-                                if ($inv_row) {
-                                    sendTenantInvitation($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $inv_row['token'], $slug);
+                                if ($inv_row && $inv_row['status'] !== 'used') {
+                                    // Renew token so the setup link is always fresh
+                                    $new_tok = bin2hex(random_bytes(32));
+                                    $new_exp = date('Y-m-d H:i:s', strtotime('+24 hours'));
+                                    $pdo->prepare("UPDATE tenant_invitations SET token=?, expires_at=?, status='pending', used_at=NULL WHERE id=?")
+                                        ->execute([$new_tok, $new_exp, $inv_row['id']]);
+                                    sendTenantInvitation($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $new_tok, $slug);
                                 } else {
                                     sendTenantApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $slug);
                                 }

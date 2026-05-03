@@ -68,9 +68,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo->prepare("INSERT INTO tenant_invitations (tenant_id,email,owner_name,token,status,expires_at,created_by) VALUES (?,?,?,?,'pending',?,?)")
                         ->execute([$new_tid,$email,$oname,$token,$expires_at,$u['id']]);
                     $pdo->commit();
-                    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\" (pending approval). Invitation will be sent upon approval.",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
-                    // ── No email yet — invitation will be sent when SA approves the tenant ──
-                    $success_msg = "✅ Tenant \"<strong>$bname</strong>\" added and is now pending approval. Send the invitation email when you approve the tenant.";
+                    try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'TENANT_INVITE','tenant',?,?,?,NOW())")->execute([$new_tid,$u['id'],$u['username'],'super_admin',$new_tid,"Super Admin added tenant \"$bname\".",$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
+
+                    // ── Auto-send payment link for Pro/Enterprise, invitation for Starter ──
+                    $payment_link_sent = false;
+                    $invite_sent       = false;
+                    if (in_array($plan, ['Pro', 'Enterprise'])) {
+                        // Create PayMongo checkout session and email the link automatically
+                        require_once __DIR__ . '/paymongo_config.php';
+                        require_once __DIR__ . '/mailer.php';
+                        $prices = ['Pro' => 99900, 'Enterprise' => 249900];
+                        $pm_amount = $prices[$plan] ?? 99900;
+                        $pm_payload = [
+                            'data' => ['attributes' => [
+                                'billing'              => ['email' => $email, 'name' => $bname],
+                                'line_items'           => [['currency' => 'PHP', 'amount' => $pm_amount, 'name' => "PawnHub {$plan} Plan — Monthly Subscription", 'quantity' => 1]],
+                                'payment_method_types' => ['card', 'gcash', 'paymaya', 'dob', 'billease'],
+                                'success_url'          => PAYMONGO_SUCCESS_URL . '?tenant=' . $new_tid . '&user=0',
+                                'cancel_url'           => PAYMONGO_CANCEL_URL,
+                                'metadata'             => ['tenant_id' => $new_tid, 'user_id' => 0, 'plan' => $plan, 'type' => 'signup'],
+                            ]],
+                        ];
+                        $pm_ch = curl_init('https://api.paymongo.com/v1/checkout_sessions');
+                        curl_setopt_array($pm_ch, [
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_POST           => true,
+                            CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json', 'Authorization: Basic ' . base64_encode(PAYMONGO_SECRET_KEY . ':')],
+                            CURLOPT_POSTFIELDS     => json_encode($pm_payload),
+                            CURLOPT_TIMEOUT        => 20,
+                        ]);
+                        $pm_raw  = curl_exec($pm_ch);
+                        $pm_http = curl_getinfo($pm_ch, CURLINFO_HTTP_CODE);
+                        curl_close($pm_ch);
+                        $pm_resp = json_decode($pm_raw, true);
+                        if ($pm_http === 200 && !empty($pm_resp['data']['attributes']['checkout_url'])) {
+                            $pm_session_id   = $pm_resp['data']['id'];
+                            $pm_checkout_url = $pm_resp['data']['attributes']['checkout_url'];
+                            $pdo->prepare("UPDATE tenants SET paymongo_session_id=? WHERE id=?")->execute([$pm_session_id, $new_tid]);
+                            // Generate QR code
+                            $qr_url  = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($pm_checkout_url) . '&choe=UTF-8';
+                            $qr_data = @file_get_contents($qr_url);
+                            $qr_uri  = $qr_data ? 'data:image/png;base64,' . base64_encode($qr_data) : null;
+                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, $qr_uri, $pm_amount / 100);
+                        } else {
+                            error_log('[AddTenant] PayMongo session failed: ' . $pm_raw);
+                        }
+                        $success_msg = $payment_link_sent
+                            ? "✅ Tenant \"<strong>$bname</strong>\" added! Payment link auto-sent to <strong>$email</strong>. Account will activate once payment is received."
+                            : "✅ Tenant \"<strong>$bname</strong>\" added but payment link email failed. Please send it manually from the tenant list.";
+                    } else {
+                        // Starter — just send the invitation email right away
+                        require_once __DIR__ . '/mailer.php';
+                        $invite_sent = sendTenantInvitation($email, $oname, $bname, $token, $slug);
+                        $success_msg = $invite_sent
+                            ? "✅ Tenant \"<strong>$bname</strong>\" added! Invitation email sent to <strong>$email</strong>. Approve to activate."
+                            : "✅ Tenant \"<strong>$bname</strong>\" added but invitation email failed to send.";
+                    }
                     $active_page = 'tenants';
                 } catch (PDOException $e) {
                     $pdo->rollBack();
@@ -246,31 +299,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $email_sent = false;
         if (!empty($t_row['email']) && !empty($slug)) {
             try {
-                // Check if this tenant was SA-invited (any token — pending or expired)
-                $inv_stmt = $pdo->prepare("SELECT id, token, owner_name, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
+                // Check if this tenant was SA-invited (any token)
+                $inv_stmt = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                 $inv_stmt->execute([$tid]);
                 $inv_row = $inv_stmt->fetch();
 
-                // Renew token if expired so the invite email works on approval
-                if ($inv_row && $inv_row['status'] !== 'used') {
+                if ($inv_row && $inv_row['status'] === 'used') {
+                    // Tenant already set up their password — just send approved/login email
+                    $email_sent = sendTenantApproved(
+                        $t_row['email'],
+                        $t_row['owner_name'],
+                        $t_row['business_name'],
+                        $slug
+                    );
+                } elseif ($inv_row && $inv_row['status'] !== 'used') {
+                    // Token not used yet — renew it and resend the setup/invitation email
                     $new_token   = bin2hex(random_bytes(32));
                     $new_expires = date('Y-m-d H:i:s', strtotime('+24 hours'));
                     $pdo->prepare("UPDATE tenant_invitations SET token=?, expires_at=?, status='pending', used_at=NULL WHERE id=?")
                         ->execute([$new_token, $new_expires, $inv_row['id']]);
-                    $inv_row['token'] = $new_token;
-                }
-
-                if ($inv_row && $inv_row['status'] !== 'used') {
-                    // SA-invited tenant: send setup/invitation email with fresh token link
                     $email_sent = sendTenantInvitation(
                         $t_row['email'],
                         $t_row['owner_name'],
                         $t_row['business_name'],
-                        $inv_row['token'],
+                        $new_token,
                         $slug
                     );
                 } else {
-                    // Self-signup tenant: send the approved/login link email
+                    // Self-signup tenant (no invitation): send approved/login email
                     $email_sent = sendTenantApproved(
                         $t_row['email'],
                         $t_row['owner_name'],
