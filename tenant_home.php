@@ -1660,8 +1660,13 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </button>
     <div style="padding:24px;">
       <div id="modalContent"></div>
+      <div id="modalSignInMsg" style="margin-bottom:12px;padding:12px 14px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);border-radius:12px;font-size:.8rem;color:rgba(255,255,255,.8);line-height:1.5;display:none;">
+        <span style="font-size:1rem;">🛍️</span>
+        <strong style="color:#fff;">Interested in this item?</strong><br>
+        Sign in to your account to purchase or inquire about this item. Walk-in customers can also visit our shop directly.
+      </div>
       <a href="<?= htmlspecialchars($login_url) ?>" class="modal-btn">
-        <span class="material-symbols-outlined">login</span>Sign In
+        <span class="material-symbols-outlined">login</span>Sign In to Purchase
       </a>
       <button class="modal-btn secondary" onclick="closeItem()">Close</button>
     </div>
@@ -1711,6 +1716,7 @@ function openItem(item) {
     <div class="item-detail-meta">${badges.join('')}</div>
   `;
   document.getElementById('itemModal').classList.add('open');
+  document.getElementById('modalSignInMsg').style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
 
