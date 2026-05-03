@@ -801,6 +801,7 @@ document.getElementById('regForm').addEventListener('submit', function(e) {
   if (!valid) e.preventDefault();
 });
 
+function checkSignupStrength(pw) {
   const bar = document.getElementById('signup_str_bar');
   const lbl = document.getElementById('signup_str_lbl');
   if (!bar) return;
