@@ -27,6 +27,7 @@ if (!file_exists($_autoload)) {
         function sendSuperAdminAccountReady(): bool       { return false; }
         function sendPermitApproved(string $a='', string $b='', string $c='', string $d=''): bool { return false; }
         function sendPermitRejected(string $a='', string $b='', string $c='', string $d=''): bool { return false; }
+        function sendSuperAdminPaymentNotif(string $a='', string $b='', string $c='', string $d='', string $e='', string $f='', float $g=0, string $h='', string $i='', string $j='', int $k=0): bool { return false; }
     }
     return;
 }
@@ -1503,4 +1504,117 @@ function sendFreeTrialExpired(
     </div></body></html>';
 
     return sendMail($toEmail, $toName, '⏰ Your PawnHub free trial for ' . $businessName . ' has ended — Upgrade to continue', $html);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN PAYMENT NOTIFICATION
+// Sent to ALL Super Admin accounts whenever a payment event fires via webhook.
+// Types: 'signup' | 'renewal' | 'upgrade' | 'downgrade' | 'reactivation'
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sendSuperAdminPaymentNotif(
+    string $saEmail,
+    string $saName,
+    string $businessName,
+    string $ownerName,
+    string $plan,
+    string $type,
+    float  $amount,
+    string $billingCycle  = 'monthly',
+    string $paymentMethod = '',
+    string $newSubEnd     = '',
+    int    $tenantId      = 0
+): bool {
+    $dashboardUrl = APP_URL . '/superadmin.php?page=subscriptions';
+
+    $typeLabels = [
+        'signup'       => ['emoji' => '🆕', 'label' => 'New Signup Payment',       'color' => '#2563eb', 'bg' => '#dbeafe', 'border' => '#bfdbfe'],
+        'renewal'      => ['emoji' => '🔄', 'label' => 'Subscription Renewed',     'color' => '#15803d', 'bg' => '#dcfce7', 'border' => '#bbf7d0'],
+        'upgrade'      => ['emoji' => '⬆️', 'label' => 'Plan Upgraded',            'color' => '#7c3aed', 'bg' => '#f3e8ff', 'border' => '#e9d5ff'],
+        'downgrade'    => ['emoji' => '⬇️', 'label' => 'Plan Downgraded',          'color' => '#b45309', 'bg' => '#fef3c7', 'border' => '#fde68a'],
+        'reactivation' => ['emoji' => '✅', 'label' => 'Account Reactivated',      'color' => '#0f766e', 'bg' => '#ccfbf1', 'border' => '#99f6e4'],
+    ];
+
+    $t         = $typeLabels[$type] ?? ['emoji' => '💳', 'label' => 'Payment Received', 'color' => '#2563eb', 'bg' => '#dbeafe', 'border' => '#bfdbfe'];
+    $subject   = "[PawnHub] {$t['emoji']} {$t['label']} — {$businessName}";
+    $formatted = $newSubEnd ? date('F d, Y', strtotime($newSubEnd)) : '—';
+    $amountFmt = '₱' . number_format($amount, 2);
+
+    $cycleLabels = ['monthly' => 'Monthly', 'quarterly' => 'Quarterly (3 months)', 'annually' => 'Annual (12 months)'];
+    $cycleLabel  = $cycleLabels[$billingCycle] ?? ucfirst($billingCycle);
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:580px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:28px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:36px;height:36px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:9px;display:inline-block;"></div>
+          <span style="font-size:1.3rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.55);font-size:.8rem;margin:0;">Super Admin Notification</p>
+      </div>
+
+      <div style="padding:32px 36px;">
+
+        <!-- Alert box -->
+        <div style="background:' . $t['bg'] . ';border:1px solid ' . $t['border'] . ';border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2rem;margin:0 0 6px;">' . $t['emoji'] . '</p>
+          <p style="color:' . $t['color'] . ';font-size:1.05rem;font-weight:800;margin:0 0 4px;">' . $t['label'] . '</p>
+          <p style="color:' . $t['color'] . ';font-size:.84rem;margin:0;opacity:.85;">' . htmlspecialchars($businessName) . ' — ' . htmlspecialchars($ownerName) . '</p>
+        </div>
+
+        <!-- Payment details table -->
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:.85rem;">
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:10px 0;color:#64748b;font-weight:600;width:45%;">Business</td>
+            <td style="padding:10px 0;color:#0f172a;font-weight:700;">' . htmlspecialchars($businessName) . '</td>
+          </tr>
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:10px 0;color:#64748b;font-weight:600;">Owner</td>
+            <td style="padding:10px 0;color:#0f172a;">' . htmlspecialchars($ownerName) . '</td>
+          </tr>
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:10px 0;color:#64748b;font-weight:600;">Plan</td>
+            <td style="padding:10px 0;"><span style="background:#fef3c7;color:#b45309;font-weight:700;padding:2px 10px;border-radius:100px;font-size:.78rem;">' . htmlspecialchars($plan) . '</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:10px 0;color:#64748b;font-weight:600;">Billing Cycle</td>
+            <td style="padding:10px 0;color:#0f172a;">' . $cycleLabel . '</td>
+          </tr>
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:10px 0;color:#64748b;font-weight:600;">Amount Paid</td>
+            <td style="padding:10px 0;color:#15803d;font-weight:800;font-size:1rem;">' . $amountFmt . '</td>
+          </tr>
+          ' . ($paymentMethod ? '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;">Payment Method</td><td style="padding:10px 0;color:#0f172a;">' . htmlspecialchars($paymentMethod) . '</td></tr>' : '') . '
+          ' . ($newSubEnd ? '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;">New Subscription End</td><td style="padding:10px 0;color:#0f172a;font-weight:700;">' . $formatted . '</td></tr>' : '') . '
+          <tr>
+            <td style="padding:10px 0;color:#64748b;font-weight:600;">Time</td>
+            <td style="padding:10px 0;color:#0f172a;">' . date('F d, Y · h:i A') . ' (PHT)</td>
+          </tr>
+        </table>
+
+        <!-- CTA -->
+        <div style="text-align:center;margin:24px 0;">
+          <a href="' . $dashboardUrl . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:13px 32px;border-radius:10px;font-size:.9rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
+            View in Dashboard →
+          </a>
+        </div>
+
+        <p style="color:#94a3b8;font-size:.74rem;text-align:center;margin:0;">
+          This is an automated notification from the PawnHub webhook system.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · Super Admin Portal<br>
+          You are receiving this because you are a registered Super Admin.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($saEmail, $saName, $subject, $html);
 }
