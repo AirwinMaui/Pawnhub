@@ -347,7 +347,24 @@ $active_count     = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE 
 
 $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $all_tickets->execute([$tid]); $all_tickets=$all_tickets->fetchAll();
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
-$customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
+$customers_stmt = $pdo->prepare("
+    SELECT id, full_name, contact_number, email,
+           gender, address, birthdate, nationality,
+           valid_id_type, valid_id_number, valid_id_image,
+           customer_photo, registered_at AS registered_at,
+           'walkin' AS source
+    FROM customers WHERE tenant_id=?
+    UNION ALL
+    SELECT id, full_name, contact_number, email,
+           NULL AS gender, address, birthdate, NULL AS nationality,
+           NULL AS valid_id_type, NULL AS valid_id_number, NULL AS valid_id_image,
+           profile_photo AS customer_photo, created_at AS registered_at,
+           'mobile' AS source
+    FROM mobile_customers WHERE tenant_id=?
+    ORDER BY full_name
+");
+$customers_stmt->execute([$tid, $tid]);
+$customers = $customers_stmt->fetchAll();
 $my_void_reqs = $pdo->prepare("SELECT * FROM pawn_void_requests WHERE tenant_id=? AND requested_by=? ORDER BY requested_at DESC"); $my_void_reqs->execute([$tid,$u['id']]); $my_void_reqs=$my_void_reqs->fetchAll();
 
 // Mobile pawn requests
@@ -868,13 +885,29 @@ $notif_count = count($notifs);
     </div>
 
   <?php elseif($active_page==='customers'): ?>
-    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div><a href="?page=register_customer" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ Register</a></div>
+    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> total · <?=count(array_filter($customers,fn($c)=>$c['source']==='mobile'))?> mobile · <?=count(array_filter($customers,fn($c)=>$c['source']==='walkin'))?> walk-in</p></div><a href="?page=register_customer" class="btn-xs btn-primary-xs" style="padding:7px 14px;">+ Register</a></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>ID Type</th><th>ID Photo</th><th>Registered</th></tr></thead><tbody>
       <?php foreach($customers as $c):?>
       <tr>
-        <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <?php if(!empty($c['customer_photo'])): ?>
+              <img src="<?=htmlspecialchars($c['customer_photo'])?>" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,.12);flex-shrink:0;" onerror="this.style.display='none'">
+            <?php else: ?>
+              <div style="width:28px;height:28px;border-radius:50%;background:#059669;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($c['full_name'],0,1))?></div>
+            <?php endif; ?>
+            <div>
+              <div style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></div>
+              <?php if(($c['source']??'walkin')==='mobile'): ?>
+                <span style="font-size:.6rem;font-weight:700;background:rgba(99,102,241,.2);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);border-radius:100px;padding:1px 6px;">📱 Mobile App</span>
+              <?php else: ?>
+                <span style="font-size:.6rem;font-weight:700;background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);border-radius:100px;padding:1px 6px;">🏢 Walk-in</span>
+              <?php endif; ?>
+            </div>
+          </div>
+        </td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
@@ -883,7 +916,7 @@ $notif_count = count($notifs);
             <img src="<?=htmlspecialchars($c['valid_id_image'])?>" style="height:36px;border-radius:5px;border:1px solid rgba(255,255,255,.1);object-fit:cover;" onerror="this.style.display='none'">
           </a>
         <?php else:?><span style="color:rgba(255,255,255,.2);font-size:.73rem;">—</span><?php endif;?></td>
-        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
+        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=!empty($c['registered_at'])?date('M d, Y',strtotime($c['registered_at'])):'—'?></td>
       </tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>

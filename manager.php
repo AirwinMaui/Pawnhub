@@ -508,68 +508,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'promos';
     }
 
-    // ── SHOP: Record a sale (decrement stock, log shop_orders) ──
-    if ($_POST['action'] === 'record_sale') {
-        $item_id  = intval($_POST['item_id']  ?? 0);
-        $qty_sold = max(1, intval($_POST['qty_sold'] ?? 1));
-        $active_page = 'shop_items';
-
-        // Fetch item with row-lock to avoid race condition
-        $pdo->beginTransaction();
-        try {
-            $item_row = $pdo->prepare("SELECT * FROM item_inventory WHERE id=? AND tenant_id=? LIMIT 1 FOR UPDATE");
-            $item_row->execute([$item_id, $tid]);
-            $item_row = $item_row->fetch();
-
-            if (!$item_row) {
-                $pdo->rollBack();
-                $error_msg = 'Item not found.';
-            } elseif ((int)$item_row['stock_qty'] < $qty_sold) {
-                $pdo->rollBack();
-                $error_msg = 'Not enough stock. Available: ' . $item_row['stock_qty'];
-            } else {
-                $new_qty   = (int)$item_row['stock_qty'] - $qty_sold;
-                $total_amt = (float)$item_row['display_price'] * $qty_sold;
-
-                // Decrement stock
-                $pdo->prepare("UPDATE item_inventory SET stock_qty=?, updated_at=NOW() WHERE id=? AND tenant_id=?")
-                    ->execute([$new_qty, $item_id, $tid]);
-
-                // If out of stock, hide from shop automatically
-                if ($new_qty === 0) {
-                    $pdo->prepare("UPDATE item_inventory SET is_shop_visible=0, updated_at=NOW() WHERE id=? AND tenant_id=?")
-                        ->execute([$item_id, $tid]);
-                }
-
-                // Record in shop_orders
-                $pdo->prepare("
-                    INSERT INTO shop_orders
-                        (tenant_id, item_id, item_name, qty, unit_price, total_amount, payment_method, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'cash', 'paid', NOW())
-                ")->execute([$tid, $item_id, $item_row['item_name'], $qty_sold, $item_row['display_price'], $total_amt]);
-
-                // Audit log
-                write_audit($pdo, $u['id'], $u['fullname'] ?? $u['username'], $u['role'],
-                    'record_sale', 'item_inventory', (string)$item_id,
-                    "Sold {$qty_sold}x {$item_row['item_name']} @ ₱".number_format($item_row['display_price'],2)." (remaining stock: {$new_qty})",
-                    $tid);
-
-                $pdo->commit();
-
-                if ($new_qty === 0) {
-                    $success_msg = "✅ Sale recorded! {$item_row['item_name']} is now OUT OF STOCK and has been hidden from the shop.";
-                } elseif ($new_qty <= 2) {
-                    $success_msg = "✅ Sale recorded! ⚠️ Warning: {$item_row['item_name']} is LOW on stock — only {$new_qty} left.";
-                } else {
-                    $success_msg = "✅ Sale recorded! {$qty_sold}x {$item_row['item_name']} sold. Remaining stock: {$new_qty}.";
-                }
-            }
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            $error_msg = 'Sale error: ' . $e->getMessage();
-        }
-    }
-
 }
 
 // ── Fetch data ─────────────────────────────────────────────────
@@ -581,8 +519,24 @@ $my_team->execute([$tid]); $my_team = $my_team->fetchAll();
 $all_tickets = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100");
 $all_tickets->execute([$tid]); $all_tickets = $all_tickets->fetchAll();
 
-$customers   = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name");
-$customers->execute([$tid]); $customers = $customers->fetchAll();
+$customers_stmt = $pdo->prepare("
+    SELECT id, full_name, contact_number, email,
+           gender, address, birthdate, nationality,
+           valid_id_type, valid_id_number, valid_id_image,
+           customer_photo, registered_at AS registered_at,
+           'walkin' AS source
+    FROM customers WHERE tenant_id=?
+    UNION ALL
+    SELECT id, full_name, contact_number, email,
+           NULL AS gender, address, birthdate, NULL AS nationality,
+           NULL AS valid_id_type, NULL AS valid_id_number, NULL AS valid_id_image,
+           profile_photo AS customer_photo, created_at AS registered_at,
+           'mobile' AS source
+    FROM mobile_customers WHERE tenant_id=?
+    ORDER BY full_name
+");
+$customers_stmt->execute([$tid, $tid]);
+$customers = $customers_stmt->fetchAll();
 
 $void_reqs   = $pdo->prepare("SELECT v.*,u.fullname as req_name FROM pawn_void_requests v JOIN users u ON v.requested_by=u.id WHERE v.tenant_id=? ORDER BY v.requested_at DESC");
 $void_reqs->execute([$tid]); $void_reqs = $void_reqs->fetchAll();
@@ -958,8 +912,8 @@ try {
     if ($rd_c > 0) $notifs[] = ['type'=>'info','icon'=>'payments','title'=>$rd_c.' Redemption'.($rd_c>1?'s':'').' Today','sub'=>$rd_c.' item'.($rd_c>1?'s were':' was').' redeemed today.','link'=>'?page=tickets'];
 
     // ── 13. New customers registered today ──────────────────
-    $nc = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
-    $nc->execute([$tid]); $nc_c = (int)$nc->fetchColumn();
+    $nc = $pdo->prepare("SELECT (SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()) + (SELECT COUNT(*) FROM mobile_customers WHERE tenant_id=? AND DATE(created_at)=CURDATE())");
+    $nc->execute([$tid, $tid]); $nc_c = (int)$nc->fetchColumn();
     if ($nc_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_add','title'=>$nc_c.' New Customer'.($nc_c>1?'s':'').' Today','sub'=>'New customer'.($nc_c>1?'s':'').' registered today.','link'=>'?page=customers'];
 
     // ── 14. New staff/cashier approved today ────────────────
@@ -1193,7 +1147,7 @@ $notif_count = count($notifs);
           $cust_tickets_map[strtolower(trim($t['customer_name']))][] = $t;
       }
     ?>
-    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div></div>
+    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> total · <?=count(array_filter($customers,fn($c)=>$c['source']==='mobile'))?> mobile · <?=count(array_filter($customers,fn($c)=>$c['source']==='walkin'))?> walk-in</p></div></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?>
@@ -1213,6 +1167,7 @@ $notif_count = count($notifs);
           'valid_id_image'  => $c['valid_id_image'] ?? '',
           'customer_photo'  => $c['customer_photo'] ?? '',
           'registered_at'   => $c['registered_at'] ?? '',
+          'source'          => $c['source'] ?? 'walkin',
         ]), ENT_QUOTES);
         $c_tickets_json = htmlspecialchars(json_encode($cust_tickets_map[$ckey] ?? []), ENT_QUOTES);
       ?>
@@ -1224,14 +1179,21 @@ $notif_count = count($notifs);
             <?php else: ?>
               <div style="width:30px;height:30px;border-radius:50%;background:var(--t-primary,#059669);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($c['full_name'],0,1))?></div>
             <?php endif; ?>
-            <span style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></span>
+            <div>
+              <div style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></div>
+              <?php if(($c['source']??'walkin')==='mobile'): ?>
+                <span style="font-size:.62rem;font-weight:700;background:rgba(99,102,241,.2);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);border-radius:100px;padding:1px 7px;">📱 Mobile App</span>
+              <?php else: ?>
+                <span style="font-size:.62rem;font-weight:700;background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);border-radius:100px;padding:1px 7px;">🏢 Walk-in</span>
+              <?php endif; ?>
+            </div>
           </div>
         </td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
-        <td><?=$c['gender']?></td>
+        <td><?=$c['gender']??'—'?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
-        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
+        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=!empty($c['registered_at'])?date('M d, Y',strtotime($c['registered_at'])):'—'?></td>
         <td>
           <button class="btn-sm btn-primary" style="font-size:.7rem;" onclick="openCustomerModal(<?=$c_json?>,<?=$c_tickets_json?>)">
             <span class="material-symbols-outlined" style="font-size:13px;">person</span>View
@@ -1566,15 +1528,6 @@ $notif_count = count($notifs);
             <button onclick="openShopEdit(<?=htmlspecialchars(json_encode($item))?>, <?=htmlspecialchars(json_encode($shop_categories_list))?>)" class="btn-sm" style="font-size:.7rem;">
               <span class="material-symbols-outlined" style="font-size:13px;">edit</span>Edit
             </button>
-          </td>
-          <td>
-            <?php if((int)$item['stock_qty'] > 0): ?>
-            <button onclick="openSellModal(<?=htmlspecialchars(json_encode(['id'=>$item['id'],'item_name'=>$item['item_name']??$item['ticket_no']??'Item','stock_qty'=>$item['stock_qty'],'display_price'=>$item['display_price']]))?> )" class="btn-sm" style="font-size:.7rem;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.25);">
-              <span class="material-symbols-outlined" style="font-size:13px;">point_of_sale</span>Sell
-            </button>
-            <?php else: ?>
-            <span style="font-size:.7rem;color:rgba(255,255,255,.2);">Out of stock</span>
-            <?php endif; ?>
           </td>
         </tr>
         <?php endforeach; ?>
@@ -2572,82 +2525,6 @@ function toggleSidebar(){
   document.querySelector('.sidebar').classList.toggle('mobile-open');
   document.getElementById('mobOverlay').classList.toggle('open');
 }
-</script>
-
-<!-- ── Sell Item Modal ─────────────────────────────────────── -->
-<div class="modal-overlay" id="sellModal" style="display:none;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;">
-  <div style="background:#1a1d23;border:1px solid rgba(255,255,255,.1);border-radius:18px;width:100%;max-width:400px;padding:28px;margin:16px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-      <div>
-        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:4px;">Record Sale</div>
-        <div style="font-size:1rem;font-weight:700;color:#fff;" id="sellItemName">—</div>
-      </div>
-      <button onclick="closeSellModal()" style="background:rgba(255,255,255,.07);border:none;width:32px;height:32px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.5);font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
-    </div>
-    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;gap:18px;">
-      <div><div style="font-size:.65rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">In Stock</div><div style="font-weight:700;color:#6ee7b7;font-size:1rem;" id="sellStockDisplay">—</div></div>
-      <div><div style="font-size:.65rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Unit Price</div><div style="font-weight:700;color:#fff;font-size:1rem;" id="sellPriceDisplay">—</div></div>
-      <div><div style="font-size:.65rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Total</div><div style="font-weight:700;color:#fcd34d;font-size:1rem;" id="sellTotalDisplay">—</div></div>
-    </div>
-    <form method="POST" id="sellForm">
-      <input type="hidden" name="action" value="record_sale">
-      <input type="hidden" name="item_id" id="sellItemId">
-      <div style="margin-bottom:14px;">
-        <label style="font-size:.75rem;color:rgba(255,255,255,.5);display:block;margin-bottom:6px;">Quantity Sold</label>
-        <input type="number" name="qty_sold" id="sellQtyInput" value="1" min="1" class="finput"
-          oninput="updateSellTotal()" style="width:100%;font-size:1.1rem;font-weight:700;text-align:center;">
-      </div>
-      <div style="display:flex;gap:10px;">
-        <button type="button" onclick="closeSellModal()" class="btn-sm" style="flex:1;justify-content:center;background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);">Cancel</button>
-        <button type="submit" class="btn-sm btn-success" style="flex:2;justify-content:center;font-size:.85rem;">
-          <span class="material-symbols-outlined" style="font-size:15px;">point_of_sale</span>Confirm Sale
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-<script>
-let _sellPrice = 0, _sellStock = 0;
-function openSellModal(item) {
-  _sellPrice = parseFloat(item.display_price) || 0;
-  _sellStock = parseInt(item.stock_qty) || 0;
-  document.getElementById('sellItemName').textContent    = item.item_name || 'Item';
-  document.getElementById('sellItemId').value            = item.id;
-  document.getElementById('sellStockDisplay').textContent = _sellStock;
-  document.getElementById('sellPriceDisplay').textContent = '₱' + _sellPrice.toLocaleString('en-PH',{minimumFractionDigits:2});
-  document.getElementById('sellQtyInput').value = 1;
-  document.getElementById('sellQtyInput').max   = _sellStock;
-  updateSellTotal();
-  document.getElementById('sellModal').style.display = 'flex';
-  document.getElementById('sellQtyInput').focus();
-}
-function closeSellModal() {
-  document.getElementById('sellModal').style.display = 'none';
-}
-function updateSellTotal() {
-  const qty   = parseInt(document.getElementById('sellQtyInput').value) || 1;
-  const total = _sellPrice * qty;
-  document.getElementById('sellTotalDisplay').textContent = '₱' + total.toLocaleString('en-PH',{minimumFractionDigits:2});
-  const stockEl = document.getElementById('sellStockDisplay');
-  const remaining = _sellStock - qty;
-  if (remaining < 0) {
-    stockEl.style.color = '#fca5a5';
-    document.querySelector('#sellForm button[type=submit]').disabled = true;
-  } else if (remaining === 0) {
-    stockEl.textContent = 'Will be OUT OF STOCK';
-    stockEl.style.color = '#fca5a5';
-    document.querySelector('#sellForm button[type=submit]').disabled = false;
-  } else if (remaining <= 2) {
-    stockEl.textContent = 'Only ' + remaining + ' left after sale ⚠️';
-    stockEl.style.color = '#fcd34d';
-    document.querySelector('#sellForm button[type=submit]').disabled = false;
-  } else {
-    stockEl.textContent = remaining + ' remaining after sale';
-    stockEl.style.color = '#6ee7b7';
-    document.querySelector('#sellForm button[type=submit]').disabled = false;
-  }
-}
-document.getElementById('sellModal').addEventListener('click', function(e){ if(e.target===this) closeSellModal(); });
 </script>
 </body>
 </html>

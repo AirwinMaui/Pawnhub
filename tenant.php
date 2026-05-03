@@ -375,7 +375,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $tenant       = $pdo->prepare("SELECT * FROM tenants WHERE id=?"); $tenant->execute([$tid]); $tenant=$tenant->fetch();
 $my_users     = $pdo->prepare("SELECT * FROM users WHERE tenant_id=? AND role IN ('manager','staff','cashier') ORDER BY role,fullname"); $my_users->execute([$tid]); $my_users=$my_users->fetchAll();
 $tickets      = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $tickets->execute([$tid]); $tickets=$tickets->fetchAll();
-$customers    = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name"); $customers->execute([$tid]); $customers=$customers->fetchAll();
+$customers_stmt = $pdo->prepare("
+    SELECT id, full_name, contact_number, email,
+           gender, address, birthdate, nationality,
+           valid_id_type, valid_id_number, valid_id_image,
+           customer_photo, registered_at AS registered_at,
+           'walkin' AS source
+    FROM customers WHERE tenant_id=?
+    UNION ALL
+    SELECT id, full_name, contact_number, email,
+           NULL AS gender, address, birthdate, NULL AS nationality,
+           NULL AS valid_id_type, NULL AS valid_id_number, NULL AS valid_id_image,
+           profile_photo AS customer_photo, created_at AS registered_at,
+           'mobile' AS source
+    FROM mobile_customers WHERE tenant_id=?
+    ORDER BY full_name
+");
+$customers_stmt->execute([$tid, $tid]);
+$customers = $customers_stmt->fetchAll();
 $inventory    = $pdo->prepare("SELECT * FROM item_inventory WHERE tenant_id=? ORDER BY received_at DESC"); $inventory->execute([$tid]); $inventory=$inventory->fetchAll();
 $void_reqs    = $pdo->prepare("SELECT v.*,u.fullname as req_name FROM pawn_void_requests v JOIN users u ON v.requested_by=u.id WHERE v.tenant_id=? ORDER BY v.requested_at DESC"); $void_reqs->execute([$tid]); $void_reqs=$void_reqs->fetchAll();
 $renewals     = $pdo->prepare("SELECT * FROM renewal_requests WHERE tenant_id=? ORDER BY created_at DESC"); $renewals->execute([$tid]); $renewals=$renewals->fetchAll();
@@ -450,9 +467,9 @@ try {
   $rd = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Redeemed' AND DATE(updated_at)=CURDATE()");
   $rd->execute([$tid]); $rd_count = (int)$rd->fetchColumn();
   if ($rd_count > 0) $notifs[] = ['type'=>'info','icon'=>'payments','title'=>$rd_count.' Redemption'.($rd_count>1?'s':'').' Today','sub'=>$rd_count.' item'.($rd_count>1?'s were':' was').' redeemed today.','link'=>'?page=tickets'];
-  // 10. New customers registered today
-  $nc = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
-  $nc->execute([$tid]); $nc_count = (int)$nc->fetchColumn();
+  // 10. New customers registered today (walk-in + mobile)
+  $nc = $pdo->prepare("SELECT (SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()) + (SELECT COUNT(*) FROM mobile_customers WHERE tenant_id=? AND DATE(created_at)=CURDATE())");
+  $nc->execute([$tid, $tid]); $nc_count = (int)$nc->fetchColumn();
   if ($nc_count > 0) $notifs[] = ['type'=>'info','icon'=>'person_add','title'=>$nc_count.' New Customer'.($nc_count>1?'s':'').' Today','sub'=>'New customer'.($nc_count>1?'s':'').' registered today.','link'=>'?page=customers'];
   // 11. New managers/staff approved today
   $nm = $pdo->prepare("SELECT COUNT(*) FROM users WHERE tenant_id=? AND status='approved' AND DATE(updated_at)=CURDATE()");
@@ -1175,12 +1192,11 @@ tr:hover td{background:rgba(255,255,255,.04);}
           $cust_tickets_map[strtolower(trim($t['customer_name']))][] = $t;
       }
     ?>
-    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div></div>
+    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> total · <?=count(array_filter($customers,fn($c)=>$c['source']==='mobile'))?> mobile · <?=count(array_filter($customers,fn($c)=>$c['source']==='walkin'))?> walk-in</p></div></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Gender</th><th>ID Type</th><th>Registered</th><th>Action</th></tr></thead><tbody>
       <?php foreach($customers as $c):
-        $ckey = strtolower(trim($c['full_name']));
         $c_json = htmlspecialchars(json_encode([
           'full_name'       => $c['full_name'],
           'contact_number'  => $c['contact_number'] ?? '',
@@ -1194,7 +1210,9 @@ tr:hover td{background:rgba(255,255,255,.04);}
           'valid_id_image'  => $c['valid_id_image'] ?? '',
           'customer_photo'  => $c['customer_photo'] ?? '',
           'registered_at'   => $c['registered_at'] ?? '',
+          'source'          => $c['source'] ?? 'walkin',
         ]), ENT_QUOTES);
+        $ckey = strtolower(trim($c['full_name']));
         $c_tickets_json = htmlspecialchars(json_encode($cust_tickets_map[$ckey] ?? []), ENT_QUOTES);
       ?>
       <tr>
@@ -1205,14 +1223,21 @@ tr:hover td{background:rgba(255,255,255,.04);}
             <?php else: ?>
               <div style="width:30px;height:30px;border-radius:50%;background:var(--t-primary,#2563eb);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($c['full_name'],0,1))?></div>
             <?php endif; ?>
-            <span style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></span>
+            <div>
+              <div style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></div>
+              <?php if(($c['source']??'walkin')==='mobile'): ?>
+                <span style="font-size:.62rem;font-weight:700;background:rgba(99,102,241,.2);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);border-radius:100px;padding:1px 7px;">📱 Mobile App</span>
+              <?php else: ?>
+                <span style="font-size:.62rem;font-weight:700;background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);border-radius:100px;padding:1px 7px;">🏢 Walk-in</span>
+              <?php endif; ?>
+            </div>
           </div>
         </td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
-        <td><?=$c['gender']?></td>
+        <td><?=$c['gender']??'—'?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
-        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
+        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=!empty($c['registered_at'])?date('M d, Y',strtotime($c['registered_at'])):'—'?></td>
         <td>
           <button class="btn-sm btn-primary" style="font-size:.7rem;" onclick="openCustomerModal(<?=$c_json?>,<?=$c_tickets_json?>)">
             <span class="material-symbols-outlined" style="font-size:13px;">person</span>View
