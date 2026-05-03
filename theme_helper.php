@@ -115,16 +115,15 @@ function renderThemeCSS(array $theme): string {
     .sb-brand, .sb-user, .sb-footer { border-color: rgba(255,255,255,.08) !important; }
     .sb-name, .sb-uname, .sb-role-name, .sb-tenant-name { color: #fff !important; }
     .sb-subtitle, .sb-urole, .sb-role-label, .sb-tenant-label,
-    .sb-section { color: rgba(0,0,0,.5) !important; }
-    .sb-item { color: #000000 !important; }
-    .sb-item:hover { background: rgba(0,0,0,.1) !important; color: #000000 !important; }
+    .sb-section { color: rgba(255,255,255,.38) !important; }
+    .sb-item { color: rgba(255,255,255,.5) !important; }
+    .sb-item:hover { background: rgba(255,255,255,.08) !important; color: #fff !important; }
     .sb-item.active {
-        background: rgba(0,0,0,.15) !important;
-        color: #000000 !important;
-        font-weight: 700 !important;
+        background: {$sbActiveBg} !important;
+        color: {$sbActiveText} !important;
     }
-    .sb-logout { color: rgba(0,0,0,.55) !important; }
-    .sb-logout:hover { color: #ef4444 !important; background: rgba(239,68,68,.12) !important; }
+    .sb-logout { color: rgba(255,255,255,.38) !important; }
+    .sb-logout:hover { color: #f87171 !important; background: rgba(239,68,68,.12) !important; }
     .sb-role-card, .sb-tenant-card {
         background: rgba(255,255,255,.06) !important;
         border-color: rgba(255,255,255,.1) !important;
@@ -212,7 +211,7 @@ function renderThemeCSS(array $theme): string {
         background: linear-gradient(135deg, var(--t-primary), var(--t-secondary)) !important;
     }
 
-    /* ── Sidebar active item — always black for readability ── */
+    /* ── Sidebar active item — always black for readability on any sidebar color ── */
     .sb-item.active {
         color: #000000 !important;
         background: rgba(0,0,0,.12) !important;
@@ -235,8 +234,8 @@ function renderThemeCSS(array $theme): string {
     /* ── Legacy blue-acc links → tenant primary ── */
     a[style*='background:var(--blue-acc)'] { background: var(--t-primary) !important; }
 
-    /* ── Links inside page header ── */
-    .page-hdr a { color: var(--t-primary) !important; }
+    /* ── Links inside page header (but NOT primary buttons) ── */
+    .page-hdr a:not(.btn-primary-xs):not(.btn-primary):not([class*='btn-primary']) { color: var(--t-primary) !important; }
 
     /* ── Modal / form submit buttons with hardcoded blue gradients ── */
     button[style*='background:linear-gradient'][style*='#2563eb'],
