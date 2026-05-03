@@ -1517,7 +1517,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         Download the <?= $biz_name ?> app to track your pawn transactions, receive real-time status alerts, and manage your items with a single tap.
       </p>
       <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start;">
-        <a href="<?= htmlspecialchars($login_url) ?>" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#000;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
+        <a href="https://www.dropbox.com/scl/fo/iv0xe7trxc1qo5d80l6b9/APu4LvbsX47kwoYi62hZXnw?e=1&fbclid=IwY2xjawRkgFZleHRuA2FlbQIxMABicmlkETE2WDFEdjg5RW9VcDN1OUJZc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjItcosaTfUwzkVQUk3--LRPZxePuCxvgSePhe_EDf1y6ynsWRAHNrdf92S1_aem_usIcYw_gm0K82Bbic_0mnw&rlkey=ke2htuqmydbfutke9meuv5j57&st=u674m04p&dl=0" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#000;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
           <div style="width:34px;height:34px;background:rgba(0,0,0,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">download</span>
           </div>
@@ -1691,7 +1691,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         </p>
       </div>
 
-      <a href="#mobile-app" class="modal-btn" onclick="closeItem()" style="text-decoration:none;">
+      <a href="https://www.dropbox.com/scl/fo/iv0xe7trxc1qo5d80l6b9/APu4LvbsX47kwoYi62hZXnw?e=1&fbclid=IwY2xjawRkgFZleHRuA2FlbQIxMABicmlkETE2WDFEdjg5RW9VcDN1OUJZc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjItcosaTfUwzkVQUk3--LRPZxePuCxvgSePhe_EDf1y6ynsWRAHNrdf92S1_aem_usIcYw_gm0K82Bbic_0mnw&rlkey=ke2htuqmydbfutke9meuv5j57&st=u674m04p&dl=0" target="_blank" rel="noopener" class="modal-btn" onclick="closeItem()" style="text-decoration:none;">
         <span class="material-symbols-outlined">download</span>Download the App
       </a>
       <button class="modal-btn secondary" onclick="closeItem()">Close</button>
