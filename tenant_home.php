@@ -1498,12 +1498,12 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         Download the <?= $biz_name ?> app to track your pawn transactions, receive real-time status alerts, and manage your items with a single tap.
       </p>
       <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start;">
-        <a href="<?= htmlspecialchars($login_url) ?>" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#fff;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
-          <div style="width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <a href="<?= htmlspecialchars($login_url) ?>" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#000;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
+          <div style="width:34px;height:34px;background:rgba(0,0,0,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">download</span>
           </div>
           <div>
-            <div style="font-size:.65rem;font-weight:600;opacity:.8;letter-spacing:.06em;text-transform:uppercase;line-height:1;">Access Our Mobile App</div>
+            <div style="font-size:.65rem;font-weight:600;opacity:.7;letter-spacing:.06em;text-transform:uppercase;line-height:1;">Access Our Mobile App</div>
             <div style="font-size:1rem;font-weight:800;line-height:1.3;">Download Here</div>
           </div>
         </a>
@@ -1511,17 +1511,21 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
           <span class="material-symbols-outlined" style="font-size:15px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
           <span style="font-size:.78rem;color:rgba(240,242,247,.45);">Free · No credit card required</span>
         </div>
-
         <?php if(!empty($access_code)): ?>
         <!-- Access Code -->
-        <div style="display:inline-flex;align-items:center;gap:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 18px;margin-top:4px;">
-          <div>
-            <div style="font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(240,242,247,.35);margin-bottom:3px;">Branch Access Code</div>
-            <div style="display:flex;align-items:center;gap:9px;">
-              <span id="accessCodeText" style="font-size:1.15rem;font-weight:800;letter-spacing:.18em;color:#fff;font-family:monospace;"><?= htmlspecialchars($access_code) ?></span>
-              <button onclick="copyAccessCode()" title="Copy code" style="width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);transition:all .18s;flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,.18)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.6)'">
-                <span class="material-symbols-outlined" id="copyIcon" style="font-size:14px;">content_copy</span>
-              </button>
+        <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 18px;margin-top:4px;max-width:320px;">
+          <div style="font-size:.7rem;color:rgba(240,242,247,.5);margin-bottom:8px;line-height:1.6;">
+            📱 Use this <strong style="color:rgba(240,242,247,.8);">Branch Access Code</strong> when signing up on the mobile app to link your account to <strong style="color:rgba(240,242,247,.8);"><?= htmlspecialchars($biz_name) ?></strong>.
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;">
+            <div>
+              <div style="font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(240,242,247,.35);margin-bottom:3px;">Branch Access Code</div>
+              <div style="display:flex;align-items:center;gap:9px;">
+                <span id="accessCodeText" style="font-size:1.15rem;font-weight:800;letter-spacing:.18em;color:#fff;font-family:monospace;"><?= htmlspecialchars($access_code) ?></span>
+                <button onclick="copyAccessCode()" title="Copy code" style="width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);transition:all .18s;flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,.18)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.6)'">
+                  <span class="material-symbols-outlined" id="copyIcon" style="font-size:14px;">content_copy</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
