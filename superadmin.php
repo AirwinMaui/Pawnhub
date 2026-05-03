@@ -250,24 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             goto end_approve;
         }
 
-        // ── Guard: block approval if permit not ai_approved ────
-        // Skip permit check for Starter plan tenants (free plan, no permit required)
-        $permit_status_chk = $t_row['business_permit_status'] ?? 'pending';
-        $is_starter = ($t_row['plan'] ?? '') === 'Starter';
-        if (!$is_starter && $permit_status_chk !== 'ai_approved') {
-            $status_labels = [
-                'ai_rejected'   => 'AI Rejected',
-                'manual_review' => 'Could Not Auto-Verify',
-                'pending'       => 'Not Yet Verified',
-            ];
-            $status_label  = $status_labels[$permit_status_chk] ?? ucfirst($permit_status_chk);
-            $rejection_note = htmlspecialchars($t_row['rejection_reason'] ?? '');
-            $error_msg = "⛔ Cannot approve — permit status is <strong>{$status_label}</strong>."
-                . ($rejection_note ? " Reason: {$rejection_note}" : '')
-                . " A valid AI-verified permit is required before approving this tenant.";
-            $active_page = 'tenants';
-            goto end_approve;
-        }
+        // Permit check removed — Super Admin approves manually.
 
         // ── Generate / ensure slug ─────────────────────────────
         $slug = $t_row['slug'] ?? '';
@@ -2637,15 +2620,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
     </div>
     <div class="mbody">
 
-      <!-- Business Permit Section -->
-      <div style="margin-bottom:16px;">
-        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px;">📄 Business Permit</div>
-        <div id="approve_permit_wrap" style="border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-height:80px;display:flex;align-items:center;justify-content:center;background:#f8fafc;">
-          <div id="approve_permit_loading" style="color:var(--text-dim);font-size:.8rem;">Loading...</div>
-          <!-- Permit content injected by JS -->
-        </div>
-      </div>
-
       <!-- Payment Details Section -->
       <div style="margin-bottom:16px;">
         <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px;">💳 Payment Details</div>
@@ -2655,7 +2629,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
 
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:11px 14px;font-size:.8rem;color:#15803d;margin-bottom:16px;line-height:1.7;">
-        ✅ Please review the Business Permit and Payment details above before approving. Approving will set the tenant status to <strong>Active</strong>.
+        ✅ Approving will set the tenant status to <strong>Active</strong>.
       </div>
 
       <form method="POST">
@@ -2743,38 +2717,12 @@ function openApproveModal(tid,uid,name){
   document.getElementById('approve_sub').textContent='Business: '+name;
 
   // Reset content
-  const permitWrap   = document.getElementById('approve_permit_wrap');
   const paymentWrap  = document.getElementById('approve_payment_content');
-  permitWrap.innerHTML  = '<div style="color:#94a3b8;font-size:.8rem;padding:16px;">Loading permit...</div>';
   paymentWrap.innerHTML = '<div style="color:#94a3b8;font-size:.8rem;">Loading payment info...</div>';
 
-  // Fetch tenant permit & payment info via JS from tenants data
+  // Fetch tenant payment info via JS from tenants data
   const td = tenantsData[tid];
   if (td) {
-    // ── Business Permit ──────────────────────────────────
-    if (td.permit) {
-      const ext = td.permit.split('.').pop().toLowerCase();
-      if (ext === 'pdf') {
-        permitWrap.innerHTML = `
-          <div style="padding:16px;text-align:center;">
-            <span style="font-size:2rem;">📄</span>
-            <p style="font-size:.8rem;color:#475569;margin:6px 0 10px;">PDF Business Permit</p>
-            <a href="${td.permit}" target="_blank" class="btn-sm btn-primary" style="font-size:.74rem;">View PDF →</a>
-          </div>`;
-      } else {
-        permitWrap.innerHTML = `
-          <div style="text-align:center;">
-            <img src="${td.permit}" alt="Business Permit"
-              style="max-width:100%;max-height:260px;object-fit:contain;border-radius:8px;cursor:pointer;"
-              onclick="window.open('${td.permit}','_blank')">
-            <p style="font-size:.7rem;color:#94a3b8;padding:6px;">Click image to view full size</p>
-          </div>`;
-      }
-    } else {
-      permitWrap.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.8rem;">⚠️ No business permit uploaded.</div>';
-    }
-
-    // ── Payment Info ─────────────────────────────────────
     const isPaid   = td.payment_status === 'paid';
     const isStarter = (td.plan || '').toLowerCase() === 'starter';
 
@@ -2827,7 +2775,6 @@ function openApproveModal(tid,uid,name){
     }
 
   } else {
-    permitWrap.innerHTML  = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.8rem;">⚠️ No business permit uploaded.</div>';
     paymentWrap.innerHTML = '<span style="color:#94a3b8;font-size:.8rem;">⚠️ No payment information found.</span>';
   }
 
