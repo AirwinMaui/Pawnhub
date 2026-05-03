@@ -517,15 +517,15 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-uname{font-size:.8rem;font-weight:700;color:#1c1e21;}
 .sb-urole{font-size:.62rem;color:#65676b;margin-top:1px;}
 .sb-nav{flex:1;padding:10px 0;}
-.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a8d91;padding:12px 16px 4px;}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;cursor:pointer;color:#65676b;font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
-.sb-item:hover{background:#f2f2f2;color:#1c1e21;}
-.sb-item.active{background:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);color:var(--t-primary,#2563eb);font-weight:600;}
+.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(0,0,0,.5);padding:12px 16px 4px;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;cursor:pointer;color:#000000;font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
+.sb-item:hover{background:rgba(0,0,0,.08);color:#000000;}
+.sb-item.active{background:rgba(0,0,0,.12);color:#000000;font-weight:700;}
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;opacity:.7;}
 .sb-item.active .material-symbols-outlined{opacity:1;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:100px;}
 .sb-footer{padding:12px 14px;border-top:1px solid #e4e6eb;}
-.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#65676b;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
+.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#000000;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
 .sb-logout:hover{color:#ef4444;background:rgba(239,68,68,.08);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
@@ -645,7 +645,6 @@ tr:hover td{background:rgba(255,255,255,.04);}
 .finput{width:100%;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:9px 13px;font-family:inherit;font-size:.84rem;color:#f0f2f5;outline:none;background:rgba(255,255,255,.06);transition:border .2s;}
 .finput:focus{border-color:var(--t-primary,#2563eb);box-shadow:0 0 0 3px color-mix(in srgb,var(--t-primary,#2563eb) 15%,transparent);background:rgba(255,255,255,.09);}
 .finput::placeholder{color:rgba(255,255,255,.25);}
-.finput option{background:#1a1a2e;color:#f0f2f5;}
 
 /* ── THEME SETTINGS ── */
 .theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
@@ -1530,7 +1529,7 @@ tr:hover td{background:rgba(255,255,255,.04);}
           case 'customers':
             $exp_title = 'Customer Records';
             $exp_cols  = ['Full Name','Contact','Email','Gender','Address','ID Type','ID Number','Registered'];
-            $s = $pdo->prepare("SELECT full_name,contact_number,email,gender,address,valid_id_type,valid_id_number,registered_at FROM customers WHERE tenant_id=? AND DATE(registered_at) BETWEEN ? AND ? ORDER BY full_name");
+            $s = $pdo->prepare("SELECT full_name,contact_number,email,gender,address,valid_id_type,valid_id_number,created_at FROM customers WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY full_name");
             $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
           case 'inventory':
             $exp_title = 'Item Inventory';
@@ -1582,7 +1581,7 @@ tr:hover td{background:rgba(255,255,255,.04);}
           <input type="date" name="exp_to" class="finput" style="width:auto;padding:7px 12px;font-size:.82rem;" value="<?=htmlspecialchars($exp_to)?>" onchange="document.getElementById('exp-form').submit()">
         </div>
       </form>
-      <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);color:#000;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;font-family:inherit;white-space:nowrap;">
+      <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;font-family:inherit;white-space:nowrap;">
         <span class="material-symbols-outlined" style="font-size:17px;">print</span>Print / Save as PDF
       </button>
     </div>
@@ -1592,15 +1591,15 @@ tr:hover td{background:rgba(255,255,255,.04);}
       <!-- Doc Header -->
       <div style="background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div>
-          <div style="font-size:1.1rem;font-weight:800;color:#000;"><?=htmlspecialchars($business_name)?></div>
-          <div style="font-size:.72rem;color:rgba(0,0,0,.6);margin-top:3px;">PawnHub — Branch Report</div>
-          <?php if(!empty($tenant['phone'])):?><div style="font-size:.7rem;color:rgba(0,0,0,.55);margin-top:6px;">📞 <?=htmlspecialchars($tenant['phone'])?></div><?php endif;?>
-          <?php if(!empty($tenant['address'])):?><div style="font-size:.7rem;color:rgba(0,0,0,.55);margin-top:2px;">📍 <?=htmlspecialchars($tenant['address'])?></div><?php endif;?>
+          <div style="font-size:1.1rem;font-weight:800;color:#fff;"><?=htmlspecialchars($business_name)?></div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.6);margin-top:3px;">PawnHub — Branch Report</div>
+          <?php if(!empty($tenant['phone'])):?><div style="font-size:.7rem;color:rgba(255,255,255,.5);margin-top:6px;">📞 <?=htmlspecialchars($tenant['phone'])?></div><?php endif;?>
+          <?php if(!empty($tenant['address'])):?><div style="font-size:.7rem;color:rgba(255,255,255,.5);margin-top:2px;">📍 <?=htmlspecialchars($tenant['address'])?></div><?php endif;?>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:1.3rem;font-weight:800;color:#000;"><?=htmlspecialchars($exp_title)?></div>
-          <div style="font-size:.72rem;color:rgba(0,0,0,.6);margin-top:3px;">📅 <?=date('M d, Y',strtotime($exp_from))?> — <?=date('M d, Y',strtotime($exp_to))?></div>
-          <div style="font-size:.67rem;color:rgba(0,0,0,.5);margin-top:2px;">Generated: <?=date('F j, Y g:i A')?></div>
+          <div style="font-size:1.3rem;font-weight:800;color:#fff;"><?=htmlspecialchars($exp_title)?></div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.6);margin-top:3px;">📅 <?=date('M d, Y',strtotime($exp_from))?> — <?=date('M d, Y',strtotime($exp_to))?></div>
+          <div style="font-size:.67rem;color:rgba(255,255,255,.4);margin-top:2px;">Generated: <?=date('F j, Y g:i A')?></div>
         </div>
       </div>
       <!-- Meta -->
@@ -1630,7 +1629,7 @@ tr:hover td{background:rgba(255,255,255,.04);}
               elseif(str_contains($col,'amount')||str_contains($col,'loan')||str_contains($col,'redeem')||str_contains($col,'cash')||str_contains($col,'change')||str_contains($col,'appraisal')):
                 echo '<td>₱'.number_format((float)($val??0),2).'</td>';
               elseif(str_contains($col,'date')||str_contains($col,'registered')||str_contains($col,'time')||str_contains($col,'at')):
-                echo '<td style="font-size:.73rem;color:rgba(0,0,0,.55);">'.($val ? date(str_contains($col,'time')?'M d, Y h:i A':'M d, Y',strtotime($val)) : '—').'</td>';
+                echo '<td style="font-size:.73rem;color:rgba(255,255,255,.4);">'.($val ? date(str_contains($col,'time')?'M d, Y h:i A':'M d, Y',strtotime($val)) : '—').'</td>';
               else:
                 echo '<td>'.htmlspecialchars($val??'—').'</td>';
               endif;
@@ -1857,11 +1856,12 @@ function updatePreview() {
     // Update text colors in sidebar
     const isDarkSb = dark;
     sidebar.querySelectorAll('.sb-name,.sb-uname').forEach(el => el.style.color = isDarkSb ? '#fff' : '#1c1e21');
-    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = isDarkSb ? 'rgba(255,255,255,.35)' : '#8a8d91');
-    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => el.style.color = isDarkSb ? 'rgba(255,255,255,.45)' : '#65676b');
+    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = 'rgba(0,0,0,.5)');
+    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => el.style.color = '#000000');
     sidebar.querySelectorAll('.sb-item.active').forEach(el => {
-      el.style.color = isDarkSb ? '#fff' : p;
-      el.style.background = isDarkSb ? 'rgba(255,255,255,.15)' : `color-mix(in srgb,${p} 12%,transparent)`;
+      el.style.color = '#000000';
+      el.style.background = 'rgba(0,0,0,.12)';
+      el.style.fontWeight = '700';
     });
   }
 }
