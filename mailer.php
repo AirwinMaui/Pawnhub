@@ -1273,3 +1273,234 @@ function sendPaymentLink(
 
     return sendMail($toEmail, $toName, "PawnHub — Complete Your {$plan} Plan Payment", $html);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FREE TRIAL FUNCTIONS (Starter Plan)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * sendFreeTrialExpiring()
+ * Sent at 7, 3, and 1 day(s) before the Starter free trial ends.
+ * Reminds the tenant to upgrade to Pro or Enterprise.
+ */
+function sendFreeTrialExpiring(
+    string $toEmail,
+    string $toName,
+    string $businessName,
+    string $expiryDate,
+    int    $daysLeft,
+    string $slug
+): bool {
+    $loginLink    = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $upgradeLink  = APP_URL . '/' . urlencode($slug) . '?login=1';
+    $formatted    = date('F d, Y', strtotime($expiryDate));
+    $dayWord      = $daysLeft === 1 ? '1 day' : "{$daysLeft} days";
+
+    if ($daysLeft <= 1) {
+        $urgencyColor  = '#dc2626';
+        $urgencyBg     = '#fef2f2';
+        $urgencyBorder = '#fecaca';
+        $urgencyIcon   = '🚨';
+        $urgencyLabel  = 'Your Free Trial Ends TODAY!';
+        $subject       = "🚨 URGENT: Your PawnHub free trial ends TODAY — {$businessName}";
+    } elseif ($daysLeft <= 3) {
+        $urgencyColor  = '#ea580c';
+        $urgencyBg     = '#fff7ed';
+        $urgencyBorder = '#fed7aa';
+        $urgencyIcon   = '⚠️';
+        $urgencyLabel  = "Free Trial Ends in {$dayWord}!";
+        $subject       = "⚠️ Your PawnHub free trial ends in {$dayWord} — {$businessName}";
+    } else {
+        $urgencyColor  = '#d97706';
+        $urgencyBg     = '#fffbeb';
+        $urgencyBorder = '#fde68a';
+        $urgencyIcon   = '⏳';
+        $urgencyLabel  = "Free Trial Ends in {$dayWord}";
+        $subject       = "⏳ Your PawnHub free trial ends in {$dayWord} — {$businessName}";
+    }
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Free Trial Notice</p>
+      </div>
+
+      <div style="padding:36px;">
+
+        <!-- Urgency box -->
+        <div style="background:' . $urgencyBg . ';border:1px solid ' . $urgencyBorder . ';border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2rem;margin:0 0 6px;">' . $urgencyIcon . '</p>
+          <p style="color:' . $urgencyColor . ';font-size:1.1rem;font-weight:800;margin:0 0 4px;">' . $urgencyLabel . '</p>
+          <p style="color:' . $urgencyColor . ';font-size:.84rem;margin:0;">Trial expires on <strong>' . $formatted . '</strong></p>
+        </div>
+
+        <!-- Body copy -->
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
+          Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
+          Your <strong>1-month free trial</strong> for <strong>' . htmlspecialchars($businessName) . '</strong>
+          on PawnHub will end in <strong style="color:' . $urgencyColor . ';">' . $dayWord . '</strong>.<br><br>
+          After your trial ends, your account will be <strong>locked</strong> until you upgrade
+          to a paid plan. Upgrade now to keep full access to your dashboard and all your data.
+        </p>
+
+        <!-- Plan comparison -->
+        <div style="display:flex;gap:12px;margin-bottom:24px;">
+          <div style="flex:1;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #2563eb;border-radius:14px;padding:18px 14px;text-align:center;position:relative;">
+            <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#2563eb;color:#fff;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;padding:2px 10px;border-radius:100px;white-space:nowrap;">⭐ Most Popular</div>
+            <div style="font-size:.9rem;font-weight:800;color:#1e40af;margin-bottom:6px;">Pro Plan</div>
+            <div style="font-size:1.5rem;font-weight:800;color:#1d4ed8;line-height:1.1;">₱999<span style="font-size:.75rem;font-weight:500;color:#60a5fa;">/mo</span></div>
+            <div style="font-size:.72rem;color:#3b82f6;margin-top:8px;line-height:1.5;">Unlimited staff · Advanced reports · Custom branding · Priority support</div>
+          </div>
+          <div style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px 14px;text-align:center;">
+            <div style="font-size:.9rem;font-weight:800;color:#334155;margin-bottom:6px;">Enterprise</div>
+            <div style="font-size:1.5rem;font-weight:800;color:#1e293b;line-height:1.1;">₱2,499<span style="font-size:.75rem;font-weight:500;color:#94a3b8;">/mo</span></div>
+            <div style="font-size:.72rem;color:#64748b;margin-top:8px;line-height:1.5;">Multi-branch · White-label · Data export · Dedicated account manager</div>
+          </div>
+        </div>
+
+        <!-- How to upgrade -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+          <p style="color:#334155;font-size:.85rem;font-weight:700;margin:0 0 10px;">🚀 How to Upgrade:</p>
+          <ol style="color:#475569;font-size:.84rem;line-height:1.9;margin:0;padding-left:18px;">
+            <li>Sign in to your dashboard</li>
+            <li>Go to <strong>Subscription</strong> in the sidebar</li>
+            <li>Choose <strong>Pro</strong> or <strong>Enterprise</strong></li>
+            <li>Pay via GCash, Maya, Card, or Online Banking</li>
+            <li>Your account is upgraded <strong>instantly</strong> after payment ✅</li>
+          </ol>
+        </div>
+
+        <!-- CTA button -->
+        <div style="text-align:center;margin:28px 0;">
+          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
+            🚀 Upgrade My Plan Now →
+          </a>
+        </div>
+
+        <p style="color:#94a3b8;font-size:.76rem;text-align:center;">
+          Or visit: <a href="' . $loginLink . '" style="color:#2563eb;">' . $loginLink . '</a>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, $subject, $html);
+}
+
+
+/**
+ * sendFreeTrialExpired()
+ * Sent on the day the Starter free trial ends (subscription_end passed).
+ * Informs the tenant their account is now locked and they must upgrade.
+ */
+function sendFreeTrialExpired(
+    string $toEmail,
+    string $toName,
+    string $businessName,
+    string $slug
+): bool {
+    $loginLink = APP_URL . '/' . urlencode($slug) . '?login=1';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header — amber/orange theme for trial ended -->
+      <div style="background:linear-gradient(135deg,#78350f,#d97706);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:rgba(255,255,255,.2);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.75);font-size:.85rem;margin:0;">Free Trial Notice</p>
+      </div>
+
+      <div style="padding:36px;">
+
+        <!-- Alert box -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:18px 20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2rem;margin:0 0 6px;">⏰</p>
+          <p style="color:#92400e;font-size:1.1rem;font-weight:800;margin:0 0 4px;">Your Free Trial Has Ended</p>
+          <p style="color:#a16207;font-size:.84rem;margin:0;">Your account is now locked until you upgrade.</p>
+        </div>
+
+        <!-- Body copy -->
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
+          Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
+          Your <strong>1-month free trial</strong> for <strong>' . htmlspecialchars($businessName) . '</strong>
+          on PawnHub has officially ended.<br><br>
+          Your account has been <strong style="color:#dc2626;">temporarily locked</strong>.
+          All your data is safe — simply upgrade to <strong>Pro</strong> or <strong>Enterprise</strong>
+          to instantly restore access for you and your entire team.
+        </p>
+
+        <!-- What you\'re missing box -->
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+          <p style="color:#dc2626;font-size:.82rem;font-weight:700;margin:0 0 8px;">🔒 Currently unavailable until you upgrade:</p>
+          <ul style="color:#7f1d1d;font-size:.82rem;line-height:1.9;margin:0;padding-left:18px;">
+            <li>Staff &amp; manager dashboard access</li>
+            <li>Pawn transactions &amp; inventory management</li>
+            <li>Reports &amp; audit logs</li>
+            <li>Customer records</li>
+          </ul>
+        </div>
+
+        <!-- Plan comparison -->
+        <div style="display:flex;gap:12px;margin-bottom:24px;">
+          <div style="flex:1;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #2563eb;border-radius:14px;padding:18px 14px;text-align:center;position:relative;">
+            <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#2563eb;color:#fff;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;padding:2px 10px;border-radius:100px;white-space:nowrap;">⭐ Most Popular</div>
+            <div style="font-size:.9rem;font-weight:800;color:#1e40af;margin-bottom:6px;">Pro Plan</div>
+            <div style="font-size:1.5rem;font-weight:800;color:#1d4ed8;line-height:1.1;">₱999<span style="font-size:.75rem;font-weight:500;color:#60a5fa;">/mo</span></div>
+            <div style="font-size:.72rem;color:#3b82f6;margin-top:8px;line-height:1.5;">Unlimited staff · Advanced reports · Custom branding · Priority support</div>
+          </div>
+          <div style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px 14px;text-align:center;">
+            <div style="font-size:.9rem;font-weight:800;color:#334155;margin-bottom:6px;">Enterprise</div>
+            <div style="font-size:1.5rem;font-weight:800;color:#1e293b;line-height:1.1;">₱2,499<span style="font-size:.75rem;font-weight:500;color:#94a3b8;">/mo</span></div>
+            <div style="font-size:.72rem;color:#64748b;margin-top:8px;line-height:1.5;">Multi-branch · White-label · Data export · Dedicated account manager</div>
+          </div>
+        </div>
+
+        <!-- CTA button -->
+        <div style="text-align:center;margin:28px 0;">
+          <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
+            🚀 Upgrade &amp; Restore Access →
+          </a>
+        </div>
+
+        <!-- Reassurance -->
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+          <p style="color:#15803d;font-size:.82rem;margin:0;line-height:1.7;">
+            ✅ <strong>Your data is safe.</strong> All your transactions, records, and settings
+            are preserved. Upgrading instantly restores your full dashboard — no setup needed.
+          </p>
+        </div>
+
+        <p style="color:#94a3b8;font-size:.76rem;text-align:center;">
+          Need help? Contact us at <a href="mailto:' . MAIL_FROM . '" style="color:#2563eb;">' . MAIL_FROM . '</a>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, '⏰ Your PawnHub free trial for ' . $businessName . ' has ended — Upgrade to continue', $html);
+}
