@@ -348,18 +348,24 @@ $active_count     = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE 
 $all_tickets  = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100"); $all_tickets->execute([$tid]); $all_tickets=$all_tickets->fetchAll();
 $my_active    = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? AND assigned_staff_id=? AND status='Stored' ORDER BY maturity_date ASC"); $my_active->execute([$tid,$u['id']]); $my_active=$my_active->fetchAll();
 $customers_stmt = $pdo->prepare("
-    SELECT id, full_name, contact_number, email,
+    SELECT id,
+           full_name COLLATE utf8mb4_unicode_ci AS full_name,
+           contact_number COLLATE utf8mb4_unicode_ci AS contact_number,
+           email COLLATE utf8mb4_unicode_ci AS email,
            gender, address, birthdate, nationality,
            valid_id_type, valid_id_number, valid_id_image,
            customer_photo, registered_at AS registered_at,
-           'walkin' AS source
+           'walkin' COLLATE utf8mb4_unicode_ci AS source
     FROM customers WHERE tenant_id=?
     UNION ALL
-    SELECT id, full_name, contact_number, email,
+    SELECT id,
+           full_name COLLATE utf8mb4_unicode_ci AS full_name,
+           contact_number COLLATE utf8mb4_unicode_ci AS contact_number,
+           email COLLATE utf8mb4_unicode_ci AS email,
            NULL AS gender, address, birthdate, NULL AS nationality,
            NULL AS valid_id_type, NULL AS valid_id_number, NULL AS valid_id_image,
            profile_photo AS customer_photo, created_at AS registered_at,
-           'mobile' AS source
+           'mobile' COLLATE utf8mb4_unicode_ci AS source
     FROM mobile_customers WHERE tenant_id=?
     ORDER BY full_name
 ");
