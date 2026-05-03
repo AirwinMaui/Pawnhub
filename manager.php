@@ -943,7 +943,9 @@ try {
     if ($ap_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_c.' Pending Walk-in Application'.($ap_c>1?'s':''),'sub'=>'Online application'.($ap_c>1?'s':'').' awaiting branch admin review.','link'=>'?page=tickets'];
 
     // ── 18. Shop sales today ─────────────────────────────────
-    $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(created_at)=CURDATE()");
+    // FIX: Use paid_at (or updated_at fallback) instead of created_at.
+    // Orders are created BEFORE payment, so created_at may be a different day.
+    $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(COALESCE(paid_at, updated_at))=CURDATE()");
     $so->execute([$tid]); $so_c = (int)$so->fetchColumn();
     if ($so_c > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$so_c.' Shop Sale'.($so_c>1?'s':'').' Today','sub'=>$so_c.' item'.($so_c>1?'s were':' was').' purchased from your shop today.','link'=>'?page=shop_items'];
 
