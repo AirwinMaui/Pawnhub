@@ -23,6 +23,8 @@ if (($_GET['error'] ?? '') === 'paymongo_fail') {
     $error_msg = '⚠️ PayMongo payment failed or was cancelled. You can try again or use a manual payment method.';
 } elseif (($_GET['error'] ?? '') === 'already_pending') {
     $error_msg = 'You already have a pending renewal request. Please wait for admin approval.';
+} elseif (($_GET['error'] ?? '') === 'starter_trial_used') {
+    $error_msg = '🔒 Your Starter free trial has already been used. The Starter Plan is a one-time free trial only — please upgrade to Pro or Enterprise to continue using PawnHub.';
 } elseif (($_GET['cancelled'] ?? '') === '1') {
     $error_msg = 'Payment was cancelled. No charge was made.';
 }

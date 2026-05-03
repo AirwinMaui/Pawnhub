@@ -146,6 +146,50 @@ $billing_labels = [
 
 // Starter reactivation is free — auto-reactivate without payment
 if ($payment_type === 'reactivation' && $target_plan === 'Starter') {
+
+    // ── SERVER-SIDE GUARD: Block if free trial already used ───
+    // Check all possible indicators that they've already had a Starter trial
+    $starter_already_used = false;
+
+    // 1. Any Starter renewal record exists
+    $chk1 = $pdo->prepare("SELECT id FROM subscription_renewals WHERE tenant_id = ? AND plan = 'Starter' LIMIT 1");
+    $chk1->execute([$tid]);
+    if ($chk1->fetch()) $starter_already_used = true;
+
+    // 2. starter-free reactivation reference exists
+    if (!$starter_already_used) {
+        $chk2 = $pdo->prepare("SELECT id FROM subscription_renewals WHERE tenant_id = ? AND payment_reference LIKE 'starter-free%' LIMIT 1");
+        $chk2->execute([$tid]);
+        if ($chk2->fetch()) $starter_already_used = true;
+    }
+
+    // 3. Audit log shows previous Starter reactivation
+    if (!$starter_already_used) {
+        $chk3 = $pdo->prepare("SELECT id FROM audit_logs WHERE tenant_id = ? AND action = 'TENANT_REACTIVATED_STARTER' LIMIT 1");
+        $chk3->execute([$tid]);
+        if ($chk3->fetch()) $starter_already_used = true;
+    }
+
+    // 4. No renewals at all but subscription_end is set = they had original Starter trial at signup
+    if (!$starter_already_used) {
+        $chk4 = $pdo->prepare("SELECT COUNT(*) FROM subscription_renewals WHERE tenant_id = ?");
+        $chk4->execute([$tid]);
+        $rc = (int)$chk4->fetchColumn();
+        $te = $pdo->prepare("SELECT subscription_end FROM tenants WHERE id = ? LIMIT 1");
+        $te->execute([$tid]);
+        $te_end = $te->fetchColumn();
+        if ($rc === 0 && !empty($te_end)) $starter_already_used = true;
+    }
+
+    if ($starter_already_used) {
+        // Log attempted abuse
+        try {
+            $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'STARTER_REACTIVATION_BLOCKED','subscription',?,?,?,NOW())")
+                ->execute([$tid, $uid, $u['username'], 'admin', $tid, "Blocked Starter free trial reactivation — trial already used.", $_SERVER['REMOTE_ADDR'] ?? '::1']);
+        } catch (Throwable $e) {}
+        header('Location: tenant_subscription.php?error=starter_trial_used'); exit;
+    }
+
     // Auto-reactivate tenant to Starter (free) without going through PayMongo
     $pdo->prepare("
         UPDATE tenants SET

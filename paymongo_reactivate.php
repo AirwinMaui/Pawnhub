@@ -70,6 +70,73 @@ $biz_name    = $tenant['business_name'];
 $current_plan = $tenant['plan'];
 $owner_name  = $tenant['owner_name'];
 
+// ── Check if tenant has ever used Starter free trial ─────────
+// A tenant has "used" their free trial if:
+//   1. Their current or past plan was Starter AND subscription_end is set (they got a trial), OR
+//   2. They have any subscription_renewals record with plan='Starter'
+$has_used_starter = false;
+
+// Check 1: tenant was ever on Starter with a subscription_end (trial was given)
+if (!empty($tenant['subscription_end'])) {
+    // If current plan is Starter or they had Starter history in renewals
+    $starter_renewal = $pdo->prepare("
+        SELECT id FROM subscription_renewals
+        WHERE tenant_id = ? AND plan = 'Starter'
+        LIMIT 1
+    ");
+    $starter_renewal->execute([$tenant_id]);
+    if ($starter_renewal->fetch()) {
+        $has_used_starter = true;
+    }
+    // Also check: if they signed up originally as Starter (no paid renewals means they were on Starter)
+    if (!$has_used_starter) {
+        // If tenant was created with Starter plan — original plan is Starter
+        // We consider: if subscription_end is set AND they were ever Starter (current plan)
+        // or if their signup plan was Starter (check via renewals or original plan column)
+        $orig_check = $pdo->prepare("
+            SELECT id FROM subscription_renewals
+            WHERE tenant_id = ? AND payment_reference LIKE 'starter-free%'
+            LIMIT 1
+        ");
+        $orig_check->execute([$tenant_id]);
+        if ($orig_check->fetch()) {
+            $has_used_starter = true;
+        }
+    }
+}
+
+// Check 2: tenant's own plan history — if they originally signed up as Starter
+// The most reliable: check if tenant's original_plan (or first recorded plan) was Starter
+// Fallback: if current plan is Starter and subscription_end is set, they've used the trial
+if (!$has_used_starter && $current_plan === 'Starter' && !empty($tenant['subscription_end'])) {
+    $has_used_starter = true;
+}
+
+// Also check audit logs for FREE_TRIAL type activation
+if (!$has_used_starter) {
+    $audit_chk = $pdo->prepare("
+        SELECT id FROM audit_logs
+        WHERE tenant_id = ? AND action IN ('TENANT_REACTIVATED_STARTER', 'SUBSCRIPTION_AUTO_ACTIVATED')
+        LIMIT 1
+    ");
+    $audit_chk->execute([$tenant_id]);
+    if ($audit_chk->fetch()) {
+        $has_used_starter = true;
+    }
+}
+
+// If tenant was originally registered as Starter (check subscription_renewals for any record)
+// If they have NO renewals at all but have a subscription_end, they originally got a Starter trial at signup
+if (!$has_used_starter) {
+    $any_renewal = $pdo->prepare("SELECT COUNT(*) FROM subscription_renewals WHERE tenant_id = ?");
+    $any_renewal->execute([$tenant_id]);
+    $renewal_count = (int)$any_renewal->fetchColumn();
+    // Tenant has subscription_end set but no renewals = they got a free Starter trial at signup
+    if ($renewal_count === 0 && !empty($tenant['subscription_end'])) {
+        $has_used_starter = true;
+    }
+}
+
 // ── Plan definitions ──────────────────────────────────────────
 $plans = [
     'Starter' => [
@@ -82,7 +149,7 @@ $plans = [
         'active_border'   => '#334155',
         'icon'            => '🏪',
         'features'        => ['Basic inventory management', 'Up to 1 branch', 'Up to 2 staff accounts', 'Standard reports'],
-        'note'            => 'No payment required — reactivated instantly.',
+        'note'            => $has_used_starter ? 'Free trial already used — upgrade required.' : 'No payment required — reactivated instantly.',
     ],
     'Pro' => [
         'price_monthly'   => 999,
@@ -153,6 +220,9 @@ h1{font-size:1.8rem;font-weight:800;color:#fff;margin-bottom:8px;}
 .plan-card.selected.plan-pro{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.2);}
 .plan-card.selected.plan-enterprise{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.2);}
 .current-badge{position:absolute;top:12px;right:12px;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;color:#713f12;}
+.locked-badge{position:absolute;top:12px;right:12px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;color:#fca5a5;}
+.plan-card.locked{opacity:.6;cursor:not-allowed;pointer-events:none;filter:grayscale(40%);}
+.plan-card.locked:hover{transform:none;background:rgba(255,255,255,.04);}
 .plan-icon{font-size:1.6rem;margin-bottom:10px;}
 .plan-name{font-size:1rem;font-weight:800;color:#fff;margin-bottom:4px;}
 .plan-price{font-size:1.5rem;font-weight:900;color:#fff;margin-bottom:2px;}
@@ -208,45 +278,82 @@ h1{font-size:1.8rem;font-weight:800;color:#fff;margin-bottom:8px;}
   </div>
 
   <!-- Plan cards -->
+  <?php
+  // If starter already used, force preselect Pro (or their existing paid plan)
+  $effective_presel = $presel_plan;
+  if ($has_used_starter && ($effective_presel === 'Starter' || !$effective_presel)) {
+      $effective_presel = ($current_plan !== 'Starter') ? $current_plan : 'Pro';
+  }
+  ?>
   <div class="plan-grid">
     <?php foreach ($plans as $plan_key => $p):
-      $is_current = ($plan_key === $current_plan);
-      $preselected = ($plan_key === $presel_plan) || (!$presel_plan && $plan_key === $current_plan);
-      $card_class  = 'plan-card plan-' . strtolower($plan_key) . ($preselected ? ' selected' : '');
+      $is_current        = ($plan_key === $current_plan);
+      $is_starter_locked = ($plan_key === 'Starter' && $has_used_starter);
+      $preselected       = !$is_starter_locked && (($plan_key === $effective_presel) || (!$effective_presel && $plan_key === $current_plan));
+      $card_class        = 'plan-card plan-' . strtolower($plan_key)
+                         . ($preselected ? ' selected' : '')
+                         . ($is_starter_locked ? ' locked' : '');
     ?>
-    <div class="<?= $card_class ?>" onclick="selectPlan('<?= $plan_key ?>')" id="card-<?= $plan_key ?>">
-      <?php if ($is_current): ?>
+    <div class="<?= $card_class ?>"
+         <?= $is_starter_locked ? '' : "onclick=\"selectPlan('{$plan_key}')\"" ?>
+         id="card-<?= $plan_key ?>"
+         <?= $is_starter_locked ? 'title="Free trial already used — upgrade to a paid plan."' : '' ?>>
+
+      <?php if ($is_starter_locked): ?>
+        <div class="locked-badge">🔒 Trial Used</div>
+      <?php elseif ($is_current): ?>
         <div class="current-badge">Current Plan</div>
       <?php endif; ?>
-      <div class="plan-icon"><?= $p['icon'] ?></div>
-      <div class="plan-name"><?= $plan_key ?> Plan</div>
+
+      <div class="plan-icon" style="<?= $is_starter_locked ? 'opacity:.35;' : '' ?>"><?= $p['icon'] ?></div>
+      <div class="plan-name" style="<?= $is_starter_locked ? 'color:rgba(255,255,255,.3);' : '' ?>"><?= $plan_key ?> Plan</div>
+
       <?php if ($plan_key === 'Starter'): ?>
-        <div class="plan-price">Free</div>
-        <div class="plan-period">No payment needed</div>
+        <div class="plan-price" style="<?= $is_starter_locked ? 'color:rgba(255,255,255,.2);text-decoration:line-through;' : '' ?>">Free</div>
+        <div class="plan-period" style="<?= $is_starter_locked ? 'color:rgba(255,255,255,.2);' : '' ?>">No payment needed</div>
       <?php else: ?>
         <div class="plan-price" id="price-<?= $plan_key ?>">₱<?= number_format($p['price_monthly']) ?></div>
         <div class="plan-period" id="period-<?= $plan_key ?>">/month</div>
       <?php endif; ?>
-      <div class="plan-note"><?= htmlspecialchars($p['note']) ?></div>
+
+      <?php if ($is_starter_locked): ?>
+        <div style="font-size:.75rem;color:rgba(239,68,68,.65);margin:8px 0 12px;font-style:italic;font-weight:600;">
+          Free trial already used.<br>Upgrade to Pro or Enterprise to continue.
+        </div>
+      <?php else: ?>
+        <div class="plan-note"><?= htmlspecialchars($p['note']) ?></div>
+      <?php endif; ?>
+
       <ul class="plan-features">
         <?php foreach ($p['features'] as $feat): ?>
-          <li><?= htmlspecialchars($feat) ?></li>
+          <li style="<?= $is_starter_locked ? 'color:rgba(255,255,255,.18);' : '' ?>"><?= htmlspecialchars($feat) ?></li>
         <?php endforeach; ?>
       </ul>
+
+      <?php if ($is_starter_locked): ?>
+        <div style="margin-top:12px;padding:7px 10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:.71rem;color:rgba(239,68,68,.65);text-align:center;font-weight:600;">
+          One free trial per account only
+        </div>
+      <?php endif; ?>
     </div>
     <?php endforeach; ?>
   </div>
 
   <!-- Submit section -->
   <div class="submit-section">
+    <?php if ($has_used_starter): ?>
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:11px 16px;margin-bottom:18px;font-size:.8rem;color:rgba(239,68,68,.85);text-align:center;font-weight:600;">
+      ⚠️ Your free trial has already been used. <strong style="color:#fca5a5;">The Starter Plan is no longer available for your account.</strong> Please choose Pro or Enterprise to continue.
+    </div>
+    <?php endif; ?>
     <div class="selected-summary">
       <div class="plan-label">Selected Plan</div>
       <div class="plan-display" id="summary-plan">
-        <?= $presel_plan ?: $current_plan ?> Plan
+        <?= $effective_presel ?: $current_plan ?> Plan
       </div>
       <div class="price-display" id="summary-price">
         <?php
-          $sp = $presel_plan ?: $current_plan;
+          $sp = $effective_presel ?: $current_plan;
           if ($sp === 'Starter') echo 'Free — no payment required';
           else echo '₱' . number_format($plans[$sp]['price_monthly'] ?? 0) . '/month (Monthly billing)';
         ?>
@@ -256,7 +363,7 @@ h1{font-size:1.8rem;font-weight:800;color:#fff;margin-bottom:8px;}
     <form method="POST" action="paymongo_renewal.php" id="reactivate-form">
       <input type="hidden" name="action" value="pay_reactivation_paymongo"/>
       <input type="hidden" name="billing_cycle" id="input-cycle" value="monthly"/>
-      <input type="hidden" name="reactivate_plan" id="input-plan" value="<?= htmlspecialchars($presel_plan ?: $current_plan) ?>"/>
+      <input type="hidden" name="reactivate_plan" id="input-plan" value="<?= htmlspecialchars($effective_presel ?: $current_plan) ?>"/>
 
       <button type="submit" class="btn-pay" id="pay-btn">
         🔄 Reactivate Now
@@ -283,10 +390,14 @@ const cycleLabels = {
     annually:  'Annual billing (12 months)',
 };
 
-let selectedPlan  = <?= json_encode($presel_plan ?: $current_plan) ?>;
+const starterLocked = <?= $has_used_starter ? 'true' : 'false' ?>;
+
+let selectedPlan  = <?= json_encode($effective_presel ?: $current_plan) ?>;
 let selectedCycle = 'monthly';
 
 function selectPlan(plan) {
+    // Block selecting Starter if trial already used
+    if (plan === 'Starter' && starterLocked) return;
     document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
     document.getElementById('card-' + plan).classList.add('selected');
     selectedPlan = plan;
