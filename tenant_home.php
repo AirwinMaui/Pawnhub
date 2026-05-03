@@ -118,6 +118,7 @@ try {
           AND p.is_active = 1
           AND (p.start_date IS NULL OR p.start_date <= NOW())
           AND (p.end_date IS NULL OR p.end_date >= NOW())
+          AND (p.linked_item_id IS NULL OR i.stock_qty > 0)
         ORDER BY p.is_pinned DESC, p.created_at DESC
         LIMIT 12
     ");
