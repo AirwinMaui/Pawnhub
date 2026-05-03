@@ -1505,3 +1505,83 @@ function sendFreeTrialExpired(
 
     return sendMail($toEmail, $toName, '⏰ Your PawnHub free trial for ' . $businessName . ' has ended — Upgrade to continue', $html);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sendSuperAdminPaymentNotif — notifies all Super Admins when a payment is made
+// Called by paymongo_webhook.php for signup, renewal, upgrade, downgrade,
+// and reactivation payment types.
+// ─────────────────────────────────────────────────────────────────────────────
+function sendSuperAdminPaymentNotif(
+    string $toEmail,
+    string $toName,
+    string $businessName,
+    string $ownerName,
+    string $plan,
+    string $paymentType,    // 'signup', 'renewal', 'upgrade', 'downgrade', 'reactivation'
+    float  $amount,
+    string $billingCycle,
+    string $paymentMethod,
+    string $newSubEnd,
+    int    $tenantId
+): bool {
+    $amount_fmt = '₱' . number_format($amount, 2);
+    $sub_end_fmt = $newSubEnd ? date('F d, Y', strtotime($newSubEnd)) : 'N/A';
+    $saLink = APP_URL . '/superadmin.php?page=tenants&highlight=' . $tenantId;
+
+    $type_labels = [
+        'signup'       => ['label' => 'New Signup Payment',        'icon' => '🆕', 'color' => '#16a34a', 'bg' => '#f0fdf4', 'border' => '#bbf7d0'],
+        'renewal'      => ['label' => 'Subscription Renewed',      'icon' => '🔄', 'color' => '#2563eb', 'bg' => '#eff6ff', 'border' => '#bfdbfe'],
+        'upgrade'      => ['label' => 'Plan Upgraded',             'icon' => '⬆️', 'color' => '#7c3aed', 'bg' => '#f5f3ff', 'border' => '#ddd6fe'],
+        'downgrade'    => ['label' => 'Plan Downgraded',           'icon' => '⬇️', 'color' => '#d97706', 'bg' => '#fffbeb', 'border' => '#fde68a'],
+        'reactivation' => ['label' => 'Account Reactivation',      'icon' => '✅', 'color' => '#0891b2', 'bg' => '#ecfeff', 'border' => '#a5f3fc'],
+    ];
+
+    $t = $type_labels[$paymentType] ?? ['label' => ucfirst($paymentType), 'icon' => '💳', 'color' => '#334155', 'bg' => '#f8fafc', 'border' => '#e2e8f0'];
+
+    $billing_labels = [
+        'monthly'   => 'Monthly',
+        'quarterly' => 'Quarterly (3 months)',
+        'annually'  => 'Annual (12 months)',
+    ];
+    $cycle_label = $billing_labels[$billingCycle] ?? ucfirst($billingCycle);
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:580px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+      <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:28px 36px;text-align:center;">
+        <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        <p style="color:rgba(255,255,255,.6);font-size:.82rem;margin:4px 0 0;">Super Admin — Payment Notification</p>
+      </div>
+      <div style="padding:32px 36px;">
+        <div style="background:' . $t['bg'] . ';border:1px solid ' . $t['border'] . ';border-radius:12px;padding:16px 20px;margin-bottom:22px;text-align:center;">
+          <p style="font-size:1.8rem;margin:0 0 4px;">' . $t['icon'] . '</p>
+          <p style="color:' . $t['color'] . ';font-size:1rem;font-weight:800;margin:0;">' . $t['label'] . '</p>
+        </div>
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 18px;">
+          Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br>
+          A payment has been confirmed via PayMongo. Details below:
+        </p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+          <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+            <tr><td style="color:#64748b;padding:4px 0;width:38%;">Business</td><td style="color:#0f172a;font-weight:700;">' . htmlspecialchars($businessName) . '</td></tr>
+            <tr><td style="color:#64748b;padding:4px 0;">Owner</td><td style="color:#0f172a;">' . htmlspecialchars($ownerName) . '</td></tr>
+            <tr><td style="color:#64748b;padding:4px 0;">Plan</td><td style="color:#0f172a;">' . htmlspecialchars($plan) . '</td></tr>
+            <tr><td style="color:#64748b;padding:4px 0;">Billing</td><td style="color:#0f172a;">' . htmlspecialchars($cycle_label) . '</td></tr>
+            <tr><td style="color:#64748b;padding:4px 0;">Amount</td><td style="color:#16a34a;font-weight:800;">' . $amount_fmt . '</td></tr>
+            <tr><td style="color:#64748b;padding:4px 0;">Method</td><td style="color:#0f172a;">' . htmlspecialchars($paymentMethod) . '</td></tr>
+            <tr><td style="color:#64748b;padding:4px 0;">New Expiry</td><td style="color:#0f172a;">' . $sub_end_fmt . '</td></tr>
+          </table>
+        </div>
+        <div style="text-align:center;margin:22px 0;">
+          <a href="' . $saLink . '" style="display:inline-block;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;text-decoration:none;padding:12px 32px;border-radius:10px;font-size:.9rem;font-weight:700;">
+            View Tenant in Dashboard →
+          </a>
+        </div>
+      </div>
+      <div style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.72rem;margin:0;">© ' . date('Y') . ' PawnHub · Automated payment notification</p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, $t['icon'] . ' PawnHub Payment: ' . htmlspecialchars($businessName) . ' — ' . $t['label'], $html);
+}

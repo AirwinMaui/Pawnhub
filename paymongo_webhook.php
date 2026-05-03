@@ -24,7 +24,7 @@
 
 require 'db.php';
 require 'paymongo_config.php';
-require_once __DIR__ . '/mailer.php';   // needed for SA payment notifications
+require_once __DIR__ . '/mailer.php';
 
 // ── 1. Only accept POST ──────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -111,7 +111,7 @@ if ($event_type === 'checkout_session.payment.paid') {
         // ── Deduplicate check ─────────────────────────────────
         $dup = $pdo->prepare("
             SELECT id FROM subscription_renewals
-            WHERE tenant_id = ? AND payment_reference = ? AND status = 'pending'
+            WHERE tenant_id = ? AND payment_reference = ?
             LIMIT 1
         ");
         $dup->execute([$tenant_id, $session_id]);
@@ -169,7 +169,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal/upgrade email
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -199,7 +198,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // ── Notify Super Admins ───────────────────
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         $up_t = $pdo->prepare("SELECT business_name, owner_name FROM tenants WHERE id=? LIMIT 1");
                         $up_t->execute([$tenant_id]);
                         $up_t = $up_t->fetch();
@@ -271,7 +269,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send confirmation email
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -301,7 +298,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // ── Notify Super Admins ───────────────────
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         if ($t_info && function_exists('sendSuperAdminPaymentNotif')) {
                             foreach ($sa_admins as $sa) {
                                 sendSuperAdminPaymentNotif(
@@ -363,7 +359,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -393,7 +388,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // ── Notify Super Admins ───────────────────
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         // Re-fetch $t_info if not already set from tenant email block above
                         if (empty($t_info) || !is_array($t_info)) {
                             $ti = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
@@ -467,7 +461,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email to tenant
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -497,7 +490,6 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // ── Notify Super Admins ───────────────────
                     try {
-                        require_once __DIR__ . '/mailer.php';
                         if (empty($t_info) || !is_array($t_info)) {
                             $ti = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                             $ti->execute([$tenant_id]);
@@ -582,7 +574,6 @@ if ($event_type === 'checkout_session.payment.paid') {
                         // Send login credentials email
                         if (!empty($t_row['email']) && !empty($slug)) {
                             try {
-                                require_once __DIR__ . '/mailer.php';
                                 // Check for SA-invited tenant (any token — renew if expired)
                                 $inv = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                                 $inv->execute([$tenant_id]);
