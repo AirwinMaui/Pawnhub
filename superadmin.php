@@ -181,8 +181,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         // ── Guard: block approval if permit not ai_approved ────
+        // Starter (Free) plan tenants are exempt from the permit requirement.
         $permit_status_chk = $t_row['business_permit_status'] ?? 'pending';
-        if ($permit_status_chk !== 'ai_approved') {
+        $tenant_plan_chk   = $t_row['plan'] ?? 'Starter';
+        if ($permit_status_chk !== 'ai_approved' && $tenant_plan_chk !== 'Starter') {
             $status_labels = [
                 'ai_rejected'   => 'AI Rejected',
                 'manual_review' => 'Could Not Auto-Verify',
