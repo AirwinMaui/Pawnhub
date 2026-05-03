@@ -1,9 +1,10 @@
 <?php
 // ── GMAIL SETTINGS — palitan ng sarili mong Gmail ─────────────
-define('MAIL_FROM',     'pogisiakosiya@gmail.com');
+define('MAIL_FROM',     'mendozakiaro@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
-define('MAIL_USERNAME', 'pogisiakosiya@gmail.com');
-define('MAIL_PASSWORD', 'ssis seud oqud iqif');
+define('MAIL_USERNAME', 'mendozakiaro@gmail.com');
+define('MAIL_PASSWORD', 'ssis seud oqud iqif
+');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 // ── Load PHPMailer ─────────────────────────────────────────────
@@ -30,6 +31,7 @@ if (!file_exists($_autoload)) {
         function sendPaymentLink(string $a='', string $b='', string $c='', string $d='', string $e='', ?string $f=null, float $g=0): bool { return false; }
         function sendTenantApplicationReceived(string $a='', string $b='', string $c='', string $d='', bool $e=false): bool { return false; }
         function sendSANewApplicantNotification(string $a='', string $b='', string $c='', string $d='', string $e='', string $f='', int $g=0): bool { return false; }
+        function sendSuperAdminPaymentNotif(string $a='', string $b='', string $c='', string $d='', string $e='', string $f='', float $g=0, string $h='monthly', string $i='', string $j='', int $k=0): bool { return false; }
     }
     return;
 }
@@ -1337,8 +1339,82 @@ function sendSANewApplicantNotification(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// sendPaymentLink — SA-initiated: sends PayMongo checkout link + QR to tenant
+// sendSuperAdminPaymentNotif — called by webhook after any PayMongo payment
+// Types: signup, renewal, upgrade, downgrade, reactivation
 // ────────────────────────────────────────────────────────────────────────────
+function sendSuperAdminPaymentNotif(
+    string $saEmail,
+    string $saName,
+    string $businessName,
+    string $ownerName,
+    string $plan,
+    string $paymentType,
+    float  $amount,
+    string $billingCycle = 'monthly',
+    string $paymentMethod = 'PayMongo',
+    string $newSubEnd = '',
+    int    $tenantId = 0
+): bool {
+    $dashboard_url = APP_URL . '/superadmin.php?page=subscriptions';
+    $amount_fmt    = '₱' . number_format($amount, 2);
+
+    $type_labels = [
+        'signup'       => ['label' => 'New Signup Payment',   'emoji' => '🆕', 'color' => '#0369a1', 'bg' => '#f0f9ff', 'border' => '#bae6fd'],
+        'renewal'      => ['label' => 'Subscription Renewal', 'emoji' => '🔄', 'color' => '#166534', 'bg' => '#f0fdf4', 'border' => '#bbf7d0'],
+        'upgrade'      => ['label' => 'Plan Upgrade',         'emoji' => '⬆️', 'color' => '#1d4ed8', 'bg' => '#eff6ff', 'border' => '#bfdbfe'],
+        'downgrade'    => ['label' => 'Plan Downgrade',       'emoji' => '⬇️', 'color' => '#92400e', 'bg' => '#fffbeb', 'border' => '#fde68a'],
+        'reactivation' => ['label' => 'Account Reactivation', 'emoji' => '✅', 'color' => '#15803d', 'bg' => '#f0fdf4', 'border' => '#bbf7d0'],
+    ];
+    $t = $type_labels[$paymentType] ?? $type_labels['renewal'];
+
+    $cycle_labels = ['monthly' => 'Monthly', 'quarterly' => 'Quarterly', 'annually' => 'Annual'];
+    $cycle_label  = $cycle_labels[$billingCycle] ?? 'Monthly';
+
+    $sub_end_row = $newSubEnd
+        ? '<br>📅 <strong>New Sub End:</strong> ' . htmlspecialchars($newSubEnd)
+        : '';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+      <div style="background:linear-gradient(135deg,#1e1b4b,#4c1d95);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#7c3aed,#a855f7);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub Admin</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Payment Notification</p>
+      </div>
+      <div style="padding:36px;">
+        <div style="background:' . $t['bg'] . ';border:1px solid ' . $t['border'] . ';border-radius:12px;padding:20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:1.8rem;margin:0 0 6px;">' . $t['emoji'] . '</p>
+          <p style="color:' . $t['color'] . ';font-size:1.1rem;font-weight:800;margin:0 0 4px;">' . htmlspecialchars($t['label']) . '</p>
+          <p style="color:' . $t['color'] . ';font-size:1.5rem;font-weight:800;margin:0;">' . $amount_fmt . '</p>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+          <p style="color:#334155;font-size:.84rem;margin:0;line-height:2;">
+            🏪 <strong>Business:</strong> ' . htmlspecialchars($businessName) . '<br>
+            👤 <strong>Owner:</strong> ' . htmlspecialchars($ownerName) . '<br>
+            📦 <strong>Plan:</strong> ' . htmlspecialchars($plan) . ' — ' . htmlspecialchars($cycle_label) . '<br>
+            💳 <strong>Method:</strong> ' . htmlspecialchars($paymentMethod) . $sub_end_row . '
+          </p>
+        </div>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="' . $dashboard_url . '"
+             style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.35);">
+            View in Dashboard →
+          </a>
+        </div>
+      </div>
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($saEmail, $saName, $t['emoji'] . ' PawnHub — ' . $t['label'] . ': ' . $businessName . ' (' . $amount_fmt . ')', $html);
+}
 function sendPaymentLink(
     string  $toEmail,
     string  $toName,
