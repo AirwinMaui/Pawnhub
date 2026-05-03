@@ -157,24 +157,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             CURLOPT_POSTFIELDS     => json_encode($pm_payload),
                             CURLOPT_TIMEOUT        => 20,
                         ]);
-                        $pm_raw      = curl_exec($pm_ch);
-                        $pm_http     = curl_getinfo($pm_ch, CURLINFO_HTTP_CODE);
-                        $pm_curl_err = curl_error($pm_ch);
+                        $pm_raw  = curl_exec($pm_ch);
+                        $pm_http = curl_getinfo($pm_ch, CURLINFO_HTTP_CODE);
                         curl_close($pm_ch);
                         $pm_resp = json_decode($pm_raw, true);
                         if ($pm_http === 200 && !empty($pm_resp['data']['attributes']['checkout_url'])) {
                             $pm_session_id   = $pm_resp['data']['id'];
                             $pm_checkout_url = $pm_resp['data']['attributes']['checkout_url'];
                             $pdo->prepare("UPDATE tenants SET paymongo_session_id=? WHERE id=?")->execute([$pm_session_id, $new_tid]);
-                            // Use QR code as a plain <img src="URL"> — avoids file_get_contents
-                            // which can be blocked on Azure. The URL is passed as-is to mailer.php.
-                            $qr_img_url = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($pm_checkout_url) . '&choe=UTF-8';
-                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, $qr_img_url, $pm_amount / 100);
-                            if (!$payment_link_sent) {
-                                error_log('[AddTenant] sendPaymentLink() returned false for tenant_id=' . $new_tid . ' email=' . $email);
-                            }
+                            // Generate QR code
+                            $qr_url  = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($pm_checkout_url) . '&choe=UTF-8';
+                            $qr_data = @file_get_contents($qr_url);
+                            $qr_uri  = $qr_data ? 'data:image/png;base64,' . base64_encode($qr_data) : null;
+                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, $qr_uri, $pm_amount / 100);
                         } else {
-                            error_log('[AddTenant] PayMongo session failed HTTP=' . $pm_http . ' curl_err=' . $pm_curl_err . ' body=' . $pm_raw);
+                            error_log('[AddTenant] PayMongo session failed: ' . $pm_raw);
                         }
                         $success_msg = $payment_link_sent
                             ? "✅ Tenant \"<strong>$bname</strong>\" added! Payment link auto-sent to <strong>$email</strong>. Account will activate once payment is received."
@@ -342,10 +339,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         // ── Send approval/login email ──────────────────────────
+        // Skip if webhook already activated the tenant (payment_status=paid + status=active)
+        // to avoid sending duplicate emails.
         // For SA-invited tenants: send the invitation/setup email (with token link).
         // For self-signup tenants (no invitation token): send the approved/login email.
+        $already_activated = ($t_row['payment_status'] === 'paid' && $t_row['status'] === 'active');
         $email_sent = false;
-        if (!empty($t_row['email']) && !empty($slug)) {
+        if (!$already_activated && !empty($t_row['email']) && !empty($slug)) {
             try {
                 // Check if this tenant was SA-invited (any token)
                 $inv_stmt = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
@@ -392,9 +392,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid ({$t_row['business_name']}). Email sent: " . ($email_sent ? 'yes' : 'no'),$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
 
-        $success_msg = $email_sent
-            ? "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). Invitation sent to <strong>{$t_row['email']}</strong>."
-            : "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). ⚠️ Email could not be sent — check mailer.php settings.";
+        if ($already_activated) {
+            $success_msg = "✅ Tenant approved! (Account was already activated via PayMongo webhook — no duplicate email sent.)";
+        } else {
+            $success_msg = $email_sent
+                ? "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). Invitation sent to <strong>{$t_row['email']}</strong>."
+                : "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). ⚠️ Email could not be sent — check mailer.php settings.";
+        }
         $active_page = 'tenants';
         end_approve:;
     }

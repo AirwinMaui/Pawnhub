@@ -92,7 +92,7 @@ if ($event_type === 'checkout_session.payment.paid') {
     // ── Fetch all Super Admin accounts for notifications ──────
     $sa_admins = [];
     try {
-        $sa_stmt = $pdo->query("SELECT email, fullname FROM users WHERE role='super_admin' AND status='approved' LIMIT 10");
+        $sa_stmt = $pdo->query("SELECT email, fullname FROM users WHERE role='super_admin' AND status='approved' AND username='superadmin' LIMIT 1");
         $sa_admins = $sa_stmt->fetchAll();
     } catch (Throwable $e) {
         error_log("[Webhook] Could not fetch SA emails: " . $e->getMessage());
