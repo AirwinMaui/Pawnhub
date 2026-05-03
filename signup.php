@@ -42,6 +42,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'You must agree to the Terms & Conditions before registering.';
     } elseif (!$fullname || !$email || !$username || !$pass || !$biz_name) {
         $error = 'Please fill in all required fields.';
+    } elseif (strlen($fullname) < 2 || strlen($fullname) > 100) {
+        $error = 'Full name must be between 2 and 100 characters.';
+    } elseif (!preg_match('/^[a-zA-ZÀ-ÖØ-öø-ÿ\s\'\-\.]+$/', $fullname)) {
+        $error = 'Full name must contain letters only (no numbers or special characters).';
+    } elseif (strlen($biz_name) < 2 || strlen($biz_name) > 100) {
+        $error = 'Business name must be between 2 and 100 characters.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Please enter a valid email address.';
+    } elseif (strlen($email) > 150) {
+        $error = 'Email address is too long (max 150 characters).';
+    } elseif (strlen($username) < 4 || strlen($username) > 30) {
+        $error = 'Username must be between 4 and 30 characters.';
+    } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+        $error = 'Username may only contain letters, numbers, and underscores (no spaces or special characters).';
+    } elseif ($phone !== '' && !preg_match('/^(09|\+639)\d{9}$/', preg_replace('/[\s\-]/', '', $phone))) {
+        $error = 'Phone number must be a valid PH mobile number (e.g. 09XXXXXXXXX or +639XXXXXXXXX).';
+    } elseif ($address !== '' && (strlen($address) < 3 || strlen($address) > 255)) {
+        $error = 'Address must be between 3 and 255 characters.';
     } elseif ($pass !== $conf) {
         $error = 'Passwords do not match.';
     } elseif (strlen($pass) < 8) {
@@ -406,18 +424,22 @@ html { scroll-behavior: smooth; }
             <div>
               <label class="field-label">Business Name *</label>
               <input type="text" name="business_name" class="glass-input" placeholder="e.g. GoldKing Pawnshop"
-                autocomplete="off" value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>" required>
+                autocomplete="off" value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>"
+                required minlength="2" maxlength="100">
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
                 <label class="field-label">Phone Number</label>
-                <input type="text" name="phone" class="glass-input" placeholder="09XXXXXXXXX"
-                  autocomplete="off" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+                <input type="tel" name="phone" id="phone_input" class="glass-input" placeholder="09XXXXXXXXX"
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>"
+                  maxlength="13" oninput="validatePhone(this)">
+                <div id="phone_err" style="font-size:0.67rem;color:#f87171;margin-top:4px;min-height:14px;display:none;"></div>
               </div>
               <div>
                 <label class="field-label">Address</label>
                 <input type="text" name="address" class="glass-input" placeholder="City, Province"
-                  autocomplete="off" value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['address'] ?? '') ?>"
+                  minlength="3" maxlength="255">
               </div>
             </div>
           </div>
@@ -451,18 +473,23 @@ html { scroll-behavior: smooth; }
             <div>
               <label class="field-label">Full Name *</label>
               <input type="text" name="fullname" class="glass-input" placeholder="Juan Dela Cruz"
-                autocomplete="off" value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
+                autocomplete="off" value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>"
+                required minlength="2" maxlength="100" oninput="validateFullname(this)">
+              <div id="fullname_err" style="font-size:0.67rem;color:#f87171;margin-top:4px;min-height:14px;display:none;"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
                 <label class="field-label">Email *</label>
                 <input type="email" name="email" class="glass-input" placeholder="owner@example.com"
-                  autocomplete="off" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                  required maxlength="150">
               </div>
               <div>
                 <label class="field-label">Username *</label>
                 <input type="text" name="username" class="glass-input" placeholder="yourUsername"
-                  autocomplete="off" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required>
+                  autocomplete="off" value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
+                  required minlength="4" maxlength="30" oninput="validateUsername(this)">
+                <div id="username_err" style="font-size:0.67rem;color:#f87171;margin-top:4px;min-height:14px;display:none;"></div>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -681,7 +708,99 @@ function toggleSignupPw(id, btn) {
   icon.textContent = f.type === 'password' ? 'visibility' : 'visibility_off';
 }
 
-function checkSignupStrength(pw) {
+function validatePhone(input) {
+  const err = document.getElementById('phone_err');
+  const val = input.value.replace(/[\s\-]/g, '');
+  if (val === '') { showFieldOk(input); err.style.display = 'none'; return true; }
+  const ok = /^(09|\+639)\d{9}$/.test(val);
+  if (!ok) {
+    showFieldErr(input);
+    err.textContent = 'Must be a valid PH number: 09XXXXXXXXX or +639XXXXXXXXX (11 digits)';
+    err.style.display = 'block';
+  } else {
+    showFieldOk(input);
+    err.style.display = 'none';
+  }
+  return ok;
+}
+
+function validateFullname(input) {
+  const err = document.getElementById('fullname_err');
+  const val = input.value.trim();
+  if (val.length < 2) {
+    showFieldErr(input);
+    err.textContent = 'Full name must be at least 2 characters.';
+    err.style.display = 'block';
+    return false;
+  }
+  if (!/^[a-zA-ZÀ-ÖØ-öø-ÿ\s'\-\.]+$/.test(val)) {
+    showFieldErr(input);
+    err.textContent = 'Letters only — no numbers or special characters.';
+    err.style.display = 'block';
+    return false;
+  }
+  showFieldOk(input);
+  err.style.display = 'none';
+  return true;
+}
+
+function validateUsername(input) {
+  const err = document.getElementById('username_err');
+  const val = input.value;
+  if (val.length < 4) {
+    showFieldErr(input);
+    err.textContent = 'Username must be at least 4 characters.';
+    err.style.display = 'block';
+    return false;
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(val)) {
+    showFieldErr(input);
+    err.textContent = 'Letters, numbers, and underscores only (no spaces).';
+    err.style.display = 'block';
+    return false;
+  }
+  showFieldOk(input);
+  err.style.display = 'none';
+  return true;
+}
+
+function showFieldErr(input) {
+  input.style.borderColor = 'rgba(239,68,68,0.8)';
+  input.style.boxShadow   = '0 0 0 3px rgba(239,68,68,0.2)';
+}
+function showFieldOk(input) {
+  input.style.borderColor = 'rgba(52,211,153,0.7)';
+  input.style.boxShadow   = '0 0 0 3px rgba(52,211,153,0.15)';
+}
+
+// Pre-submit client-side validation
+document.getElementById('regForm').addEventListener('submit', function(e) {
+  let valid = true;
+
+  // Fullname
+  const fn = document.querySelector('[name="fullname"]');
+  if (fn && !validateFullname(fn)) valid = false;
+
+  // Username
+  const un = document.querySelector('[name="username"]');
+  if (un && !validateUsername(un)) valid = false;
+
+  // Phone (only if filled)
+  const ph = document.getElementById('phone_input');
+  if (ph && ph.value.trim() !== '' && !validatePhone(ph)) valid = false;
+
+  // Password match
+  const pw   = document.getElementById('signup_pw');
+  const conf = document.getElementById('signup_conf');
+  if (pw && conf && pw.value !== conf.value) {
+    showFieldErr(conf);
+    valid = false;
+    alert('Passwords do not match.');
+  }
+
+  if (!valid) e.preventDefault();
+});
+
   const bar = document.getElementById('signup_str_bar');
   const lbl = document.getElementById('signup_str_lbl');
   if (!bar) return;
