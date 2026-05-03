@@ -838,16 +838,12 @@ try {
     // ── 1. Overdue pawn tickets ───────────────────────────────
     $od = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date < CURDATE()");
     $od->execute([$tid]); $od_c = (int)$od->fetchColumn();
-    if ($od_c > 0) $notifs[] = ['type'=>'danger','icon'=>'receipt_long','title'=>$od_c.' Overdue Ticket'.($od_c>1?'s':''),'sub'=>$od_c.' item'.($od_c>1?'s have':' has').' passed maturity date — customer hasn\'t paid. Mark as forfeited or contact them.','link'=>'?page=tickets'];
-    // ── 1b. Items overdue 7+ days — ready to forfeit and sell ─
-    $od7 = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date < DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
-    $od7->execute([$tid]); $od7_c = (int)$od7->fetchColumn();
-    if ($od7_c > 0) $notifs[] = ['type'=>'danger','icon'=>'gavel','title'=>$od7_c.' Item'.($od7_c>1?'s':'').' Ready to Forfeit & Sell','sub'=>$od7_c.' pawn ticket'.($od7_c>1?'s are':' is').' 7+ days overdue — forfeit and list in shop to recover the loan.','link'=>'?page=tickets'];
+    if ($od_c > 0) $notifs[] = ['type'=>'danger','icon'=>'receipt_long','title'=>$od_c.' Overdue Ticket'.($od_c>1?'s':''),'sub'=>'Items past maturity date — action needed.','link'=>'?page=tickets'];
 
     // ── 2. Tickets expiring within 3 days ────────────────────
     $exp = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)");
     $exp->execute([$tid]); $exp_c = (int)$exp->fetchColumn();
-    if ($exp_c > 0) $notifs[] = ['type'=>'warn','icon'=>'hourglass_bottom','title'=>$exp_c.' Ticket'.($exp_c>1?'s':'').' Expiring in 3 Days','sub'=>'Remind customers to redeem or renew before maturity.','link'=>'?page=tickets'];
+    if ($exp_c > 0) $notifs[] = ['type'=>'warn','icon'=>'hourglass_bottom','title'=>$exp_c.' Ticket'.($exp_c>1?'s':'').' Expiring in 3 Days','sub'=>'Remind customers to redeem or renew.','link'=>'?page=tickets'];
 
     // ── 3. Pending void requests ──────────────────────────────
     $vr = $pdo->prepare("SELECT COUNT(*) FROM pawn_void_requests WHERE tenant_id=? AND status='pending'");
@@ -927,21 +923,12 @@ try {
     // ── 18. Shop sales today ─────────────────────────────────
     $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(created_at)=CURDATE()");
     $so->execute([$tid]); $so_c = (int)$so->fetchColumn();
-    // Also count items directly marked as sold in inventory today
-    $si_sold = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND status='sold' AND DATE(updated_at)=CURDATE()");
-    $si_sold->execute([$tid]); $si_sold_c = (int)$si_sold->fetchColumn();
-    $total_sales_today = $so_c + $si_sold_c;
-    if ($total_sales_today > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$total_sales_today.' Shop Sale'.($total_sales_today>1?'s':'').' Today','sub'=>$total_sales_today.' item'.($total_sales_today>1?'s were':' was').' sold from your shop today.','link'=>'?page=shop_items'];
+    if ($so_c > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$so_c.' Shop Sale'.($so_c>1?'s':'').' Today','sub'=>$so_c.' item'.($so_c>1?'s were':' was').' purchased from your shop today.','link'=>'?page=shop_items'];
 
     // ── 19. Forfeited items not yet listed in shop ───────────
     $fs = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND status='forfeited' AND (is_shop_visible=0 OR is_shop_visible IS NULL)");
     $fs->execute([$tid]); $fs_c = (int)$fs->fetchColumn();
-    if ($fs_c > 0) $notifs[] = ['type'=>'warn','icon'=>'sell','title'=>$fs_c.' Forfeited Item'.($fs_c>1?'s':'').' Ready to List','sub'=>$fs_c.' forfeited item'.($fs_c>1?'s are':' is').' not yet listed in the shop — list them to start selling.','link'=>'?page=shop_items'];
-
-    // ── 20. Pending shop orders (customer hasn't paid yet) ───
-    $po = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='pending' AND DATE(created_at)=CURDATE()");
-    $po->execute([$tid]); $po_c = (int)$po->fetchColumn();
-    if ($po_c > 0) $notifs[] = ['type'=>'warn','icon'=>'pending_actions','title'=>$po_c.' Pending Shop Order'.($po_c>1?'s':'').' Today','sub'=>$po_c.' shop order'.($po_c>1?'s have':' has').' not been paid — follow up with the customer.','link'=>'?page=shop_items'];
+    if ($fs_c > 0) $notifs[] = ['type'=>'warn','icon'=>'sell','title'=>$fs_c.' Forfeited Item'.($fs_c>1?'s':'').' Ready to Sell','sub'=>$fs_c.' forfeited item'.($fs_c>1?'s are':' is').' not yet listed in the shop. List them now.','link'=>'?page=shop_items'];
   }
 } catch (Throwable $e) {}
 $notif_count = count($notifs);
