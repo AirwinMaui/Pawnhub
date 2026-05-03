@@ -28,6 +28,8 @@ if (!file_exists($_autoload)) {
         function sendPermitApproved(string $a='', string $b='', string $c='', string $d=''): bool { return false; }
         function sendPermitRejected(string $a='', string $b='', string $c='', string $d=''): bool { return false; }
         function sendPaymentLink(string $a='', string $b='', string $c='', string $d='', string $e='', ?string $f=null, float $g=0): bool { return false; }
+        function sendTenantApplicationReceived(string $a='', string $b='', string $c='', string $d='', bool $e=false): bool { return false; }
+        function sendSANewApplicantNotification(string $a='', string $b='', string $c='', string $d='', string $e='', string $f='', int $g=0): bool { return false; }
     }
     return;
 }
@@ -1161,6 +1163,178 @@ function sendPermitRejected(string $toEmail, string $toName, string $businessNam
     return sendMail($toEmail, $toName, '❌ PawnHub — Business Permit Rejected for ' . $businessName, $html);
 }
 
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// sendTenantApplicationReceived — sent to tenant right after signup form submit
+// Confirms we received their registration and tells them to wait for approval.
+// ────────────────────────────────────────────────────────────────────────────
+function sendTenantApplicationReceived(
+    string $toEmail,
+    string $toName,
+    string $businessName,
+    string $plan,
+    bool   $needsPayment = false
+): bool {
+    $plan_label = htmlspecialchars($plan);
+    $biz_label  = htmlspecialchars($businessName);
+    $name_label = htmlspecialchars($toName);
+
+    if ($needsPayment) {
+        $next_step_html = '
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+          <p style="color:#1e40af;font-size:.85rem;font-weight:700;margin:0 0 8px;">💳 Next Step — Complete Your Payment</p>
+          <p style="color:#1d4ed8;font-size:.82rem;margin:0;line-height:1.6;">
+            You were redirected to our payment page to complete your <strong>' . $plan_label . ' Plan</strong> subscription.
+            Your account will be <strong>automatically activated</strong> once payment is confirmed.
+          </p>
+        </div>';
+        $subject = '📋 PawnHub — Application Received for ' . $businessName . ' (' . $plan . ' Plan)';
+    } else {
+        $next_step_html = '
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+          <p style="color:#15803d;font-size:.85rem;font-weight:700;margin:0 0 8px;">⏳ What happens next?</p>
+          <p style="color:#166534;font-size:.82rem;margin:0;line-height:1.6;">
+            Our team will review your <strong>Business Permit</strong> and activate your account shortly.
+            You will receive another email with your <strong>login link</strong> once approved.
+          </p>
+        </div>';
+        $subject = '📋 PawnHub — Application Received for ' . $businessName;
+    }
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Multi-Tenant Pawnshop Management</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px;">
+
+        <!-- Received badge -->
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2.2rem;margin:0 0 6px;">📋</p>
+          <p style="color:#0369a1;font-size:1.15rem;font-weight:800;margin:0 0 4px;">Application Received!</p>
+          <p style="color:#0284c7;font-size:.84rem;margin:0;">We\'ve received your registration for <strong>' . $biz_label . '</strong></p>
+        </div>
+
+        <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
+          Hello <strong>' . $name_label . '</strong>,<br><br>
+          Thank you for registering <strong>' . $biz_label . '</strong> on PawnHub!
+          We have received your application and business permit for the
+          <strong style="color:#2563eb;">' . $plan_label . ' Plan</strong>.
+        </p>
+
+        ' . $next_step_html . '
+
+        <!-- Details -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+          <p style="color:#334155;font-size:.84rem;margin:0;line-height:2;">
+            🏪 <strong>Business:</strong> ' . $biz_label . '<br>
+            📦 <strong>Plan:</strong> ' . $plan_label . '<br>
+            📧 <strong>Email:</strong> ' . htmlspecialchars($toEmail) . '
+          </p>
+        </div>
+
+        <!-- Spam notice -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
+          <p style="color:#92400e;font-size:.82rem;margin:0;line-height:1.7;">
+            📬 <strong>Tip:</strong> If you don\'t receive future emails from us, please check your
+            <strong>spam or junk folder</strong> and mark us as safe.
+          </p>
+        </div>
+
+        <p style="color:#94a3b8;font-size:.78rem;text-align:center;margin:0;">
+          Questions? Contact us at <a href="mailto:' . MAIL_FROM . '" style="color:#2563eb;">' . MAIL_FROM . '</a>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($toEmail, $toName, $subject, $html);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// sendSANewApplicantNotification — alerts Super Admin when a new tenant signs up
+// ────────────────────────────────────────────────────────────────────────────
+function sendSANewApplicantNotification(
+    string $saEmail,
+    string $saName,
+    string $tenantName,
+    string $ownerName,
+    string $ownerEmail,
+    string $plan,
+    int    $tenantId
+): bool {
+    $review_url = APP_URL . '/superadmin.php?page=tenants';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+    <body style="margin:0;padding:0;background:#f1f5f9;font-family:\'Segoe UI\',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+      <!-- Header — purple/admin theme -->
+      <div style="background:linear-gradient(135deg,#1e1b4b,#4c1d95);padding:32px 36px;text-align:center;">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#7c3aed,#a855f7);border-radius:10px;display:inline-block;"></div>
+          <span style="font-size:1.4rem;font-weight:800;color:#fff;">PawnHub Admin</span>
+        </div>
+        <p style="color:rgba(255,255,255,.6);font-size:.85rem;margin:0;">Super Admin Notification</p>
+      </div>
+
+      <div style="padding:36px;">
+
+        <div style="background:#faf5ff;border:1px solid #d8b4fe;border-radius:12px;padding:20px;margin-bottom:24px;text-align:center;">
+          <p style="font-size:2rem;margin:0 0 6px;">🆕</p>
+          <p style="color:#6d28d9;font-size:1.1rem;font-weight:800;margin:0 0 4px;">New Tenant Application!</p>
+          <p style="color:#7c3aed;font-size:.84rem;margin:0;">A new pawnshop has applied for registration.</p>
+        </div>
+
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+          <p style="color:#334155;font-size:.84rem;margin:0;line-height:2;">
+            🏪 <strong>Business:</strong> ' . htmlspecialchars($tenantName) . '<br>
+            👤 <strong>Owner:</strong> ' . htmlspecialchars($ownerName) . '<br>
+            📧 <strong>Email:</strong> ' . htmlspecialchars($ownerEmail) . '<br>
+            📦 <strong>Plan:</strong> ' . htmlspecialchars($plan) . '<br>
+            🔢 <strong>Tenant ID:</strong> #' . $tenantId . '
+          </p>
+        </div>
+
+        <div style="text-align:center;margin:28px 0;">
+          <a href="' . $review_url . '"
+             style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.35);">
+            Review Application →
+          </a>
+        </div>
+
+        <p style="color:#94a3b8;font-size:.78rem;text-align:center;margin:0;">
+          Log in to the Super Admin dashboard to view the business permit and approve or reject.
+        </p>
+      </div>
+
+      <div style="background:#f8fafc;padding:18px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="color:#94a3b8;font-size:.74rem;margin:0;">
+          © ' . date('Y') . ' PawnHub · All rights reserved<br>
+          This is an automated message, please do not reply.
+        </p>
+      </div>
+    </div></body></html>';
+
+    return sendMail($saEmail, $saName, '🆕 New Tenant Application — ' . $tenantName . ' (' . $plan . ')', $html);
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // sendPaymentLink — SA-initiated: sends PayMongo checkout link + QR to tenant
