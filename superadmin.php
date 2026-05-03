@@ -25,21 +25,23 @@ try {
             t.business_name,
             t.owner_name,
             sr.plan,
-            sr.reviewed_at   AS paymongo_paid_at,
+            COALESCE(sr.reviewed_at, sr.requested_at) AS paymongo_paid_at,
             t.id             AS tenant_id,
             sr.billing_cycle,
             CASE
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%UPGRADE%'      THEN 'upgrade'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%REACTIVATION%' THEN 'reactivation'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%DOWNGRADE%'    THEN 'downgrade'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%RENEWAL%'      THEN 'renewal'
+                WHEN sr.is_upgrade = 1                                        THEN 'upgrade'
+                WHEN sr.is_upgrade = 0 AND sr.upgrade_from IS NOT NULL        THEN 'downgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%REACTIVATION%'       THEN 'reactivation'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%RENEWAL%'            THEN 'renewal'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%UPGRADE%'            THEN 'upgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%DOWNGRADE%'          THEN 'downgrade'
                 ELSE 'signup'
             END AS payment_type,
             sr.amount
         FROM subscription_renewals sr
         JOIN tenants t ON sr.tenant_id = t.id
         WHERE sr.status IN ('approved', 'pending')
-          AND sr.reviewed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+          AND COALESCE(sr.reviewed_at, sr.requested_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 
         UNION ALL
 
@@ -59,7 +61,7 @@ try {
           AND NOT EXISTS (
               SELECT 1 FROM subscription_renewals sr2
               WHERE sr2.tenant_id = t.id
-                AND sr2.reviewed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                AND COALESCE(sr2.reviewed_at, sr2.requested_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
           )
 
         ORDER BY paymongo_paid_at DESC

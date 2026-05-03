@@ -24,6 +24,7 @@
 
 require 'db.php';
 require 'paymongo_config.php';
+require_once __DIR__ . '/mailer.php';   // needed for SA payment notifications
 
 // ── 1. Only accept POST ──────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -392,6 +393,13 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // ── Notify Super Admins ───────────────────
                     try {
+                        require_once __DIR__ . '/mailer.php';
+                        // Re-fetch $t_info if not already set from tenant email block above
+                        if (empty($t_info) || !is_array($t_info)) {
+                            $ti = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
+                            $ti->execute([$tenant_id]);
+                            $t_info = $ti->fetch();
+                        }
                         if ($t_info && function_exists('sendSuperAdminPaymentNotif')) {
                             foreach ($sa_admins as $sa) {
                                 sendSuperAdminPaymentNotif(
@@ -489,6 +497,12 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // ── Notify Super Admins ───────────────────
                     try {
+                        require_once __DIR__ . '/mailer.php';
+                        if (empty($t_info) || !is_array($t_info)) {
+                            $ti = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
+                            $ti->execute([$tenant_id]);
+                            $t_info = $ti->fetch();
+                        }
                         if ($t_info && function_exists('sendSuperAdminPaymentNotif')) {
                             foreach ($sa_admins as $sa) {
                                 sendSuperAdminPaymentNotif(
