@@ -1144,7 +1144,10 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         <span class="material-symbols-outlined">shopping_bag</span>Browse Items
       </a>
       <?php endif; ?>
-      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-accent">
+      <a href="#mobile-app" class="btn-hero-accent">
+        <span class="material-symbols-outlined">download</span>Download App
+      </a>
+      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-secondary">
         <span class="material-symbols-outlined">person_add</span>Join Our Team
       </a>
       <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-secondary">
@@ -1462,7 +1465,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 <?php endif; ?>
 
 <!-- DOWNLOAD APP SECTION -->
-<section id="app" style="padding-top:0;">
+<section id="mobile-app" style="padding-top:0;">
   <div style="
     background: linear-gradient(135deg, #0d1120 0%, #0f172a 50%, #0d1120 100%);
     border: 1px solid rgba(255,255,255,.08);
