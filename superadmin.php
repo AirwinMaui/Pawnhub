@@ -4,6 +4,10 @@ pawnhub_session_start('super_admin');
 require 'db.php';
 require 'mailer.php';
 
+// Set Philippine timezone
+date_default_timezone_set('Asia/Manila');
+try { $pdo->exec("SET time_zone = '+08:00'"); } catch (Throwable $e) {}
+
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
@@ -1415,7 +1419,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div id="notifDropdown" style="display:none;position:absolute;right:0;top:44px;width:320px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:999;overflow:hidden;">
           <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
             <span style="font-size:.82rem;font-weight:700;color:#0f172a;">💳 Recent Payments</span>
-            <span style="font-size:.72rem;color:#64748b;">Last 7 days</span>
+            <span style="font-size:.72rem;color:#64748b;">Last 30 days</span>
           </div>
           <div style="max-height:320px;overflow-y:auto;">
             <?php if (empty($notif_items)): ?>
