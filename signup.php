@@ -371,7 +371,7 @@ html { scroll-behavior: smooth; }
         📍 <strong style="color:rgba(255,255,255,0.5);">1 subscription = 1 branch.</strong> Need another branch? Subscribe again with any plan.
       </div>
       <div class="flex gap-2 flex-wrap">
-        <button type="button" onclick="selectPlan('Starter')"    id="pill-Starter"    class="plan-pill <?= $selected_plan==='Starter'    ? 'active' : '' ?>">Starter — Free</button>
+        <button type="button" onclick="selectPlan('Starter')"    id="pill-Starter"    class="plan-pill <?= $selected_plan==='Starter'    ? 'active' : '' ?>">Starter — Free Trial</button>
         <button type="button" onclick="selectPlan('Pro')"        id="pill-Pro"        class="plan-pill <?= $selected_plan==='Pro'        ? 'active' : '' ?>">Pro — ₱999/mo</button>
         <button type="button" onclick="selectPlan('Enterprise')" id="pill-Enterprise" class="plan-pill <?= $selected_plan==='Enterprise' ? 'active' : '' ?>">Enterprise — ₱2,499/mo</button>
       </div>
@@ -510,11 +510,14 @@ html { scroll-behavior: smooth; }
         <div id="plan_summary" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:14px 16px;font-size:0.82rem;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div style="color:rgba(255,255,255,0.7);">Selected Plan: <strong style="color:#93c5fd;" id="summary_plan"><?= htmlspecialchars($selected_plan) ?></strong></div>
-            <div style="font-size:0.75rem;color:rgba(255,255,255,0.35);" id="summary_price"><?= $selected_plan === 'Starter' ? 'Free' : ($selected_plan === 'Pro' ? '₱999/mo' : '₱2,499/mo') ?></div>
+            <div style="font-size:0.75rem;color:rgba(255,255,255,0.35);" id="summary_price"><?= $selected_plan === 'Starter' ? 'Free · 1 Month Trial' : ($selected_plan === 'Pro' ? '₱999/mo' : '₱2,499/mo') ?></div>
           </div>
           <div id="summary_desc" style="font-size:0.76rem;color:rgba(147,197,253,0.8);line-height:1.6;">
             <?php if($selected_plan === 'Starter'): ?>
               ✅ 1 Manager &nbsp;·&nbsp; Up to 3 Staff/Cashier &nbsp;·&nbsp; Basic Reports &nbsp;·&nbsp; Core pawnshop features
+              <div style="margin-top:8px;padding:8px 10px;background:rgba(234,179,8,0.10);border:1px solid rgba(234,179,8,0.28);border-radius:8px;font-size:0.73rem;color:#fcd34d;line-height:1.5;">
+                🎁 <strong>1-month free trial included.</strong> After 30 days, you must upgrade to <strong>Pro</strong> or <strong>Enterprise</strong> to continue using your account.
+              </div>
             <?php elseif($selected_plan === 'Pro'): ?>
               ✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; Advanced Reports &nbsp;·&nbsp; Custom Branding &nbsp;·&nbsp; Priority Support
             <?php else: ?>
@@ -551,7 +554,7 @@ html { scroll-behavior: smooth; }
             <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">4. Plan Upgrades.</strong> You may request an upgrade to a higher plan at any time. Unused days from your current plan will be credited as proration toward the new plan cost, subject to admin approval.</p>
             <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">5. Auto-Activation.</strong> Pro and Enterprise accounts are <strong style="color:#86efac;">activated automatically</strong> upon confirmed payment. No waiting period — you can log in immediately after paying.</p>
             <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">6. Business Permit Review.</strong> You are required to upload a <strong style="color:#fcd34d;">valid, current, and authentic Business Permit</strong>. Your permit will be reviewed by the Super Admin after activation. If your permit is found to be <strong style="color:#fca5a5;">fake, expired, or invalid</strong>, your account will be <strong style="color:#fca5a5;">immediately deactivated without refund</strong>. You will not be able to dispute this decision.</p>
-            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">7. Starter Plan.</strong> Starter plan registrations are subject to review and approval by the PawnHub Super Admin before activation.</p>
+            <p style="margin-bottom:8px;"><strong style="color:rgba(255,255,255,0.65);">7. Starter Plan.</strong> Starter plan registrations include a <strong style="color:#fcd34d;">1-month free trial</strong>. After the trial period, your account will be locked and you must upgrade to Pro or Enterprise to continue. Starter plan registrations are subject to review and approval by the PawnHub Super Admin before activation.</p>
             <p><strong style="color:rgba(255,255,255,0.65);">8. Changes to Terms.</strong> PawnHub reserves the right to update these terms at any time. Continued use of the service constitutes acceptance of any revised terms.</p>
           </div>
           <!-- Checkbox -->
@@ -596,7 +599,7 @@ html { scroll-behavior: smooth; }
 
 <script>
 const planData = {
-  Starter:    { price: 'Free',      desc: '✅ 1 Manager &nbsp;·&nbsp; Up to 3 Staff/Cashier &nbsp;·&nbsp; Basic Reports &nbsp;·&nbsp; Core pawnshop features' },
+  Starter:    { price: 'Free · 1 Month Trial', desc: '✅ 1 Manager &nbsp;·&nbsp; Up to 3 Staff/Cashier &nbsp;·&nbsp; Basic Reports &nbsp;·&nbsp; Core pawnshop features<div style="margin-top:8px;padding:8px 10px;background:rgba(234,179,8,0.10);border:1px solid rgba(234,179,8,0.28);border-radius:8px;font-size:0.73rem;color:#fcd34d;line-height:1.5;">🎁 <strong>1-month free trial included.</strong> After 30 days, you must upgrade to <strong>Pro</strong> or <strong>Enterprise</strong> to continue using your account.</div>' },
   Pro:        { price: '₱999/mo',   desc: '✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; Advanced Reports &nbsp;·&nbsp; Custom Branding &nbsp;·&nbsp; Priority Support' },
   Enterprise: { price: '₱2,499/mo', desc: '✅ 1 Manager &nbsp;·&nbsp; Unlimited Staff &nbsp;·&nbsp; White-Label &nbsp;·&nbsp; Data Export &nbsp;·&nbsp; Dedicated Account Manager' },
 };
