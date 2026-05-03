@@ -873,12 +873,15 @@ try {
     if ($vr_c > 0) $notifs[] = ['type'=>'warn','icon'=>'cancel_presentation','title'=>$vr_c.' Pending Void Request'.($vr_c>1?'s':''),'sub'=>'Awaiting your review and approval.','link'=>'?page=void_requests'];
 
     // ── 4. Low stock items (qty <= 2) ─────────────────────────
-    $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND is_shop_visible=1");
+    // FIX: Include hidden items with stock > 0 (manager should still be notified)
+    $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND status NOT IN ('forfeited','voided')");
     $ls->execute([$tid]); $ls_c = (int)$ls->fetchColumn();
     if ($ls_c > 0) $notifs[] = ['type'=>'warn','icon'=>'inventory_2','title'=>$ls_c.' Item'.($ls_c>1?'s':'').' Low on Stock','sub'=>'Stock is at 2 or below — restock soon.','link'=>'?page=shop_items'];
 
     // ── 5. Out-of-stock items (qty = 0) ──────────────────────
-    $oos = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty = 0 AND is_shop_visible=1");
+    // FIX: Remove is_shop_visible=1 filter — webhook hides the item when sold (sets visible=0)
+    //      so we must count ALL items with stock=0 that were ever shop-listed (status != 'forfeited')
+    $oos = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty = 0 AND status NOT IN ('forfeited','voided') AND (is_shop_visible=1 OR sold_at IS NOT NULL)");
     $oos->execute([$tid]); $oos_c = (int)$oos->fetchColumn();
     if ($oos_c > 0) $notifs[] = ['type'=>'danger','icon'=>'remove_shopping_cart','title'=>$oos_c.' Item'.($oos_c>1?'s':'').' Out of Stock','sub'=>'Listed in shop but no stock available.','link'=>'?page=shop_items'];
 
@@ -943,8 +946,7 @@ try {
     if ($ap_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_c.' Pending Walk-in Application'.($ap_c>1?'s':''),'sub'=>'Online application'.($ap_c>1?'s':'').' awaiting branch admin review.','link'=>'?page=tickets'];
 
     // ── 18. Shop sales today ─────────────────────────────────
-    // FIX: Use paid_at (or updated_at fallback) instead of created_at.
-    // Orders are created BEFORE payment, so created_at may be a different day.
+    // FIX: Use paid_at (or updated_at fallback) — orders are created BEFORE payment
     $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(COALESCE(paid_at, updated_at))=CURDATE()");
     $so->execute([$tid]); $so_c = (int)$so->fetchColumn();
     if ($so_c > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$so_c.' Shop Sale'.($so_c>1?'s':'').' Today','sub'=>$so_c.' item'.($so_c>1?'s were':' was').' purchased from your shop today.','link'=>'?page=shop_items'];
