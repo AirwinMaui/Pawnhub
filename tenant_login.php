@@ -27,12 +27,21 @@ if (!$tenant) {
 
 // Block login if tenant is deactivated OR subscription expired 7+ days ago
 // (covers cases where cron hasn't run yet but tenant should be locked out)
-$is_deactivated = false;
-$is_trial_ended = false;  // Starter free trial ended
-$sub_expired_days = 0;
+$is_deactivated    = false;
+$is_permit_rejected = false;  // Deactivated specifically due to permit rejection by SA
+$is_trial_ended    = false;  // Starter free trial ended
+$sub_expired_days  = 0;
+$rejection_reason  = '';
 
 if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
-    $is_deactivated = true;
+    // Check if deactivated due to permit rejection (has rejection_reason set by SA)
+    $permit_status = $tenant['business_permit_status'] ?? '';
+    if ($permit_status === 'sa_rejected' || !empty($tenant['rejection_reason'])) {
+        $is_permit_rejected = true;
+        $rejection_reason   = $tenant['rejection_reason'] ?? '';
+    } else {
+        $is_deactivated = true;
+    }
 } elseif (
     !empty($tenant['subscription_end']) &&
     $tenant['plan'] === 'Starter' &&
@@ -66,7 +75,7 @@ if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
 
 $sa_contact_email = '';
 $sa_contact_name  = '';
-if ($is_deactivated) {
+if ($is_deactivated || $is_permit_rejected) {
     try {
         $sa_row = $pdo->query("SELECT fullname, email FROM users WHERE role='super_admin' AND status='approved' ORDER BY id ASC LIMIT 1")->fetch();
         $sa_contact_email = $sa_row['email']    ?? '';
@@ -173,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
 
 // ── Handle LOGIN POST ─────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login'
-    && !$is_deactivated && !$is_trial_ended) {
+    && !$is_deactivated && !$is_trial_ended && !$is_permit_rejected) {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -552,6 +561,36 @@ html { scroll-behavior: smooth; }
           ⚡ <strong>Instant activation</strong> — upgrade via PayMongo and your full access is restored immediately.
         </div>
 
+        <?php elseif ($is_permit_rejected):
+            $deact_tenant_id = $tenant['id'] ?? 0;
+        ?>
+        <!-- ══ PERMIT REJECTED SCREEN ══════════════════════════ -->
+        <div style="text-align:center;margin-bottom:18px;">
+          <div style="width:64px;height:64px;border-radius:50%;background:#fef2f2;border:2px solid #fecaca;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+            <span class="material-symbols-outlined" style="font-size:32px;color:#dc2626;">gavel</span>
+          </div>
+          <h1 class="card-title" style="font-size:1.35rem;color:#111827;">Account Deactivated</h1>
+          <p class="card-sub" style="margin-bottom:0;">Access to <strong><?= $bizName ?></strong> has been deactivated because your Business Permit was rejected by PawnHub.</p>
+        </div>
+
+        <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:14px;padding:18px 18px 14px;margin-bottom:16px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#dc2626;margin-bottom:10px;">Why was my account deactivated?</div>
+          <ul style="font-size:.81rem;color:#7f1d1d;line-height:1.9;padding-left:18px;margin:0 0 10px 0;">
+            <li>Your Business Permit was reviewed and <strong>rejected</strong> by the Super Admin</li>
+            <li>This may be because your permit is <strong>fake, expired, or does not match</strong> your registered business name</li>
+            <li>As stated in the Terms &amp; Conditions, <strong>no refund</strong> will be issued</li>
+          </ul>
+          <?php if ($rejection_reason): ?>
+          <div style="background:#fff;border:1px solid #fecaca;border-radius:9px;padding:10px 13px;font-size:.8rem;color:#991b1b;line-height:1.6;">
+            <strong>Reason given:</strong> <?= htmlspecialchars($rejection_reason) ?>
+          </div>
+          <?php endif; ?>
+        </div>
+
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:.78rem;color:#7f1d1d;line-height:1.7;">
+          ⛔ <strong>This decision is final.</strong> As stated in our Terms &amp; Conditions, submitting a fake or invalid Business Permit results in <strong>immediate permanent deactivation with no refund</strong>. This account cannot be reactivated.
+        </div>
+
         <?php elseif ($is_deactivated):
             $deact_tenant_id = $tenant['id'] ?? 0;
             $deact_plan      = $tenant['plan'] ?? 'Pro';
@@ -683,7 +722,7 @@ html { scroll-behavior: smooth; }
           </div>
         </div>
 
-        <?php endif; // end trial_ended / deactivated / login form check ?>
+        <?php endif; // end trial_ended / permit_rejected / deactivated / login form check ?>
 
       <?php endif; ?>
 
