@@ -411,6 +411,13 @@ try {
     elseif ($dl <= 7)   $notifs[] = ['type'=>'warn',   'icon'=>'schedule',         'title'=>'Subscription Expires in '.$dl.' Days', 'sub'=>'Plan expires '.date('M d, Y',$sub_end_ts_notif).'. Renew soon.', 'link'=>'tenant_subscription.php'];
     elseif ($dl <= 14)  $notifs[] = ['type'=>'info',   'icon'=>'calendar_month',   'title'=>'Subscription Reminder', 'sub'=>$dl.' days left on your '.htmlspecialchars($tenant['plan']).' plan.', 'link'=>'tenant_subscription.php'];
   }
+  // 1b. Starter free trial expiring / expired
+  if ($sub_end_ts_notif && $tenant['plan'] === 'Starter') {
+    $dl = (int)ceil(($sub_end_ts_notif - time()) / 86400);
+    if ($dl < 0)        $notifs[] = ['type'=>'danger', 'icon'=>'hourglass_disabled', 'title'=>'Free Trial Ended', 'sub'=>'Your free trial expired '.abs($dl).' day(s) ago. Upgrade to keep access.', 'link'=>'tenant_subscription.php'];
+    elseif ($dl <= 3)   $notifs[] = ['type'=>'danger', 'icon'=>'warning',            'title'=>'Free Trial Ends in '.$dl.' Day(s)!', 'sub'=>'Upgrade to Pro or Enterprise before your trial ends to avoid disruption.', 'link'=>'tenant_subscription.php'];
+    elseif ($dl <= 7)   $notifs[] = ['type'=>'warn',   'icon'=>'schedule',            'title'=>'Free Trial Expires in '.$dl.' Days', 'sub'=>'Trial ends '.date('M d, Y',$sub_end_ts_notif).'. Upgrade now to keep all features.', 'link'=>'tenant_subscription.php'];
+  }
   // 2. Overdue pawn tickets (maturity_date passed, still Stored)
   $od = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Stored' AND maturity_date < CURDATE()");
   $od->execute([$tid]); $od_count = (int)$od->fetchColumn();
@@ -905,7 +912,45 @@ tr:hover td{background:rgba(255,255,255,.04);}
       }
   }
 
-  // $notifs and $notif_count are already computed above (before HTML output)
+  // ── Starter free trial expiry banner ────────────────────────
+  if ($sub_end_ts && $tenant['plan'] === 'Starter') {
+      $days_left_trial   = (int)ceil(($sub_end_ts - time()) / 86400);
+      $trial_is_expired  = ($days_left_trial <= 0 || in_array($sub_status, ['expired','trial_expired']));
+
+      if ($trial_is_expired) {
+          $trial_days_ago = abs($days_left_trial);
+          echo '<div style="background:linear-gradient(135deg,rgba(124,45,18,.6),rgba(154,52,18,.55));border-bottom:2px solid rgba(249,115,22,.6);padding:11px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1.3rem;flex-shrink:0;">⏳</span>'
+             . '<div>'
+             . '<div style="font-size:.84rem;font-weight:800;color:#fdba74;">Free Trial Ended</div>'
+             . '<div style="font-size:.75rem;color:rgba(255,210,180,.75);margin-top:1px;">'
+             . 'Your free trial expired ' . ($trial_days_ago > 0 ? $trial_days_ago . ' day(s) ago' : 'today') . ' (' . date('M d, Y', $sub_end_ts) . '). '
+             . '<strong style="color:#fff;">You cannot extend your free trial.</strong> Upgrade to Pro or Enterprise to continue using PawnHub.'
+             . '</div>'
+             . '</div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,88,12,.9);color:#fff;text-decoration:none;padding:8px 18px;border-radius:9px;font-size:.78rem;font-weight:800;white-space:nowrap;flex-shrink:0;border:1px solid rgba(249,115,22,.4);box-shadow:0 2px 12px rgba(234,88,12,.3);">'
+             . '⚡ Upgrade Now</a>'
+             . '</div>';
+      } elseif ($days_left_trial <= 3) {
+          echo '<div style="background:linear-gradient(135deg,rgba(153,27,27,.5),rgba(124,45,18,.5));border-bottom:2px solid rgba(249,115,22,.5);padding:10px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1.2rem;flex-shrink:0;">🚨</span>'
+             . '<div style="font-size:.81rem;color:#fdba74;font-weight:700;">URGENT: Free trial ends in <strong style="color:#fff;">' . $days_left_trial . ' day(s)</strong> (' . date('M d, Y', $sub_end_ts) . '). Upgrade now — free trial cannot be extended!</div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,88,12,.9);color:#fff;text-decoration:none;padding:7px 16px;border-radius:9px;font-size:.77rem;font-weight:800;white-space:nowrap;flex-shrink:0;">⚡ Upgrade Now</a>'
+             . '</div>';
+      } elseif ($days_left_trial <= 7) {
+          echo '<div style="background:rgba(120,53,15,.55);border-bottom:2px solid rgba(249,115,22,.45);padding:10px 28px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;position:sticky;top:64px;z-index:49;backdrop-filter:blur(10px);">'
+             . '<div style="display:flex;align-items:center;gap:10px;">'
+             . '<span style="font-size:1.1rem;flex-shrink:0;">⚠️</span>'
+             . '<div style="font-size:.8rem;color:#fcd34d;font-weight:600;">Free trial expires in <strong style="color:#fff;">' . $days_left_trial . ' days</strong> (' . date('M d, Y', $sub_end_ts) . '). Upgrade to Pro or Enterprise — <strong style="color:#fdba74;">free trial cannot be renewed or extended.</strong></div>'
+             . '</div>'
+             . '<a href="/tenant_subscription.php" style="display:inline-flex;align-items:center;gap:6px;background:rgba(234,88,12,.85);color:#fff;text-decoration:none;padding:7px 16px;border-radius:9px;font-size:.77rem;font-weight:700;white-space:nowrap;flex-shrink:0;">⚡ Upgrade</a>'
+             . '</div>';
+      }
+  }
   ?>
 
   <div class="content">
@@ -914,18 +959,47 @@ tr:hover td{background:rgba(255,255,255,.04);}
 
   <?php if($active_page==='dashboard'): ?>
     <?php if($tenant_plan === 'starter'): ?>
+    <?php
+      $starter_sub_end = !empty($tenant['subscription_end']) ? strtotime($tenant['subscription_end']) : null;
+      $starter_days_left = $starter_sub_end ? (int)ceil(($starter_sub_end - time()) / 86400) : null;
+      $starter_trial_expired = ($starter_days_left !== null && $starter_days_left <= 0) || in_array($tenant['subscription_status'] ?? '', ['expired','trial_expired']);
+    ?>
+    <?php if($starter_trial_expired): ?>
+    <div style="background:linear-gradient(135deg,rgba(185,28,28,.2),rgba(124,45,18,.2));border:1px solid rgba(249,115,22,.35);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.3rem;">⏳</span>
+        <div>
+          <div style="font-size:.82rem;font-weight:800;color:#fdba74;">Free Trial Has Ended</div>
+          <div style="font-size:.72rem;color:rgba(255,200,150,.6);margin-top:3px;">Your free trial has expired. <strong style="color:#fdba74;">You cannot extend or renew the Starter plan.</strong> Upgrade to Pro or Enterprise to continue using PawnHub.</div>
+        </div>
+      </div>
+      <a href="tenant_subscription.php" style="font-size:.72rem;font-weight:800;color:#fff;background:rgba(234,88,12,.85);padding:7px 16px;border-radius:100px;border:1px solid rgba(249,115,22,.4);white-space:nowrap;text-decoration:none;">⚡ Upgrade Now</a>
+    </div>
+    <?php elseif($starter_days_left !== null && $starter_days_left <= 7): ?>
+    <div style="background:linear-gradient(135deg,rgba(120,53,15,.3),rgba(185,28,28,.2));border:1px solid rgba(249,115,22,.4);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.2rem;">⚠️</span>
+        <div>
+          <div style="font-size:.82rem;font-weight:800;color:#fcd34d;">Free Trial Ends in <?=$starter_days_left?> Day(s)!</div>
+          <div style="font-size:.72rem;color:rgba(255,220,130,.6);margin-top:3px;">Trial expires <?=date('M d, Y',$starter_sub_end)?>. <strong style="color:#fcd34d;">The Starter free trial cannot be extended.</strong> Upgrade to Pro or Enterprise to keep access.</div>
+        </div>
+      </div>
+      <a href="tenant_subscription.php" style="font-size:.72rem;font-weight:800;color:#fff;background:rgba(217,119,6,.85);padding:7px 16px;border-radius:100px;border:1px solid rgba(245,158,11,.4);white-space:nowrap;text-decoration:none;">⚡ Upgrade Now</a>
+    </div>
+    <?php else: ?>
     <div style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(234,88,12,.1));border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="font-size:1.2rem;">⭐</span>
         <div>
-          <div style="font-size:.8rem;font-weight:700;color:#fcd34d;">You're on the Starter Plan</div>
-          <div style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px;">Upgrade to Pro to unlock Theme & Branding, Manager invitations, Audit Logs and more.</div>
+          <div style="font-size:.8rem;font-weight:700;color:#fcd34d;">You're on the Starter Plan<?=$starter_days_left!==null?' — '.$starter_days_left.' day(s) left in your free trial':''?></div>
+          <div style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px;">Upgrade to Pro to unlock Theme &amp; Branding, Manager invitations, Audit Logs and more. <strong style="color:rgba(255,210,100,.5);">Free trial cannot be renewed.</strong></div>
         </div>
       </div>
       <div style="font-size:.72rem;font-weight:700;color:#fcd34d;background:rgba(245,158,11,.2);padding:5px 14px;border-radius:100px;border:1px solid rgba(245,158,11,.3);white-space:nowrap;">
         <?=htmlspecialchars($tenant['plan'])?> Plan
       </div>
     </div>
+    <?php endif;?>
     <?php endif;?>
     <!-- Branch Info Banner -->
     <div style="background:linear-gradient(135deg,rgba(30,58,138,.6),rgba(37,99,235,.3));border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:16px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
