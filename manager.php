@@ -919,6 +919,16 @@ try {
     $ap = $pdo->prepare("SELECT COUNT(*) FROM tenant_applicants WHERE tenant_id=? AND status='pending'");
     $ap->execute([$tid]); $ap_c = (int)$ap->fetchColumn();
     if ($ap_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_c.' Pending Walk-in Application'.($ap_c>1?'s':''),'sub'=>'Online application'.($ap_c>1?'s':'').' awaiting branch admin review.','link'=>'?page=tickets'];
+
+    // ── 18. Shop sales today ─────────────────────────────────
+    $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(created_at)=CURDATE()");
+    $so->execute([$tid]); $so_c = (int)$so->fetchColumn();
+    if ($so_c > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$so_c.' Shop Sale'.($so_c>1?'s':'').' Today','sub'=>$so_c.' item'.($so_c>1?'s were':' was').' purchased from your shop today.','link'=>'?page=shop_items'];
+
+    // ── 19. Forfeited items not yet listed in shop ───────────
+    $fs = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND status='forfeited' AND (is_shop_visible=0 OR is_shop_visible IS NULL)");
+    $fs->execute([$tid]); $fs_c = (int)$fs->fetchColumn();
+    if ($fs_c > 0) $notifs[] = ['type'=>'warn','icon'=>'sell','title'=>$fs_c.' Forfeited Item'.($fs_c>1?'s':'').' Ready to Sell','sub'=>$fs_c.' forfeited item'.($fs_c>1?'s are':' is').' not yet listed in the shop. List them now.','link'=>'?page=shop_items'];
   }
 } catch (Throwable $e) {}
 $notif_count = count($notifs);

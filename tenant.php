@@ -455,6 +455,14 @@ try {
   $ft = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Forfeited' AND DATE(updated_at)=CURDATE()");
   $ft->execute([$tid]); $ft_count = (int)$ft->fetchColumn();
   if ($ft_count > 0) $notifs[] = ['type'=>'danger','icon'=>'gavel','title'=>$ft_count.' Forfeited Ticket'.($ft_count>1?'s':'').' Today','sub'=>$ft_count.' item'.($ft_count>1?'s were':' was').' forfeited today.','link'=>'?page=tickets'];
+  // 13. Shop sales today
+  $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(created_at)=CURDATE()");
+  $so->execute([$tid]); $so_count = (int)$so->fetchColumn();
+  if ($so_count > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$so_count.' Shop Sale'.($so_count>1?'s':'').' Today','sub'=>$so_count.' item'.($so_count>1?'s were':' was').' purchased from your shop today.','link'=>'?page=inventory'];
+  // 14. Forfeited items not yet listed in shop (ready to sell)
+  $fs = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND status='forfeited' AND (is_shop_visible=0 OR is_shop_visible IS NULL)");
+  $fs->execute([$tid]); $fs_count = (int)$fs->fetchColumn();
+  if ($fs_count > 0) $notifs[] = ['type'=>'warn','icon'=>'sell','title'=>$fs_count.' Forfeited Item'.($fs_count>1?'s':'').' Ready to Sell','sub'=>$fs_count.' forfeited item'.($fs_count>1?'s are':' is').' not yet listed in the shop.','link'=>'?page=inventory'];
 } catch (Throwable $e) { /* fail silently */ }
 $notif_count = count($notifs);
 ?>
