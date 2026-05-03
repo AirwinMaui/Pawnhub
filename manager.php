@@ -602,14 +602,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);displ
 .sb-status{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;background:rgba(16,185,129,.12);color:#059669;padding:2px 7px;border-radius:100px;margin-top:3px;}
 
 .sb-nav{flex:1;padding:10px 0;}
-.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(0,0,0,.5);padding:12px 16px 4px;}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;color:#000000;font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
-.sb-item:hover{background:rgba(0,0,0,.08);color:#000000;}
-.sb-item.active{background:rgba(0,0,0,.12);color:#000000;font-weight:700;}
+.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a8d91;padding:12px 16px 4px;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:10px;color:#65676b;font-size:.82rem;font-weight:500;text-decoration:none;transition:all .18s;}
+.sb-item:hover{background:#f2f2f2;color:#1c1e21;}
+.sb-item.active{background:color-mix(in srgb,var(--t-primary,#059669) 12%,transparent);color:var(--t-primary,#059669);font-weight:600;}
 .sb-item .material-symbols-outlined{font-size:18px;flex-shrink:0;}
 .sb-pill{margin-left:auto;background:#ef4444;color:#fff;font-size:.6rem;font-weight:700;padding:1px 7px;border-radius:100px;}
 .sb-footer{padding:12px 14px;border-top:1px solid #e4e6eb;}
-.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#000000;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
+.sb-logout{display:flex;align-items:center;gap:9px;font-size:.8rem;color:#65676b;text-decoration:none;padding:9px 10px;border-radius:10px;transition:all .18s;}
 .sb-logout:hover{color:#ef4444;background:rgba(239,68,68,.08);}
 .sb-logout .material-symbols-outlined{font-size:18px;}
 
@@ -670,7 +670,7 @@ tr:hover td{background:rgba(255,255,255,.04);}
 
 .btn-sm{padding:6px 12px;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid #e4e6eb;background:#f0f2f5;color:#1c1e21;text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:all .15s;font-family:inherit;}
 .btn-sm:hover{background:#e4e6eb;}
-.btn-primary{background:var(--t-primary,#059669);color:#fff;border-color:transparent;}
+.btn-primary{background:var(--t-primary,#059669);color:#000000 !important;border-color:transparent;}
 .btn-primary:hover{background:var(--t-primary-d,#047857);}
 .btn-danger{background:rgba(239,68,68,.9);color:#fff;border-color:transparent;}
 .btn-success{background:rgba(16,185,129,.9);color:#fff;border-color:transparent;}
@@ -1674,7 +1674,7 @@ $notif_count = count($notifs);
             $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
           case 'customers':
             $exp_title='Customer Records'; $exp_cols=['Full Name','Contact','Email','Gender','Address','ID Type','ID Number','Registered'];
-            $s=$pdo->prepare("SELECT full_name,contact_number,email,gender,address,valid_id_type,valid_id_number,created_at FROM customers WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? ORDER BY full_name");
+            $s=$pdo->prepare("SELECT full_name,contact_number,email,gender,address,valid_id_type,valid_id_number,registered_at FROM customers WHERE tenant_id=? AND DATE(registered_at) BETWEEN ? AND ? ORDER BY full_name");
             $s->execute([$tid,$exp_from,$exp_to]); $exp_rows=$s->fetchAll(); break;
           case 'inventory':
             $exp_title='Item Inventory'; $exp_cols=['Ticket No.','Item','Category','Serial No.','Condition','Appraisal','Loan Amount','Status','Date'];
@@ -1708,20 +1708,20 @@ $notif_count = count($notifs);
         <div><div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.35);margin-bottom:4px;">Date To</div>
         <input type="date" name="exp_to" class="finput" style="width:auto;padding:7px 12px;" value="<?=htmlspecialchars($exp_to)?>" onchange="document.getElementById('exp-form').submit()"></div>
       </form>
-      <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;font-family:inherit;white-space:nowrap;">
+      <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);color:#000;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;font-family:inherit;white-space:nowrap;">
         <span class="material-symbols-outlined" style="font-size:17px;">print</span>Print / Save as PDF
       </button>
     </div>
     <div class="export-doc card" style="padding:0;overflow:hidden;">
       <div style="background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div>
-          <div style="font-size:1.1rem;font-weight:800;color:#fff;"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
-          <div style="font-size:.72rem;color:rgba(255,255,255,.6);margin-top:3px;">PawnHub — Branch Report</div>
+          <div style="font-size:1.1rem;font-weight:800;color:#000;"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
+          <div style="font-size:.72rem;color:rgba(0,0,0,.6);margin-top:3px;">PawnHub — Branch Report</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:1.3rem;font-weight:800;color:#fff;"><?=htmlspecialchars($exp_title)?></div>
-          <div style="font-size:.72rem;color:rgba(255,255,255,.6);margin-top:3px;">📅 <?=date('M d, Y',strtotime($exp_from))?> — <?=date('M d, Y',strtotime($exp_to))?></div>
-          <div style="font-size:.67rem;color:rgba(255,255,255,.4);margin-top:2px;">Generated: <?=date('F j, Y g:i A')?></div>
+          <div style="font-size:1.3rem;font-weight:800;color:#000;"><?=htmlspecialchars($exp_title)?></div>
+          <div style="font-size:.72rem;color:rgba(0,0,0,.6);margin-top:3px;">📅 <?=date('M d, Y',strtotime($exp_from))?> — <?=date('M d, Y',strtotime($exp_to))?></div>
+          <div style="font-size:.67rem;color:rgba(0,0,0,.5);margin-top:2px;">Generated: <?=date('F j, Y g:i A')?></div>
         </div>
       </div>
       <div style="padding:10px 24px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.06);display:flex;gap:20px;flex-wrap:wrap;">
@@ -1739,7 +1739,7 @@ $notif_count = count($notifs);
           if(str_contains($col,'ticket no')): echo '<td><span class="ticket-tag">'.htmlspecialchars($val??'—').'</span></td>';
           elseif(str_contains($col,'status')): $sc=['stored'=>'b-blue','released'=>'b-green','renewed'=>'b-yellow','voided'=>'b-red','pawned'=>'b-blue','redeemed'=>'b-green']; echo '<td><span class="badge '.($sc[strtolower($val??'')] ?? 'b-gray').'">'.htmlspecialchars($val??'—').'</span></td>';
           elseif(str_contains($col,'amount')||str_contains($col,'loan')||str_contains($col,'redeem')||str_contains($col,'cash')||str_contains($col,'change')||str_contains($col,'appraisal')): echo '<td>₱'.number_format((float)($val??0),2).'</td>';
-          elseif(str_contains($col,'date')||str_contains($col,'registered')||str_contains($col,'time')||str_contains($col,'at')): echo '<td style="font-size:.73rem;color:rgba(255,255,255,.4);">'.($val ? date(str_contains($col,'time')?'M d, Y h:i A':'M d, Y',strtotime($val)) : '—').'</td>';
+          elseif(str_contains($col,'date')||str_contains($col,'registered')||str_contains($col,'time')||str_contains($col,'at')): echo '<td style="font-size:.73rem;color:rgba(0,0,0,.55);">'.($val ? date(str_contains($col,'time')?'M d, Y h:i A':'M d, Y',strtotime($val)) : '—').'</td>';
           else: echo '<td>'.htmlspecialchars($val??'—').'</td>';
           endif;
         endforeach;?></tr>
