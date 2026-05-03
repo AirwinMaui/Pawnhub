@@ -157,21 +157,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             CURLOPT_POSTFIELDS     => json_encode($pm_payload),
                             CURLOPT_TIMEOUT        => 20,
                         ]);
-                        $pm_raw  = curl_exec($pm_ch);
-                        $pm_http = curl_getinfo($pm_ch, CURLINFO_HTTP_CODE);
+                        $pm_raw      = curl_exec($pm_ch);
+                        $pm_http     = curl_getinfo($pm_ch, CURLINFO_HTTP_CODE);
+                        $pm_curl_err = curl_error($pm_ch);
                         curl_close($pm_ch);
                         $pm_resp = json_decode($pm_raw, true);
                         if ($pm_http === 200 && !empty($pm_resp['data']['attributes']['checkout_url'])) {
                             $pm_session_id   = $pm_resp['data']['id'];
                             $pm_checkout_url = $pm_resp['data']['attributes']['checkout_url'];
                             $pdo->prepare("UPDATE tenants SET paymongo_session_id=? WHERE id=?")->execute([$pm_session_id, $new_tid]);
-                            // Generate QR code
-                            $qr_url  = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($pm_checkout_url) . '&choe=UTF-8';
-                            $qr_data = @file_get_contents($qr_url);
-                            $qr_uri  = $qr_data ? 'data:image/png;base64,' . base64_encode($qr_data) : null;
-                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, $qr_uri, $pm_amount / 100);
+                            // Use QR code as a plain <img src="URL"> — avoids file_get_contents
+                            // which can be blocked on Azure. The URL is passed as-is to mailer.php.
+                            $qr_img_url = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($pm_checkout_url) . '&choe=UTF-8';
+                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, $qr_img_url, $pm_amount / 100);
+                            if (!$payment_link_sent) {
+                                error_log('[AddTenant] sendPaymentLink() returned false for tenant_id=' . $new_tid . ' email=' . $email);
+                            }
                         } else {
-                            error_log('[AddTenant] PayMongo session failed: ' . $pm_raw);
+                            error_log('[AddTenant] PayMongo session failed HTTP=' . $pm_http . ' curl_err=' . $pm_curl_err . ' body=' . $pm_raw);
                         }
                         $success_msg = $payment_link_sent
                             ? "✅ Tenant \"<strong>$bname</strong>\" added! Payment link auto-sent to <strong>$email</strong>. Account will activate once payment is received."

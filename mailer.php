@@ -27,6 +27,7 @@ if (!file_exists($_autoload)) {
         function sendSuperAdminAccountReady(): bool       { return false; }
         function sendPermitApproved(string $a='', string $b='', string $c='', string $d=''): bool { return false; }
         function sendPermitRejected(string $a='', string $b='', string $c='', string $d=''): bool { return false; }
+        function sendPaymentLink(string $a='', string $b='', string $c='', string $d='', string $e='', ?string $f=null, float $g=0): bool { return false; }
     }
     return;
 }
@@ -1176,10 +1177,12 @@ function sendPaymentLink(
     $amount_fmt = '₱' . number_format($amountPesos, 2);
     $plan_label = htmlspecialchars($plan);
 
-    // QR code block — embedded inline if we have the data URI, else show link only
+    // QR code block — accepts a plain https:// URL or a base64 data URI.
+    // Using a plain URL avoids Azure file_get_contents blocking and
+    // keeps the email smaller (no embedded binary blob).
     $qr_block = $qrDataUri
         ? '<div style="text-align:center;margin:24px 0 8px;">
-             <img src="' . $qrDataUri . '" alt="Payment QR Code"
+             <img src="' . htmlspecialchars($qrDataUri) . '" alt="Payment QR Code"
                   style="width:220px;height:220px;border:4px solid #e2e8f0;border-radius:12px;"/>
              <p style="color:#64748b;font-size:.78rem;margin:6px 0 0;">
                Scan this QR code with GCash, Maya, or your banking app to pay
