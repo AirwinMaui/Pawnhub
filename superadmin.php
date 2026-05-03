@@ -10,6 +10,23 @@ if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
 
 
 $active_page = $_GET['page'] ?? 'dashboard';
+
+// ── Fetch recent payment notifications (last 30 days, unread = paid_at within 7 days) ──
+$notif_items = [];
+$notif_count = 0;
+try {
+    $notif_stmt = $pdo->query("
+        SELECT t.business_name, t.owner_name, t.plan, t.paymongo_paid_at, t.id AS tenant_id
+        FROM tenants t
+        WHERE t.payment_status = 'paid'
+          AND t.paymongo_paid_at IS NOT NULL
+          AND t.paymongo_paid_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ORDER BY t.paymongo_paid_at DESC
+        LIMIT 20
+    ");
+    $notif_items = $notif_stmt->fetchAll();
+    $notif_count = count($notif_items);
+} catch (Throwable $e) {}
 $success_msg = $error_msg = '';
 // Flash messages from redirect (e.g. paymongo_send_link.php)
 if (!empty($_SESSION['sa_success'])) { $success_msg = $_SESSION['sa_success']; unset($_SESSION['sa_success']); }
@@ -1364,6 +1381,43 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <button onclick="document.getElementById('addTenantModal').classList.add('open')" class="btn-sm btn-primary topbar-add-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span class="btn-add-full">Add Tenant + Invite</span><span class="btn-add-short">+ Add</span>
       </button>
+      <!-- Notification Bell -->
+      <div style="position:relative;display:inline-block;">
+        <button id="notifBtn" onclick="toggleNotif()" style="position:relative;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <?php if ($notif_count > 0): ?>
+          <span style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:.6rem;font-weight:800;min-width:16px;height:16px;border-radius:100px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid #fff;"><?= $notif_count ?></span>
+          <?php endif; ?>
+        </button>
+        <!-- Dropdown -->
+        <div id="notifDropdown" style="display:none;position:absolute;right:0;top:44px;width:320px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:999;overflow:hidden;">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:.82rem;font-weight:700;color:#0f172a;">💳 Recent Payments</span>
+            <span style="font-size:.72rem;color:#64748b;">Last 7 days</span>
+          </div>
+          <div style="max-height:320px;overflow-y:auto;">
+            <?php if (empty($notif_items)): ?>
+              <div style="padding:24px 16px;text-align:center;color:#94a3b8;font-size:.82rem;">No recent payments</div>
+            <?php else: ?>
+              <?php foreach ($notif_items as $n): ?>
+              <div style="padding:11px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:background .12s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''" onclick="window.location='?page=tenants'">
+                <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#dcfce7,#bbf7d0);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">
+                  <span style="font-size:.9rem;">💳</span>
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:.8rem;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($n['business_name']) ?></div>
+                  <div style="font-size:.73rem;color:#475569;margin-top:1px;"><?= htmlspecialchars($n['owner_name']) ?> · <span style="color:#16a34a;font-weight:600;"><?= htmlspecialchars($n['plan']) ?> Plan paid</span></div>
+                  <div style="font-size:.68rem;color:#94a3b8;margin-top:2px;"><?= date('M d, Y · h:i A', strtotime($n['paymongo_paid_at'])) ?></div>
+                </div>
+              </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+          <div style="padding:10px 16px;text-align:center;border-top:1px solid #f1f5f9;">
+            <a href="?page=tenants" style="font-size:.78rem;color:#2563eb;font-weight:600;text-decoration:none;">View all tenants →</a>
+          </div>
+        </div>
+      </div>
       <div class="topbar-date" style="font-size:.78rem;color:var(--text-dim);"><?= date('F d, Y') ?></div>
     </div>
   </header>
@@ -1504,25 +1558,14 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
               $is_sa_added = !empty($t['invite_status']); // SA-added tenants have an invite record
             ?>
             <?php if ($is_sa_added): ?>
-              <?php /* SA manually added — payment link only; invite auto-sends after payment */ ?>
+              <?php /* SA manually added — payment link auto-sent on add; show status only */ ?>
               <?php if (!$is_free && $pmt_status !== 'paid'): ?>
-              <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
-                <input type="hidden" name="action" value="send_payment_link"/>
-                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">💳 Pay Link</button>
-              </form>
+                <span style="font-size:.72rem;color:#f59e0b;font-weight:600;">⏳ Awaiting Payment</span>
               <?php else: ?>
                 <span style="font-size:.72rem;color:#16a34a;font-weight:600;">✓ Paid — invite will auto-send</span>
               <?php endif; ?>
             <?php else: ?>
               <?php /* Self-signup — needs approval flow */ ?>
-              <?php if (!$is_free && $pmt_status !== 'paid'): ?>
-              <form method="POST" action="paymongo_send_link.php" style="display:inline;" onsubmit="return confirm('Send payment link to <?=htmlspecialchars(addslashes($t['email']))?> ?');">
-                <input type="hidden" name="action" value="send_payment_link"/>
-                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-                <button type="submit" class="btn-sm" style="font-size:.69rem;background:#7c3aed;color:#fff;border:none;">💳 Pay Link</button>
-              </form>
-              <?php endif; ?>
               <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.7rem;">✓ Approve</button>
               <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.7rem;">✗ Reject</button>
             <?php endif; ?>
@@ -2904,6 +2947,17 @@ document.getElementById('logoutModal').addEventListener('click', function(e){ if
 
 <div class="mob-overlay" id="mobOverlay" onclick="toggleSidebar()"></div>
 <script>
+function toggleNotif() {
+  const d = document.getElementById('notifDropdown');
+  d.style.display = d.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  const btn = document.getElementById('notifBtn');
+  const dd  = document.getElementById('notifDropdown');
+  if (dd && btn && !btn.contains(e.target) && !dd.contains(e.target)) {
+    dd.style.display = 'none';
+  }
+});
 function toggleSidebar(){
   document.querySelector('.sidebar').classList.toggle('mobile-open');
   document.getElementById('mobOverlay').classList.toggle('open');
