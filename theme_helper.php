@@ -281,6 +281,48 @@ function colorIsDark(string $hex): bool {
     return $luminance < 0.4;
 }
 
+/**
+ * renderTenantFavicon()
+ * 
+ * Returns <link> favicon tags for the browser tab.
+ * - If tenant has a custom logo_url → use it as the favicon (data URI via base64)
+ * - Fallback → /favicon.ico (PawnHub default)
+ *
+ * Usage: echo renderTenantFavicon($theme);
+ */
+function renderTenantFavicon(array $theme): string {
+    $logo_url = $theme['logo_url'] ?? '';
+
+    if (!empty($logo_url)) {
+        // Normalize path — add leading slash if local path
+        if (strpos($logo_url, 'http') !== 0 && $logo_url[0] !== '/') {
+            $logo_url = '/' . $logo_url;
+        }
+
+        // Try to load the image and convert to base64 data URI
+        $file_path = '/home/site/wwwroot' . parse_url($logo_url, PHP_URL_PATH);
+        if (file_exists($file_path)) {
+            $mime = mime_content_type($file_path) ?: 'image/png';
+            $b64  = base64_encode(file_get_contents($file_path));
+            $data_uri = "data:{$mime};base64,{$b64}";
+            return '
+<link rel="icon" type="' . $mime . '" href="' . $data_uri . '">
+<link rel="apple-touch-icon" href="' . $data_uri . '">';
+        }
+
+        // If file not found locally, use URL directly
+        return '
+<link rel="icon" href="' . htmlspecialchars($logo_url) . '">
+<link rel="apple-touch-icon" href="' . htmlspecialchars($logo_url) . '">';
+    }
+
+    // Fallback — default PawnHub favicon
+    return '
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">';
+}
+
 function adjustColor(string $hex, int $amount): string {
     $hex = ltrim($hex, '#');
     if (strlen($hex) !== 6) return '#' . $hex;
