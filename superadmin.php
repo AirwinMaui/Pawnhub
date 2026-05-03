@@ -11,9 +11,8 @@ if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
 
 $active_page = $_GET['page'] ?? 'dashboard';
 
-// ── Fetch recent payment notifications (last 7 days) ──────────
-// Includes: signups (paymongo_paid_at on tenants)
-//         + renewals / upgrades / reactivations (subscription_renewals)
+// ── Fetch recent payment notifications (last 30 days) ─────────
+// Includes: signups, renewals, upgrades, reactivations, downgrades
 $notif_items = [];
 $notif_count = 0;
 try {
@@ -22,21 +21,21 @@ try {
             t.business_name,
             t.owner_name,
             sr.plan,
-            sr.reviewed_at AS paymongo_paid_at,
-            t.id           AS tenant_id,
+            sr.reviewed_at   AS paymongo_paid_at,
+            t.id             AS tenant_id,
             sr.billing_cycle,
             CASE
-                WHEN sr.notes LIKE '%UPGRADE%'       THEN 'upgrade'
-                WHEN sr.notes LIKE '%REACTIVATION%'  THEN 'reactivation'
-                WHEN sr.notes LIKE '%DOWNGRADE%'     THEN 'downgrade'
-                WHEN sr.notes LIKE '%Renewal%'       THEN 'renewal'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%UPGRADE%'      THEN 'upgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%REACTIVATION%' THEN 'reactivation'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%DOWNGRADE%'    THEN 'downgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%RENEWAL%'      THEN 'renewal'
                 ELSE 'signup'
             END AS payment_type,
             sr.amount
         FROM subscription_renewals sr
         JOIN tenants t ON sr.tenant_id = t.id
-        WHERE sr.status = 'approved'
-          AND sr.reviewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        WHERE sr.status IN ('approved', 'pending')
+          AND sr.reviewed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 
         UNION ALL
 
@@ -45,23 +44,22 @@ try {
             t.owner_name,
             t.plan,
             t.paymongo_paid_at,
-            t.id AS tenant_id,
+            t.id       AS tenant_id,
             'monthly'  AS billing_cycle,
             'signup'   AS payment_type,
             CASE t.plan WHEN 'Pro' THEN 999 WHEN 'Enterprise' THEN 2499 ELSE 0 END AS amount
         FROM tenants t
         WHERE t.payment_status = 'paid'
           AND t.paymongo_paid_at IS NOT NULL
-          AND t.paymongo_paid_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          AND t.paymongo_paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
           AND NOT EXISTS (
               SELECT 1 FROM subscription_renewals sr2
               WHERE sr2.tenant_id = t.id
-                AND sr2.status = 'approved'
-                AND sr2.reviewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                AND sr2.reviewed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
           )
 
         ORDER BY paymongo_paid_at DESC
-        LIMIT 30
+        LIMIT 50
     ");
     $notif_items = $notif_stmt->fetchAll();
     $notif_count = count($notif_items);
