@@ -489,7 +489,7 @@ tr:hover td{background:rgba(255,255,255,.07);}
 
 .btn-xs{padding:5px 11px;border-radius:7px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:rgba(240,242,247,.75);text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:all .15s;margin-right:3px;font-family:inherit;}
 .btn-xs:hover{background:rgba(255,255,255,.14);}
-.btn-primary-xs{background:var(--t-primary,#2563eb);color:var(--t-on-primary,#fff);border:1.5px solid rgba(0,0,0,.18);box-shadow:0 2px 8px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.15);font-weight:700;}
+.btn-primary-xs{background:var(--t-primary,#2563eb);color:#000;border:1.5px solid rgba(0,0,0,.18);box-shadow:0 2px 8px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.15);font-weight:700;}
 .btn-primary-xs:hover{filter:brightness(1.08);}
 .btn-danger-xs{background:rgba(239,68,68,.9);color:#fff;border-color:transparent;}
 

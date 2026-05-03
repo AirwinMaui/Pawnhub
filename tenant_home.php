@@ -1108,6 +1108,9 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <?php if($biz_addr || $biz_phone): ?>
     <a href="#info" class="nav-link">About</a>
     <?php endif; ?>
+    <a href="#mobile-app" class="nav-link">
+      <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">download</span>Download
+    </a>
     <a href="<?= htmlspecialchars($register_url) ?>" class="nav-link" style="color:color-mix(in srgb,var(--accent) 90%,#fff);">Join Us</a>
   </div>
 
