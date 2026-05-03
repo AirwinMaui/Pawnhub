@@ -435,13 +435,13 @@ body{background:var(--t-page-bg,#0f172a);font-family:'Plus Jakarta Sans',sans-se
 .sb-uname{font-size:.76rem;font-weight:600;color:#1c1e21;}
 .sb-urole{font-size:.6rem;color:#65676b;}
 .sb-nav{flex:1;padding:8px 0;}
-.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a8d91;padding:10px 14px 4px;}
-.sb-item{display:flex;align-items:center;gap:9px;padding:8px 12px;margin:1px 6px;border-radius:9px;cursor:pointer;color:#65676b;font-size:.8rem;font-weight:500;text-decoration:none;transition:all .15s;}
-.sb-item:hover{background:#f2f2f2;color:#1c1e21;}
-.sb-item.active{background:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);color:var(--t-primary,#2563eb);font-weight:700;}
+.sb-section{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(0,0,0,.5);padding:10px 14px 4px;}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 12px;margin:1px 6px;border-radius:9px;cursor:pointer;color:#000000;font-size:.8rem;font-weight:500;text-decoration:none;transition:all .15s;}
+.sb-item:hover{background:rgba(0,0,0,.08);color:#000000;}
+.sb-item.active{background:rgba(0,0,0,.12);color:#000000;font-weight:700;}
 .sb-item .material-symbols-outlined{font-size:16px;flex-shrink:0;}
 .sb-footer{padding:10px 12px;border-top:1px solid #e4e6eb;}
-.sb-logout{display:flex;align-items:center;gap:8px;font-size:.78rem;color:#65676b;text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
+.sb-logout{display:flex;align-items:center;gap:8px;font-size:.78rem;color:#000000;text-decoration:none;padding:7px 8px;border-radius:8px;transition:all .15s;}
 .sb-logout:hover{color:#ef4444;background:rgba(239,68,68,.08);}
 .main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
 .topbar{height:60px;padding:0 26px;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);}
