@@ -181,10 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         // ── Guard: block approval if permit not ai_approved ────
-        // Starter (Free) plan tenants are exempt from the permit requirement.
         $permit_status_chk = $t_row['business_permit_status'] ?? 'pending';
-        $tenant_plan_chk   = $t_row['plan'] ?? 'Starter';
-        if ($permit_status_chk !== 'ai_approved' && $tenant_plan_chk !== 'Starter') {
+        if ($permit_status_chk !== 'ai_approved') {
             $status_labels = [
                 'ai_rejected'   => 'AI Rejected',
                 'manual_review' => 'Could Not Auto-Verify',
@@ -248,13 +246,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $email_sent = false;
         if (!empty($t_row['email']) && !empty($slug)) {
             try {
-                // Check if this tenant was SA-invited (has a pending invitation token)
-                $inv_stmt = $pdo->prepare("SELECT token, owner_name FROM tenant_invitations WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1");
+                // Check if this tenant was SA-invited (any token — pending or expired)
+                $inv_stmt = $pdo->prepare("SELECT id, token, owner_name, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                 $inv_stmt->execute([$tid]);
                 $inv_row = $inv_stmt->fetch();
 
-                if ($inv_row) {
-                    // SA-invited tenant: send the setup/invitation email with the token link
+                // Renew token if expired so the invite email works on approval
+                if ($inv_row && $inv_row['status'] !== 'used') {
+                    $new_token   = bin2hex(random_bytes(32));
+                    $new_expires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+                    $pdo->prepare("UPDATE tenant_invitations SET token=?, expires_at=?, status='pending', used_at=NULL WHERE id=?")
+                        ->execute([$new_token, $new_expires, $inv_row['id']]);
+                    $inv_row['token'] = $new_token;
+                }
+
+                if ($inv_row && $inv_row['status'] !== 'used') {
+                    // SA-invited tenant: send setup/invitation email with fresh token link
                     $email_sent = sendTenantInvitation(
                         $t_row['email'],
                         $t_row['owner_name'],
