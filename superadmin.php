@@ -22,37 +22,35 @@ $notif_count = 0;
 try {
     $notif_stmt = $pdo->query("
         SELECT
-            CONVERT(t.business_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS business_name,
-            CONVERT(t.owner_name    USING utf8mb4) COLLATE utf8mb4_unicode_ci AS owner_name,
-            CONVERT(sr.plan         USING utf8mb4) COLLATE utf8mb4_unicode_ci AS plan,
-            COALESCE(sr.reviewed_at, sr.requested_at) AS paymongo_paid_at,
-            t.id AS tenant_id,
-            CONVERT(sr.billing_cycle USING utf8mb4) COLLATE utf8mb4_unicode_ci AS billing_cycle,
+            t.business_name,
+            t.owner_name,
+            sr.plan,
+            sr.reviewed_at   AS paymongo_paid_at,
+            t.id             AS tenant_id,
+            sr.billing_cycle,
             CASE
-                WHEN sr.is_upgrade = 1                                                              THEN 'upgrade'
-                WHEN sr.is_upgrade = 0 AND sr.upgrade_from IS NOT NULL                              THEN 'downgrade'
-                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%REACTIVATION%'     THEN 'reactivation'
-                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%RENEWAL%'          THEN 'renewal'
-                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%UPGRADE%'          THEN 'upgrade'
-                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%DOWNGRADE%'        THEN 'downgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%UPGRADE%'      THEN 'upgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%REACTIVATION%' THEN 'reactivation'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%DOWNGRADE%'    THEN 'downgrade'
+                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%RENEWAL%'      THEN 'renewal'
                 ELSE 'signup'
             END AS payment_type,
             sr.amount
         FROM subscription_renewals sr
         JOIN tenants t ON sr.tenant_id = t.id
         WHERE sr.status IN ('approved', 'pending')
-          AND COALESCE(sr.reviewed_at, sr.requested_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+          AND sr.reviewed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 
         UNION ALL
 
         SELECT
-            CONVERT(t.business_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS business_name,
-            CONVERT(t.owner_name    USING utf8mb4) COLLATE utf8mb4_unicode_ci AS owner_name,
-            CONVERT(t.plan          USING utf8mb4) COLLATE utf8mb4_unicode_ci AS plan,
+            t.business_name,
+            t.owner_name,
+            t.plan,
             t.paymongo_paid_at,
-            t.id AS tenant_id,
-            'monthly'  COLLATE utf8mb4_unicode_ci AS billing_cycle,
-            'signup'   COLLATE utf8mb4_unicode_ci AS payment_type,
+            t.id       AS tenant_id,
+            'monthly'  AS billing_cycle,
+            'signup'   AS payment_type,
             CASE t.plan WHEN 'Pro' THEN 999 WHEN 'Enterprise' THEN 2499 ELSE 0 END AS amount
         FROM tenants t
         WHERE t.payment_status = 'paid'
@@ -61,7 +59,7 @@ try {
           AND NOT EXISTS (
               SELECT 1 FROM subscription_renewals sr2
               WHERE sr2.tenant_id = t.id
-                AND COALESCE(sr2.reviewed_at, sr2.requested_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                AND sr2.reviewed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
           )
 
         ORDER BY paymongo_paid_at DESC
@@ -339,13 +337,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         // ── Send approval/login email ──────────────────────────
-        // Skip if webhook already activated the tenant (payment_status=paid + status=active)
-        // to avoid sending duplicate emails.
         // For SA-invited tenants: send the invitation/setup email (with token link).
         // For self-signup tenants (no invitation token): send the approved/login email.
-        $already_activated = ($t_row['payment_status'] === 'paid' && $t_row['status'] === 'active');
         $email_sent = false;
-        if (!$already_activated && !empty($t_row['email']) && !empty($slug)) {
+        if (!empty($t_row['email']) && !empty($slug)) {
             try {
                 // Check if this tenant was SA-invited (any token)
                 $inv_stmt = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
@@ -392,13 +387,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         try { $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPROVE_TENANT','tenant',?,?,?,NOW())")->execute([$tid,$u['id'],$u['username'],'super_admin',$tid,"Approved tenant ID $tid ({$t_row['business_name']}). Email sent: " . ($email_sent ? 'yes' : 'no'),$_SERVER['REMOTE_ADDR']??'::1']); } catch(PDOException $e){}
 
-        if ($already_activated) {
-            $success_msg = "✅ Tenant approved! (Account was already activated via PayMongo webhook — no duplicate email sent.)";
-        } else {
-            $success_msg = $email_sent
-                ? "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). Invitation sent to <strong>{$t_row['email']}</strong>."
-                : "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). ⚠️ Email could not be sent — check mailer.php settings.";
-        }
+        $success_msg = $email_sent
+            ? "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). Invitation sent to <strong>{$t_row['email']}</strong>."
+            : "✅ Tenant approved! Subscription started today (expires " . date('M d, Y', strtotime('+1 month')) . "). ⚠️ Email could not be sent — check mailer.php settings.";
         $active_page = 'tenants';
         end_approve:;
     }

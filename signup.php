@@ -137,22 +137,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     // ── Pro / Enterprise → go straight to PayMongo ──────────────────
                     if ($needs_payment) {
-                        // Send confirmation email to tenant before redirecting to payment
-                        try {
-                            require_once __DIR__ . '/mailer.php';
-                            sendTenantApplicationReceived($email, $fullname, $biz_name, $plan, true);
-                        } catch (Throwable $mailErr) {
-                            error_log('[Signup] Pre-payment email error: ' . $mailErr->getMessage());
-                        }
-                        // Notify SA about new paid-plan applicant
-                        try {
-                            $sa_row = $pdo->query("SELECT email, fullname FROM users WHERE role='super_admin' AND status='approved' LIMIT 1")->fetch();
-                            if ($sa_row) {
-                                sendSANewApplicantNotification($sa_row['email'], $sa_row['fullname'], $biz_name, $fullname, $email, $plan, $new_tid);
-                            }
-                        } catch (Throwable $e) {
-                            error_log('[Signup] SA notification error: ' . $e->getMessage());
-                        }
                         $_SESSION['pending_tenant_id'] = $new_tid;
                         $_SESSION['pending_user_id']   = $new_uid;
                         $_SESSION['pending_plan']      = $plan;
@@ -162,22 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
 
-                    // Starter plan (free) — send confirmation email + notify SA, then show pending message
-                    try {
-                        require_once __DIR__ . '/mailer.php';
-                        sendTenantApplicationReceived($email, $fullname, $biz_name, $plan, false);
-                    } catch (Throwable $mailErr) {
-                        error_log('[Signup] Starter confirmation email error: ' . $mailErr->getMessage());
-                    }
-                    try {
-                        require_once __DIR__ . '/mailer.php';
-                        $sa_row = $pdo->query("SELECT email, fullname FROM users WHERE role='super_admin' AND status='approved' LIMIT 1")->fetch();
-                        if ($sa_row) {
-                            sendSANewApplicantNotification($sa_row['email'], $sa_row['fullname'], $biz_name, $fullname, $email, $plan, $new_tid);
-                        }
-                    } catch (Throwable $e) {
-                        error_log('[Signup] SA notification error: ' . $e->getMessage());
-                    }
+                    // Starter plan (free) — application submitted, pending SA review
                     $success = 'application_submitted';
                     end_processing:
                 }

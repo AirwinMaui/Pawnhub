@@ -37,13 +37,9 @@ $payment_status = $tenant['payment_status']      ?? 'pending';
 $session_id     = $tenant['paymongo_session_id'] ?? '';
 
 // ── WEBHOOK FALLBACK ──────────────────────────────────────────
-// Runs if webhook hasn't fired yet OR if it partially failed
-// (paid in DB but tenant not yet active / email not sent).
-$needs_activation = (
-    $tenant_id && $session_id &&
-    ($payment_status !== 'paid' || $tenant['status'] !== 'active')
-);
-if ($needs_activation) {
+// Normally the webhook fires before the user reaches this page.
+// If not yet (rare race condition) — verify with PayMongo and activate now.
+if ($tenant_id && $payment_status !== 'paid' && $session_id) {
 
     $ch = curl_init("https://api.paymongo.com/v1/checkout_sessions/{$session_id}");
     curl_setopt_array($ch, [
@@ -130,23 +126,17 @@ if ($needs_activation) {
                     } catch (PDOException $e) {}
                 }
 
-                error_log("[SuccessPage] Fallback auto-activate: tenant_id={$tenant_id}, plan={$plan}");
-
-            } else {
-                // Already have a record — just make sure slug is set for email below
-                $slug = $tenant['slug'] ?? '';
-            }
-
-            // ── Always send login email if tenant has email + slug ──
-            // (regardless of dedup — email may have failed on first attempt)
-            $slug = $slug ?? $tenant['slug'] ?? '';
-            if (!empty($tenant['email']) && !empty($slug)) {
-                try {
-                    require_once __DIR__ . '/mailer.php';
-                    sendTenantApproved($tenant['email'], $tenant['owner_name'], $tenant['business_name'], $slug);
-                } catch (Throwable $e) {
-                    error_log("[SuccessPage] Email error: " . $e->getMessage());
+                // Send login email
+                if (!empty($tenant['email']) && !empty($slug)) {
+                    try {
+                        require_once __DIR__ . '/mailer.php';
+                        sendTenantApproved($tenant['email'], $tenant['owner_name'], $tenant['business_name'], $slug);
+                    } catch (Throwable $e) {
+                        error_log("[SuccessPage] Email error: " . $e->getMessage());
+                    }
                 }
+
+                error_log("[SuccessPage] Fallback auto-activate: tenant_id={$tenant_id}, plan={$plan}");
             }
         } catch (Throwable $e) {
             error_log("[SuccessPage] Fallback error: " . $e->getMessage());
