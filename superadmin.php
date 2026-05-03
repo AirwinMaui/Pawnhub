@@ -11,18 +11,57 @@ if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
 
 $active_page = $_GET['page'] ?? 'dashboard';
 
-// ── Fetch recent payment notifications (last 30 days, unread = paid_at within 7 days) ──
+// ── Fetch recent payment notifications (last 7 days) ──────────
+// Includes: signups (paymongo_paid_at on tenants)
+//         + renewals / upgrades / reactivations (subscription_renewals)
 $notif_items = [];
 $notif_count = 0;
 try {
     $notif_stmt = $pdo->query("
-        SELECT t.business_name, t.owner_name, t.plan, t.paymongo_paid_at, t.id AS tenant_id
+        SELECT
+            t.business_name,
+            t.owner_name,
+            sr.plan,
+            sr.reviewed_at AS paymongo_paid_at,
+            t.id           AS tenant_id,
+            sr.billing_cycle,
+            CASE
+                WHEN sr.notes LIKE '%UPGRADE%'       THEN 'upgrade'
+                WHEN sr.notes LIKE '%REACTIVATION%'  THEN 'reactivation'
+                WHEN sr.notes LIKE '%DOWNGRADE%'     THEN 'downgrade'
+                WHEN sr.notes LIKE '%Renewal%'       THEN 'renewal'
+                ELSE 'signup'
+            END AS payment_type,
+            sr.amount
+        FROM subscription_renewals sr
+        JOIN tenants t ON sr.tenant_id = t.id
+        WHERE sr.status = 'approved'
+          AND sr.reviewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+
+        UNION ALL
+
+        SELECT
+            t.business_name,
+            t.owner_name,
+            t.plan,
+            t.paymongo_paid_at,
+            t.id AS tenant_id,
+            'monthly'  AS billing_cycle,
+            'signup'   AS payment_type,
+            CASE t.plan WHEN 'Pro' THEN 999 WHEN 'Enterprise' THEN 2499 ELSE 0 END AS amount
         FROM tenants t
         WHERE t.payment_status = 'paid'
           AND t.paymongo_paid_at IS NOT NULL
           AND t.paymongo_paid_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-        ORDER BY t.paymongo_paid_at DESC
-        LIMIT 20
+          AND NOT EXISTS (
+              SELECT 1 FROM subscription_renewals sr2
+              WHERE sr2.tenant_id = t.id
+                AND sr2.status = 'approved'
+                AND sr2.reviewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          )
+
+        ORDER BY paymongo_paid_at DESC
+        LIMIT 30
     ");
     $notif_items = $notif_stmt->fetchAll();
     $notif_count = count($notif_items);
@@ -854,7 +893,7 @@ try {
             (SELECT u.id FROM users u WHERE u.tenant_id=t.id AND u.role='admin' LIMIT 1) AS admin_uid,
             (SELECT status FROM tenant_invitations ti WHERE ti.tenant_id=t.id ORDER BY ti.created_at DESC LIMIT 1) AS invite_status,
             DATEDIFF(t.subscription_end, CURDATE()) AS days_left
-        FROM tenants t ORDER BY t.created_at DESC
+        FROM tenants t ORDER BY t.business_name ASC
     ")->fetchAll();
 } catch (PDOException $e) {
     $tenants = [];
@@ -1391,7 +1430,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 </div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:.8rem;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($n['business_name']) ?></div>
-                  <div style="font-size:.73rem;color:#475569;margin-top:1px;"><?= htmlspecialchars($n['owner_name']) ?> · <span style="color:#16a34a;font-weight:600;"><?= htmlspecialchars($n['plan']) ?> Plan paid</span></div>
+                  <div style="font-size:.73rem;color:#475569;margin-top:1px;"><?= htmlspecialchars($n['owner_name']) ?> · <span style="color:#16a34a;font-weight:600;"><?= htmlspecialchars($n['plan']) ?> Plan</span> <span style="color:#2563eb;font-weight:600;"><?php $pt=$n['payment_type']??'signup'; echo match($pt){'renewal'=>'Renewed','upgrade'=>'Upgraded','reactivation'=>'Reactivated','downgrade'=>'Downgraded',default=>'Signup'}; ?></span></div>
                   <div style="font-size:.68rem;color:#94a3b8;margin-top:2px;"><?= date('M d, Y · h:i A', strtotime($n['paymongo_paid_at'])) ?></div>
                 </div>
               </div>
