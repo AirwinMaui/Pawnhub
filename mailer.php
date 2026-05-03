@@ -236,12 +236,12 @@ function sendTenantApproved(string $toEmail, string $toName, string $businessNam
         <h2 style="font-size:1.25rem;font-weight:800;color:#0f172a;margin:0 0 8px;">Access your account 🔑</h2>
         <p style="color:#475569;font-size:.9rem;line-height:1.7;margin:0 0 20px;">
           Hello <strong>' . htmlspecialchars($toName) . '</strong>,<br><br>
-          You can now sign in to your <strong>' . htmlspecialchars($businessName) . '</strong> dashboard
+          You can now sign in to your <strong>' . htmlspecialchars($businessName) . '</strong> account
           using the <strong>username and password</strong> you set during registration.
         </p>
         <div style="text-align:center;margin:28px 0;">
           <a href="' . $loginLink . '" style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:.95rem;font-weight:700;box-shadow:0 4px 14px rgba(37,99,235,.3);">
-            Sign In to My Dashboard →
+            Sign In to Login Page →
           </a>
         </div>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
