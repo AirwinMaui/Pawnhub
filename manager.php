@@ -4,6 +4,10 @@ pawnhub_session_start('manager');
 require 'db.php';
 require 'theme_helper.php';
 
+// Set Philippine timezone
+date_default_timezone_set('Asia/Manila');
+try { $pdo->exec("SET time_zone = '+08:00'"); } catch (Throwable $e) {}
+
 require_once __DIR__ . '/vendor/autoload.php';
 
 use MicrosoftAzure\Storage\Blob\BlobRestProxy;

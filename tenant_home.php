@@ -8,6 +8,10 @@
 require 'db.php';
 require 'theme_helper.php';
 
+// Set Philippine timezone
+date_default_timezone_set('Asia/Manila');
+try { $pdo->exec("SET time_zone = '+08:00'"); } catch (Throwable $e) {}
+
 // Get slug from router or GET param
 $slug = trim($_GET['slug'] ?? '');
 if (!$slug) { header('Location: /home.php'); exit; }
@@ -112,8 +116,8 @@ try {
         LEFT JOIN item_inventory i ON i.id = p.linked_item_id AND i.tenant_id = p.tenant_id
         WHERE p.tenant_id = ?
           AND p.is_active = 1
-          AND (p.start_date IS NULL OR p.start_date <= CURDATE())
-          AND (p.end_date IS NULL OR p.end_date >= CURDATE())
+          AND (p.start_date IS NULL OR p.start_date <= NOW())
+          AND (p.end_date IS NULL OR p.end_date >= NOW())
         ORDER BY p.is_pinned DESC, p.created_at DESC
         LIMIT 12
     ");
