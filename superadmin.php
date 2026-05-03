@@ -22,19 +22,19 @@ $notif_count = 0;
 try {
     $notif_stmt = $pdo->query("
         SELECT
-            t.business_name,
-            t.owner_name,
-            sr.plan,
+            CONVERT(t.business_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS business_name,
+            CONVERT(t.owner_name    USING utf8mb4) COLLATE utf8mb4_unicode_ci AS owner_name,
+            CONVERT(sr.plan         USING utf8mb4) COLLATE utf8mb4_unicode_ci AS plan,
             COALESCE(sr.reviewed_at, sr.requested_at) AS paymongo_paid_at,
-            t.id             AS tenant_id,
-            sr.billing_cycle,
+            t.id AS tenant_id,
+            CONVERT(sr.billing_cycle USING utf8mb4) COLLATE utf8mb4_unicode_ci AS billing_cycle,
             CASE
-                WHEN sr.is_upgrade = 1                                        THEN 'upgrade'
-                WHEN sr.is_upgrade = 0 AND sr.upgrade_from IS NOT NULL        THEN 'downgrade'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%REACTIVATION%'       THEN 'reactivation'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%RENEWAL%'            THEN 'renewal'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%UPGRADE%'            THEN 'upgrade'
-                WHEN UPPER(COALESCE(sr.notes,'')) LIKE '%DOWNGRADE%'          THEN 'downgrade'
+                WHEN sr.is_upgrade = 1                                                              THEN 'upgrade'
+                WHEN sr.is_upgrade = 0 AND sr.upgrade_from IS NOT NULL                              THEN 'downgrade'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%REACTIVATION%'     THEN 'reactivation'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%RENEWAL%'          THEN 'renewal'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%UPGRADE%'          THEN 'upgrade'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%DOWNGRADE%'        THEN 'downgrade'
                 ELSE 'signup'
             END AS payment_type,
             sr.amount
@@ -46,13 +46,13 @@ try {
         UNION ALL
 
         SELECT
-            t.business_name,
-            t.owner_name,
-            t.plan,
+            CONVERT(t.business_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS business_name,
+            CONVERT(t.owner_name    USING utf8mb4) COLLATE utf8mb4_unicode_ci AS owner_name,
+            CONVERT(t.plan          USING utf8mb4) COLLATE utf8mb4_unicode_ci AS plan,
             t.paymongo_paid_at,
-            t.id       AS tenant_id,
-            'monthly'  AS billing_cycle,
-            'signup'   AS payment_type,
+            t.id AS tenant_id,
+            'monthly'  COLLATE utf8mb4_unicode_ci AS billing_cycle,
+            'signup'   COLLATE utf8mb4_unicode_ci AS payment_type,
             CASE t.plan WHEN 'Pro' THEN 999 WHEN 'Enterprise' THEN 2499 ELSE 0 END AS amount
         FROM tenants t
         WHERE t.payment_status = 'paid'
