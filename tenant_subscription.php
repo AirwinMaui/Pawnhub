@@ -413,6 +413,7 @@ if ($sub_end && $days_left > 0 && $is_paid_plan) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?= renderTenantFavicon($theme) ?>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
 <title>Subscription — <?= htmlspecialchars($tenant['business_name']) ?></title>

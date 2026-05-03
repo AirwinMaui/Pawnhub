@@ -276,6 +276,7 @@ $bgImg   = !empty($rawBg)
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?= renderTenantFavicon($theme) ?>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
 <title><?= $bizName ?> — <?= $mode === 'register' ? 'Set Up Account' : 'Sign In' ?></title>

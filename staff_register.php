@@ -134,6 +134,9 @@ $role_color2 = $is_manager ? '#064e3b' : ($is_cashier ? '#4c1d95' : '#2563eb');
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title><?= $biz_name ?> — Set Up Your Account</title>

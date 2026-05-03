@@ -176,6 +176,7 @@ $business_name = $tenant['business_name'] ?? 'My Branch';
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?= renderTenantFavicon($theme) ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
 <meta name="mobile-web-app-capable" content="yes">
