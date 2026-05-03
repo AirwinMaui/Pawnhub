@@ -522,13 +522,23 @@ if ($event_type === 'checkout_session.payment.paid') {
 
         // ── Log to payment_logs (non-fatal, all types) ────────
         try {
+            // Attempt with method column (present in some deployments)
             $pdo->prepare("
                 INSERT INTO payment_logs
-                    (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
+                    (tenant_id, user_id, session_id, plan, amount, method, status, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
             ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
         } catch (PDOException $e) {
-            error_log('[Webhook] payment_logs insert skipped: ' . $e->getMessage());
+            // Fallback: insert without method column
+            try {
+                $pdo->prepare("
+                    INSERT INTO payment_logs
+                        (tenant_id, user_id, session_id, plan, amount, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'paid', NOW())
+                ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid]);
+            } catch (PDOException $e2) {
+                error_log('[Webhook] payment_logs insert skipped: ' . $e2->getMessage());
+            }
         }
 
     } catch (Throwable $e) {
