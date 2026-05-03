@@ -489,8 +489,8 @@ tr:hover td{background:rgba(255,255,255,.07);}
 
 .btn-xs{padding:5px 11px;border-radius:7px;font-size:.73rem;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:rgba(240,242,247,.75);text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:all .15s;margin-right:3px;font-family:inherit;}
 .btn-xs:hover{background:rgba(255,255,255,.14);}
-.btn-primary-xs{background:var(--t-primary,#2563eb);color:#000000 !important;border:2px solid rgba(0,0,0,.4);box-shadow:0 2px 8px rgba(0,0,0,.25);font-weight:800;}
-.btn-primary-xs:hover{filter:brightness(0.92);}
+.btn-primary-xs{background:var(--t-primary,#2563eb);color:#000000 !important;border:2px solid rgba(0,0,0,.35);box-shadow:0 2px 8px rgba(0,0,0,.2);font-weight:800;}
+.btn-primary-xs:hover{background:var(--t-primary,#2563eb) !important;color:#000000 !important;filter:brightness(0.92);}
 .btn-danger-xs{background:rgba(239,68,68,.9);color:#fff;border-color:transparent;}
 
 .qa-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;font-family:inherit;font-size:.83rem;font-weight:600;cursor:pointer;border:none;width:100%;text-align:left;transition:all .18s;margin-bottom:8px;text-decoration:none;color:#fff;}
