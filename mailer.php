@@ -3,12 +3,12 @@
 define('MAIL_FROM',     'mendozalesterjames7@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
 define('MAIL_USERNAME', 'mendozalesterjames7@gmail.com');
-define('MAIL_PASSWORD', 'aigd kjcb crbq mzdu');
+define('MAIL_PASSWORD', 'aigdkjcbcrbqmzdu');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 
-// ── Load PHPMailer (using PHPMailer-master folder) ────────────
-$_pm_src = __DIR__ . '/PHPMailer-master/src';
+// ── Load PHPMailer via Composer vendor folder ────────────────
+$_pm_src = __DIR__ . '/vendor/phpmailer/phpmailer/src';
 if (!file_exists($_pm_src . '/PHPMailer.php')) {
     error_log('[PawnHub CRITICAL] PHPMailer not found at: ' . $_pm_src . ' — ALL emails will fail.');
     if (!function_exists('sendMail')) {
