@@ -4,10 +4,6 @@ pawnhub_session_start('manager');
 require 'db.php';
 require 'theme_helper.php';
 
-// Set Philippine timezone
-date_default_timezone_set('Asia/Manila');
-try { $pdo->exec("SET time_zone = '+08:00'"); } catch (Throwable $e) {}
-
 require_once __DIR__ . '/vendor/autoload.php';
 
 use MicrosoftAzure\Storage\Blob\BlobRestProxy;
@@ -523,30 +519,8 @@ $my_team->execute([$tid]); $my_team = $my_team->fetchAll();
 $all_tickets = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100");
 $all_tickets->execute([$tid]); $all_tickets = $all_tickets->fetchAll();
 
-$customers_stmt = $pdo->prepare("
-    SELECT id,
-           full_name COLLATE utf8mb4_unicode_ci AS full_name,
-           contact_number COLLATE utf8mb4_unicode_ci AS contact_number,
-           email COLLATE utf8mb4_unicode_ci AS email,
-           gender, address, birthdate, nationality,
-           valid_id_type, valid_id_number, valid_id_image,
-           customer_photo, registered_at AS registered_at,
-           'walkin' COLLATE utf8mb4_unicode_ci AS source
-    FROM customers WHERE tenant_id=?
-    UNION ALL
-    SELECT id,
-           full_name COLLATE utf8mb4_unicode_ci AS full_name,
-           contact_number COLLATE utf8mb4_unicode_ci AS contact_number,
-           email COLLATE utf8mb4_unicode_ci AS email,
-           NULL AS gender, address, birthdate, NULL AS nationality,
-           NULL AS valid_id_type, NULL AS valid_id_number, NULL AS valid_id_image,
-           profile_photo AS customer_photo, created_at AS registered_at,
-           'mobile' COLLATE utf8mb4_unicode_ci AS source
-    FROM mobile_customers WHERE tenant_id=?
-    ORDER BY full_name
-");
-$customers_stmt->execute([$tid, $tid]);
-$customers = $customers_stmt->fetchAll();
+$customers   = $pdo->prepare("SELECT * FROM customers WHERE tenant_id=? ORDER BY full_name");
+$customers->execute([$tid]); $customers = $customers->fetchAll();
 
 $void_reqs   = $pdo->prepare("SELECT v.*,u.fullname as req_name FROM pawn_void_requests v JOIN users u ON v.requested_by=u.id WHERE v.tenant_id=? ORDER BY v.requested_at DESC");
 $void_reqs->execute([$tid]); $void_reqs = $void_reqs->fetchAll();
@@ -877,15 +851,12 @@ try {
     if ($vr_c > 0) $notifs[] = ['type'=>'warn','icon'=>'cancel_presentation','title'=>$vr_c.' Pending Void Request'.($vr_c>1?'s':''),'sub'=>'Awaiting your review and approval.','link'=>'?page=void_requests'];
 
     // ── 4. Low stock items (qty <= 2) ─────────────────────────
-    // FIX: Include hidden items with stock > 0 (manager should still be notified)
-    $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND status NOT IN ('forfeited','voided')");
+    $ls = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty <= 2 AND stock_qty > 0 AND is_shop_visible=1");
     $ls->execute([$tid]); $ls_c = (int)$ls->fetchColumn();
     if ($ls_c > 0) $notifs[] = ['type'=>'warn','icon'=>'inventory_2','title'=>$ls_c.' Item'.($ls_c>1?'s':'').' Low on Stock','sub'=>'Stock is at 2 or below — restock soon.','link'=>'?page=shop_items'];
 
     // ── 5. Out-of-stock items (qty = 0) ──────────────────────
-    // FIX: Remove is_shop_visible=1 filter — webhook hides the item when sold (sets visible=0)
-    //      so we must count ALL items with stock=0 that were ever shop-listed (status != 'forfeited')
-    $oos = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty = 0 AND status NOT IN ('forfeited','voided') AND (is_shop_visible=1 OR sold_at IS NOT NULL)");
+    $oos = $pdo->prepare("SELECT COUNT(*) FROM item_inventory WHERE tenant_id=? AND stock_qty = 0 AND is_shop_visible=1");
     $oos->execute([$tid]); $oos_c = (int)$oos->fetchColumn();
     if ($oos_c > 0) $notifs[] = ['type'=>'danger','icon'=>'remove_shopping_cart','title'=>$oos_c.' Item'.($oos_c>1?'s':'').' Out of Stock','sub'=>'Listed in shop but no stock available.','link'=>'?page=shop_items'];
 
@@ -925,8 +896,8 @@ try {
     if ($rd_c > 0) $notifs[] = ['type'=>'info','icon'=>'payments','title'=>$rd_c.' Redemption'.($rd_c>1?'s':'').' Today','sub'=>$rd_c.' item'.($rd_c>1?'s were':' was').' redeemed today.','link'=>'?page=tickets'];
 
     // ── 13. New customers registered today ──────────────────
-    $nc = $pdo->prepare("SELECT (SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()) + (SELECT COUNT(*) FROM mobile_customers WHERE tenant_id=? AND DATE(created_at)=CURDATE())");
-    $nc->execute([$tid, $tid]); $nc_c = (int)$nc->fetchColumn();
+    $nc = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
+    $nc->execute([$tid]); $nc_c = (int)$nc->fetchColumn();
     if ($nc_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_add','title'=>$nc_c.' New Customer'.($nc_c>1?'s':'').' Today','sub'=>'New customer'.($nc_c>1?'s':'').' registered today.','link'=>'?page=customers'];
 
     // ── 14. New staff/cashier approved today ────────────────
@@ -950,8 +921,7 @@ try {
     if ($ap_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_c.' Pending Walk-in Application'.($ap_c>1?'s':''),'sub'=>'Online application'.($ap_c>1?'s':'').' awaiting branch admin review.','link'=>'?page=tickets'];
 
     // ── 18. Shop sales today ─────────────────────────────────
-    // FIX: Use paid_at (or updated_at fallback) — orders are created BEFORE payment
-    $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(COALESCE(paid_at, updated_at))=CURDATE()");
+    $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(created_at)=CURDATE()");
     $so->execute([$tid]); $so_c = (int)$so->fetchColumn();
     if ($so_c > 0) $notifs[] = ['type'=>'info','icon'=>'storefront','title'=>$so_c.' Shop Sale'.($so_c>1?'s':'').' Today','sub'=>$so_c.' item'.($so_c>1?'s were':' was').' purchased from your shop today.','link'=>'?page=shop_items'];
 
@@ -1161,7 +1131,7 @@ $notif_count = count($notifs);
           $cust_tickets_map[strtolower(trim($t['customer_name']))][] = $t;
       }
     ?>
-    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> total · <?=count(array_filter($customers,fn($c)=>$c['source']==='mobile'))?> mobile · <?=count(array_filter($customers,fn($c)=>$c['source']==='walkin'))?> walk-in</p></div></div>
+    <div class="page-hdr"><div><h2>Customers</h2><p><?=count($customers)?> records</p></div></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($customers)):?><div class="empty-state"><span class="material-symbols-outlined">group</span><p>No customers yet.</p></div>
       <?php else:?>
@@ -1181,7 +1151,6 @@ $notif_count = count($notifs);
           'valid_id_image'  => $c['valid_id_image'] ?? '',
           'customer_photo'  => $c['customer_photo'] ?? '',
           'registered_at'   => $c['registered_at'] ?? '',
-          'source'          => $c['source'] ?? 'walkin',
         ]), ENT_QUOTES);
         $c_tickets_json = htmlspecialchars(json_encode($cust_tickets_map[$ckey] ?? []), ENT_QUOTES);
       ?>
@@ -1193,21 +1162,14 @@ $notif_count = count($notifs);
             <?php else: ?>
               <div style="width:30px;height:30px;border-radius:50%;background:var(--t-primary,#059669);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($c['full_name'],0,1))?></div>
             <?php endif; ?>
-            <div>
-              <div style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></div>
-              <?php if(($c['source']??'walkin')==='mobile'): ?>
-                <span style="font-size:.62rem;font-weight:700;background:rgba(99,102,241,.2);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);border-radius:100px;padding:1px 7px;">📱 Mobile App</span>
-              <?php else: ?>
-                <span style="font-size:.62rem;font-weight:700;background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);border-radius:100px;padding:1px 7px;">🏢 Walk-in</span>
-              <?php endif; ?>
-            </div>
+            <span style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></span>
           </div>
         </td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
-        <td><?=$c['gender']??'—'?></td>
+        <td><?=$c['gender']?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
-        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=!empty($c['registered_at'])?date('M d, Y',strtotime($c['registered_at'])):'—'?></td>
+        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($c['registered_at']))?></td>
         <td>
           <button class="btn-sm btn-primary" style="font-size:.7rem;" onclick="openCustomerModal(<?=$c_json?>,<?=$c_tickets_json?>)">
             <span class="material-symbols-outlined" style="font-size:13px;">person</span>View

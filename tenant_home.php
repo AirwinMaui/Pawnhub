@@ -8,10 +8,6 @@
 require 'db.php';
 require 'theme_helper.php';
 
-// Set Philippine timezone
-date_default_timezone_set('Asia/Manila');
-try { $pdo->exec("SET time_zone = '+08:00'"); } catch (Throwable $e) {}
-
 // Get slug from router or GET param
 $slug = trim($_GET['slug'] ?? '');
 if (!$slug) { header('Location: /home.php'); exit; }
@@ -118,7 +114,6 @@ try {
           AND p.is_active = 1
           AND (p.start_date IS NULL OR p.start_date <= NOW())
           AND (p.end_date IS NULL OR p.end_date >= NOW())
-          AND (p.linked_item_id IS NULL OR i.stock_qty > 0)
         ORDER BY p.is_pinned DESC, p.created_at DESC
         LIMIT 12
     ");
@@ -877,10 +872,7 @@ footer {
 .modal-overlay {
   display: none; position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,.8); backdrop-filter: blur(8px);
-  align-items: flex-end; justify-content: center; padding: 0;
-}
-@media (min-width: 500px) {
-  .modal-overlay { align-items: center; padding: 16px; }
+  align-items: center; justify-content: center; padding: 16px;
 }
 .modal-overlay.open { display: flex; }
 .modal-box {
@@ -888,14 +880,7 @@ footer {
   border: 1px solid var(--border);
   border-radius: 22px; width: 100%; max-width: 440px;
   box-shadow: 0 24px 80px rgba(0,0,0,.7);
-  animation: mIn .25s ease both; overflow: visible;
-  max-height: 90vh; display: flex; flex-direction: column;
-}
-.item-detail-modal .modal-scroll-body {
-  overflow-y: auto; overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 22px;
-  flex: 1;
+  animation: mIn .25s ease both; overflow: hidden;
 }
 @keyframes mIn { from { opacity:0; transform: translateY(16px) } to { opacity:1; transform:none } }
 
@@ -953,15 +938,6 @@ footer {
 
 /* ── ITEM DETAIL MODAL ── */
 .item-detail-modal { max-width: 540px; }
-@media (max-width: 499px) {
-  .item-detail-modal {
-    max-width: 100%; width: 100%;
-    border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-    max-height: 88vh;
-    animation: mInUp .28s ease both;
-  }
-}
-@keyframes mInUp { from { opacity:0; transform: translateY(40px) } to { opacity:1; transform:none } }
 .item-detail-img {
   width: 100%; aspect-ratio: 16/9; object-fit: cover;
   border-radius: 14px; margin-bottom: 16px;
@@ -1522,7 +1498,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         Download the <?= $biz_name ?> app to track your pawn transactions, receive real-time status alerts, and manage your items with a single tap.
       </p>
       <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start;">
-        <a href="https://www.dropbox.com/scl/fo/iv0xe7trxc1qo5d80l6b9/APu4LvbsX47kwoYi62hZXnw?e=1&fbclid=IwY2xjawRkgFZleHRuA2FlbQIxMABicmlkETE2WDFEdjg5RW9VcDN1OUJZc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjItcosaTfUwzkVQUk3--LRPZxePuCxvgSePhe_EDf1y6ynsWRAHNrdf92S1_aem_usIcYw_gm0K82Bbic_0mnw&rlkey=ke2htuqmydbfutke9meuv5j57&st=u674m04p&dl=0" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#000;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
+        <a href="<?= htmlspecialchars($login_url) ?>" style="display:inline-flex;align-items:center;gap:12px;background:var(--primary);color:#000;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:700;font-size:.92rem;box-shadow:0 6px 24px color-mix(in srgb,var(--primary) 40%,transparent);transition:all .22s;border:none;" onmouseover="this.style.transform='translateY(-2px)';this.style.filter='brightness(1.1)'" onmouseout="this.style.transform='';this.style.filter=''">
           <div style="width:34px;height:34px;background:rgba(0,0,0,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">download</span>
           </div>
@@ -1679,25 +1655,13 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 <!-- ITEM DETAIL MODAL -->
 <div class="modal-overlay" id="itemModal" onclick="if(event.target===this)closeItem()">
   <div class="modal-box item-detail-modal modal-box-wrap" id="itemModalBox">
-    <button class="modal-close-x" onclick="closeItem()" style="position:fixed;z-index:1001;">
+    <button class="modal-close-x" onclick="closeItem()">
       <span class="material-symbols-outlined" style="font-size:17px;">close</span>
     </button>
-    <div class="modal-scroll-body" style="padding:24px;">
+    <div style="padding:24px;">
       <div id="modalContent"></div>
-
-      <!-- App download CTA -->
-      <div style="margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(168,85,247,.1));border:1px solid rgba(99,102,241,.3);border-radius:14px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <span style="font-size:1.2rem;">📱</span>
-          <span style="font-size:.85rem;font-weight:700;color:#fff;">Want to buy this item?</span>
-        </div>
-        <p style="font-size:.78rem;color:rgba(255,255,255,.65);line-height:1.55;margin:0;">
-          Download our mobile app to purchase items, pawn your valuables, and track your transactions — all in one place.
-        </p>
-      </div>
-
-      <a href="https://www.dropbox.com/scl/fo/iv0xe7trxc1qo5d80l6b9/APu4LvbsX47kwoYi62hZXnw?e=1&fbclid=IwY2xjawRkgFZleHRuA2FlbQIxMABicmlkETE2WDFEdjg5RW9VcDN1OUJZc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHjItcosaTfUwzkVQUk3--LRPZxePuCxvgSePhe_EDf1y6ynsWRAHNrdf92S1_aem_usIcYw_gm0K82Bbic_0mnw&rlkey=ke2htuqmydbfutke9meuv5j57&st=u674m04p&dl=0" target="_blank" rel="noopener" class="modal-btn" onclick="closeItem()" style="text-decoration:none;">
-        <span class="material-symbols-outlined">download</span>Download the App
+      <a href="<?= htmlspecialchars($login_url) ?>" class="modal-btn">
+        <span class="material-symbols-outlined">login</span>Sign In
       </a>
       <button class="modal-btn secondary" onclick="closeItem()">Close</button>
     </div>

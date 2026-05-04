@@ -1,9 +1,9 @@
 <?php
 // ── GMAIL SETTINGS — palitan ng sarili mong Gmail ─────────────
-define('MAIL_FROM',     'yalavie876@gmail.com');
+define('MAIL_FROM',     'mendozakiaro@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
-define('MAIL_USERNAME', 'aa1bc0001@smtp-brevo.com');
-define('MAIL_PASSWORD', 'xsmtpsib-4e68dc0abe6290ed0d7e2a776b05e433436eae6eea9b9f34c423d03845ae179a-RSLZgyH1ndfFkXDI');
+define('MAIL_USERNAME', 'mendozakiaro@gmail.com');
+define('MAIL_PASSWORD', 'rdum cxvt mueg avdw');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 // ── Load PHPMailer ─────────────────────────────────────────────
@@ -44,7 +44,7 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
-        $mail->Host       = 'smtp-relay.brevo.com';
+        $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
         $mail->Username   = MAIL_USERNAME;
         $mail->Password   = MAIL_PASSWORD;

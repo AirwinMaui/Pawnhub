@@ -159,7 +159,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal/upgrade email
                     try {
-                        require_once '/home/site/wwwroot/mailer.php';
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -241,7 +241,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send confirmation email
                     try {
-                        require_once '/home/site/wwwroot/mailer.php';
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -316,7 +316,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email
                     try {
-                        require_once '/home/site/wwwroot/mailer.php';
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -397,7 +397,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email to tenant
                     try {
-                        require_once '/home/site/wwwroot/mailer.php';
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -490,7 +490,7 @@ if ($event_type === 'checkout_session.payment.paid') {
                         // Send login credentials email
                         if (!empty($t_row['email']) && !empty($slug)) {
                             try {
-                                require_once '/home/site/wwwroot/mailer.php';
+                                require_once __DIR__ . '/mailer.php';
                                 // Check for SA-invited tenant (any token — renew if expired)
                                 $inv = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                                 $inv->execute([$tenant_id]);
@@ -522,23 +522,13 @@ if ($event_type === 'checkout_session.payment.paid') {
 
         // ── Log to payment_logs (non-fatal, all types) ────────
         try {
-            // Attempt with method column (present in some deployments)
             $pdo->prepare("
                 INSERT INTO payment_logs
-                    (tenant_id, user_id, session_id, plan, amount, method, status, created_at)
+                    (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
             ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
         } catch (PDOException $e) {
-            // Fallback: insert without method column
-            try {
-                $pdo->prepare("
-                    INSERT INTO payment_logs
-                        (tenant_id, user_id, session_id, plan, amount, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, 'paid', NOW())
-                ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid]);
-            } catch (PDOException $e2) {
-                error_log('[Webhook] payment_logs insert skipped: ' . $e2->getMessage());
-            }
+            error_log('[Webhook] payment_logs insert skipped: ' . $e->getMessage());
         }
 
     } catch (Throwable $e) {
