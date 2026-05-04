@@ -24,7 +24,6 @@
 
 require 'db.php';
 require 'paymongo_config.php';
-require_once __DIR__ . '/mailer.php';
 
 // ── 1. Only accept POST ──────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -89,15 +88,6 @@ if ($event_type === 'checkout_session.payment.paid') {
     $proration_credit_centavos = intval($metadata['proration_credit_centavos'] ?? 0);
     $proration_credit_pesos    = $proration_credit_centavos / 100;
 
-    // ── Fetch all Super Admin accounts for notifications ──────
-    $sa_admins = [];
-    try {
-        $sa_stmt = $pdo->query("SELECT email, name AS fullname FROM users WHERE role='super_admin' AND status='approved' LIMIT 10");
-        $sa_admins = $sa_stmt->fetchAll();
-    } catch (Throwable $e) {
-        error_log("[Webhook] Could not fetch SA emails: " . $e->getMessage());
-    }
-
     try {
         // ── Mark tenant payment_status = paid (all types) ─────
         $pdo->prepare("
@@ -111,7 +101,7 @@ if ($event_type === 'checkout_session.payment.paid') {
         // ── Deduplicate check ─────────────────────────────────
         $dup = $pdo->prepare("
             SELECT id FROM subscription_renewals
-            WHERE tenant_id = ? AND payment_reference = ?
+            WHERE tenant_id = ? AND payment_reference = ? AND status = 'pending'
             LIMIT 1
         ");
         $dup->execute([$tenant_id, $session_id]);
@@ -169,6 +159,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal/upgrade email
                     try {
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -195,25 +186,6 @@ if ($event_type === 'checkout_session.payment.paid') {
                             '::webhook',
                         ]);
                     } catch (Throwable $e) {}
-
-                    // ── Notify Super Admins ───────────────────
-                    try {
-                        $up_t = $pdo->prepare("SELECT business_name, owner_name FROM tenants WHERE id=? LIMIT 1");
-                        $up_t->execute([$tenant_id]);
-                        $up_t = $up_t->fetch();
-                        if ($up_t && function_exists('sendSuperAdminPaymentNotif')) {
-                            foreach ($sa_admins as $sa) {
-                                sendSuperAdminPaymentNotif(
-                                    $sa['email'], $sa['fullname'],
-                                    $up_t['business_name'], $up_t['owner_name'],
-                                    $plan, 'upgrade', $amount_paid,
-                                    $billing_cycle, 'PayMongo — ' . $payment_method, $new_sub_end, $tenant_id
-                                );
-                            }
-                        }
-                    } catch (Throwable $sa_err) {
-                        error_log("[Webhook] SA notif error (upgrade): " . $sa_err->getMessage());
-                    }
 
                     error_log("[Webhook] UPGRADE AUTO-APPROVED: tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
                 } catch (Throwable $up_err) {
@@ -269,6 +241,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send confirmation email
                     try {
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -295,22 +268,6 @@ if ($event_type === 'checkout_session.payment.paid') {
                             '::webhook',
                         ]);
                     } catch (Throwable $e) {}
-
-                    // ── Notify Super Admins ───────────────────
-                    try {
-                        if ($t_info && function_exists('sendSuperAdminPaymentNotif')) {
-                            foreach ($sa_admins as $sa) {
-                                sendSuperAdminPaymentNotif(
-                                    $sa['email'], $sa['fullname'],
-                                    $t_info['business_name'], $t_info['owner_name'],
-                                    $plan, 'downgrade', $amount_paid,
-                                    $billing_cycle, 'PayMongo — ' . $payment_method, $new_sub_end, $tenant_id
-                                );
-                            }
-                        }
-                    } catch (Throwable $sa_err) {
-                        error_log("[Webhook] SA notif error (downgrade): " . $sa_err->getMessage());
-                    }
 
                     error_log("[Webhook] DOWNGRADE AUTO-APPROVED: tenant_id={$tenant_id}, {$current_plan}→{$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
                 } catch (Throwable $dg_err) {
@@ -359,6 +316,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email
                     try {
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -385,28 +343,6 @@ if ($event_type === 'checkout_session.payment.paid') {
                             '::webhook',
                         ]);
                     } catch (Throwable $e) {}
-
-                    // ── Notify Super Admins ───────────────────
-                    try {
-                        // Re-fetch $t_info if not already set from tenant email block above
-                        if (empty($t_info) || !is_array($t_info)) {
-                            $ti = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
-                            $ti->execute([$tenant_id]);
-                            $t_info = $ti->fetch();
-                        }
-                        if ($t_info && function_exists('sendSuperAdminPaymentNotif')) {
-                            foreach ($sa_admins as $sa) {
-                                sendSuperAdminPaymentNotif(
-                                    $sa['email'], $sa['fullname'],
-                                    $t_info['business_name'], $t_info['owner_name'],
-                                    $plan, 'renewal', $amount_paid,
-                                    $billing_cycle, 'PayMongo — ' . $payment_method, $new_sub_end, $tenant_id
-                                );
-                            }
-                        }
-                    } catch (Throwable $sa_err) {
-                        error_log("[Webhook] SA notif error (renewal): " . $sa_err->getMessage());
-                    }
 
                     error_log("[Webhook] RENEWAL AUTO-APPROVED: tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
                 } catch (Throwable $renew_err) {
@@ -461,6 +397,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email to tenant
                     try {
+                        require_once __DIR__ . '/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -487,27 +424,6 @@ if ($event_type === 'checkout_session.payment.paid') {
                             '::webhook',
                         ]);
                     } catch (Throwable $e) {}
-
-                    // ── Notify Super Admins ───────────────────
-                    try {
-                        if (empty($t_info) || !is_array($t_info)) {
-                            $ti = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
-                            $ti->execute([$tenant_id]);
-                            $t_info = $ti->fetch();
-                        }
-                        if ($t_info && function_exists('sendSuperAdminPaymentNotif')) {
-                            foreach ($sa_admins as $sa) {
-                                sendSuperAdminPaymentNotif(
-                                    $sa['email'], $sa['fullname'],
-                                    $t_info['business_name'], $t_info['owner_name'],
-                                    $plan, 'reactivation', $amount_paid,
-                                    $billing_cycle, 'PayMongo — ' . $payment_method, $new_sub_end, $tenant_id
-                                );
-                            }
-                        }
-                    } catch (Throwable $sa_err) {
-                        error_log("[Webhook] SA notif error (reactivation): " . $sa_err->getMessage());
-                    }
 
                     error_log("[Webhook] REACTIVATION AUTO-APPROVED: tenant_id={$tenant_id}, plan={$plan}, cycle={$billing_cycle}, new_end={$new_sub_end}, method={$payment_method}");
                 } catch (Throwable $react_err) {
@@ -574,6 +490,7 @@ if ($event_type === 'checkout_session.payment.paid') {
                         // Send login credentials email
                         if (!empty($t_row['email']) && !empty($slug)) {
                             try {
+                                require_once __DIR__ . '/mailer.php';
                                 // Check for SA-invited tenant (any token — renew if expired)
                                 $inv = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                                 $inv->execute([$tenant_id]);
@@ -591,24 +508,6 @@ if ($event_type === 'checkout_session.payment.paid') {
                             } catch (Throwable $mail_err) {
                                 error_log("[Webhook] Auto-approve email error: " . $mail_err->getMessage());
                             }
-                        }
-
-                        // ── Notify Super Admins ───────────────
-                        try {
-                            if (function_exists('sendSuperAdminPaymentNotif')) {
-                                $signup_amount = $plan_amounts[$plan] ?? 0;
-                                foreach ($sa_admins as $sa) {
-                                    sendSuperAdminPaymentNotif(
-                                        $sa['email'], $sa['fullname'],
-                                        $t_row['business_name'], $t_row['owner_name'],
-                                        $plan, 'signup', (float)$signup_amount,
-                                        'monthly', 'PayMongo — ' . $payment_method,
-                                        date('Y-m-d', strtotime('+1 month')), $tenant_id
-                                    );
-                                }
-                            }
-                        } catch (Throwable $sa_err) {
-                            error_log("[Webhook] SA notif error (signup): " . $sa_err->getMessage());
                         }
 
                         error_log("[Webhook] SIGNUP AUTO-APPROVED: tenant_id={$tenant_id}, user_id={$user_id}, plan={$plan}, method={$payment_method}, slug={$slug}");
