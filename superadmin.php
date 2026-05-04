@@ -165,11 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $pm_session_id   = $pm_resp['data']['id'];
                             $pm_checkout_url = $pm_resp['data']['attributes']['checkout_url'];
                             $pdo->prepare("UPDATE tenants SET paymongo_session_id=? WHERE id=?")->execute([$pm_session_id, $new_tid]);
-                            // Generate QR code
-                            $qr_url  = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($pm_checkout_url) . '&choe=UTF-8';
-                            $qr_data = @file_get_contents($qr_url);
-                            $qr_uri  = $qr_data ? 'data:image/png;base64,' . base64_encode($qr_data) : null;
-                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, $qr_uri, $pm_amount / 100);
+                            $payment_link_sent = sendPaymentLink($email, $oname, $bname, $plan, $pm_checkout_url, null, $pm_amount / 100);
                         } else {
                             error_log('[AddTenant] PayMongo session failed: ' . $pm_raw);
                         }

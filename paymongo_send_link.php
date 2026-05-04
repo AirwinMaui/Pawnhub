@@ -139,15 +139,6 @@ $checkout_url = $response['data']['attributes']['checkout_url'];
 $pdo->prepare("UPDATE tenants SET paymongo_session_id = ? WHERE id = ?")
     ->execute([$session_id, $tenant_id]);
 
-// ── Generate QR code (data URI) ───────────────────────────────
-// Uses the free Google Chart API — no key required, no installation needed
-// Format: https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=<URL>
-$qr_url        = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=' . urlencode($checkout_url) . '&choe=UTF-8';
-$qr_image_data = @file_get_contents($qr_url);
-$qr_data_uri   = $qr_image_data
-    ? 'data:image/png;base64,' . base64_encode($qr_image_data)
-    : null;   // fallback: embed link only
-
 // ── Send email to tenant ──────────────────────────────────────
 $email_sent = sendPaymentLink(
     $email,
@@ -155,7 +146,7 @@ $email_sent = sendPaymentLink(
     $biz_name,
     $plan,
     $checkout_url,
-    $qr_data_uri,
+    null,           // no QR code
     $amount / 100   // in pesos for display
 );
 
