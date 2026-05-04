@@ -159,7 +159,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal/upgrade email
                     try {
-                        require_once __DIR__ . '/mailer.php';
+                        require_once '/home/site/wwwroot/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -241,7 +241,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send confirmation email
                     try {
-                        require_once __DIR__ . '/mailer.php';
+                        require_once '/home/site/wwwroot/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -316,7 +316,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email
                     try {
-                        require_once __DIR__ . '/mailer.php';
+                        require_once '/home/site/wwwroot/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -397,7 +397,7 @@ if ($event_type === 'checkout_session.payment.paid') {
 
                     // Send renewal confirmation email to tenant
                     try {
-                        require_once __DIR__ . '/mailer.php';
+                        require_once '/home/site/wwwroot/mailer.php';
                         $t_info = $pdo->prepare("SELECT business_name, owner_name, email, slug FROM tenants WHERE id=? LIMIT 1");
                         $t_info->execute([$tenant_id]);
                         $t_info = $t_info->fetch();
@@ -490,7 +490,7 @@ if ($event_type === 'checkout_session.payment.paid') {
                         // Send login credentials email
                         if (!empty($t_row['email']) && !empty($slug)) {
                             try {
-                                require_once __DIR__ . '/mailer.php';
+                                require_once '/home/site/wwwroot/mailer.php';
                                 // Check for SA-invited tenant (any token — renew if expired)
                                 $inv = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                                 $inv->execute([$tenant_id]);
