@@ -3,7 +3,7 @@
 define('MAIL_FROM',     'mendozalesterjames7@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
 define('MAIL_USERNAME', 'mendozalesterjames7@gmail.com');
-define('MAIL_PASSWORD', 'odhlbonvsclpjzaw');
+define('MAIL_PASSWORD', 'bractmifpocsqahm');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 
