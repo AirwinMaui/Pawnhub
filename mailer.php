@@ -7,10 +7,10 @@ define('MAIL_PASSWORD', 'cuck uxft hafi gsdh');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 
-// ── Load PHPMailer ─────────────────────────────────────────────
-$_autoload = __DIR__ . '/vendor/autoload.php';
-if (!file_exists($_autoload)) {
-    error_log('[PawnHub CRITICAL] vendor/autoload.php NOT FOUND at: ' . $_autoload . ' — PHPMailer missing, ALL emails will silently fail. Run: composer require phpmailer/phpmailer');
+// ── Load PHPMailer (using PHPMailer-master folder) ────────────
+$_pm_src = __DIR__ . '/PHPMailer-master/src';
+if (!file_exists($_pm_src . '/PHPMailer.php')) {
+    error_log('[PawnHub CRITICAL] PHPMailer not found at: ' . $_pm_src . ' — ALL emails will fail.');
     if (!function_exists('sendMail')) {
         function sendMail(): bool { return false; }
         function sendTenantInvitation(): bool { return false; }
@@ -38,7 +38,11 @@ if (!file_exists($_autoload)) {
     }
     return;
 }
-require $_autoload;
+
+// Load PHPMailer classes directly from src folder
+require $_pm_src . '/Exception.php';
+require $_pm_src . '/PHPMailer.php';
+require $_pm_src . '/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
