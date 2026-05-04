@@ -3,7 +3,7 @@
 define('MAIL_FROM',     'mendozakiaro@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
 define('MAIL_USERNAME', 'mendozakiaro@gmail.com');
-define('MAIL_PASSWORD', 'rdum cxvt mueg avdw');
+define('MAIL_PASSWORD', 'your-app-password-here');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 // ── Load PHPMailer ─────────────────────────────────────────────
