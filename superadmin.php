@@ -4,6 +4,10 @@ pawnhub_session_start('super_admin');
 require 'db.php';
 require 'mailer.php';
 
+// Set Philippine timezone
+date_default_timezone_set('Asia/Manila');
+try { $pdo->exec("SET time_zone = '+08:00'"); } catch (Throwable $e) {}
+
 if (empty($_SESSION['user'])) { header('Location: login.php'); exit; }
 $u = $_SESSION['user'];
 if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
@@ -11,18 +15,57 @@ if ($u['role'] !== 'super_admin') { header('Location: login.php'); exit; }
 
 $active_page = $_GET['page'] ?? 'dashboard';
 
-// ── Fetch recent payment notifications (last 30 days, unread = paid_at within 7 days) ──
+// ── Fetch recent payment notifications (last 30 days) ─────────
+// Includes: signups, renewals, upgrades, reactivations, downgrades
 $notif_items = [];
 $notif_count = 0;
 try {
     $notif_stmt = $pdo->query("
-        SELECT t.business_name, t.owner_name, t.plan, t.paymongo_paid_at, t.id AS tenant_id
+        SELECT
+            CONVERT(t.business_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS business_name,
+            CONVERT(t.owner_name    USING utf8mb4) COLLATE utf8mb4_unicode_ci AS owner_name,
+            CONVERT(sr.plan         USING utf8mb4) COLLATE utf8mb4_unicode_ci AS plan,
+            COALESCE(sr.reviewed_at, sr.requested_at) AS paymongo_paid_at,
+            t.id AS tenant_id,
+            CONVERT(sr.billing_cycle USING utf8mb4) COLLATE utf8mb4_unicode_ci AS billing_cycle,
+            CASE
+                WHEN sr.is_upgrade = 1                                                              THEN 'upgrade'
+                WHEN sr.is_upgrade = 0 AND sr.upgrade_from IS NOT NULL                              THEN 'downgrade'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%REACTIVATION%'     THEN 'reactivation'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%RENEWAL%'          THEN 'renewal'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%UPGRADE%'          THEN 'upgrade'
+                WHEN UPPER(CONVERT(COALESCE(sr.notes,'') USING utf8mb4)) LIKE '%DOWNGRADE%'        THEN 'downgrade'
+                ELSE 'signup'
+            END AS payment_type,
+            sr.amount
+        FROM subscription_renewals sr
+        JOIN tenants t ON sr.tenant_id = t.id
+        WHERE sr.status IN ('approved', 'pending')
+          AND COALESCE(sr.reviewed_at, sr.requested_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+
+        UNION ALL
+
+        SELECT
+            CONVERT(t.business_name USING utf8mb4) COLLATE utf8mb4_unicode_ci AS business_name,
+            CONVERT(t.owner_name    USING utf8mb4) COLLATE utf8mb4_unicode_ci AS owner_name,
+            CONVERT(t.plan          USING utf8mb4) COLLATE utf8mb4_unicode_ci AS plan,
+            t.paymongo_paid_at,
+            t.id AS tenant_id,
+            'monthly'  COLLATE utf8mb4_unicode_ci AS billing_cycle,
+            'signup'   COLLATE utf8mb4_unicode_ci AS payment_type,
+            CASE t.plan WHEN 'Pro' THEN 999 WHEN 'Enterprise' THEN 2499 ELSE 0 END AS amount
         FROM tenants t
         WHERE t.payment_status = 'paid'
           AND t.paymongo_paid_at IS NOT NULL
-          AND t.paymongo_paid_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-        ORDER BY t.paymongo_paid_at DESC
-        LIMIT 20
+          AND t.paymongo_paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+          AND NOT EXISTS (
+              SELECT 1 FROM subscription_renewals sr2
+              WHERE sr2.tenant_id = t.id
+                AND COALESCE(sr2.reviewed_at, sr2.requested_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+          )
+
+        ORDER BY paymongo_paid_at DESC
+        LIMIT 50
     ");
     $notif_items = $notif_stmt->fetchAll();
     $notif_count = count($notif_items);
@@ -854,7 +897,7 @@ try {
             (SELECT u.id FROM users u WHERE u.tenant_id=t.id AND u.role='admin' LIMIT 1) AS admin_uid,
             (SELECT status FROM tenant_invitations ti WHERE ti.tenant_id=t.id ORDER BY ti.created_at DESC LIMIT 1) AS invite_status,
             DATEDIFF(t.subscription_end, CURDATE()) AS days_left
-        FROM tenants t ORDER BY t.created_at DESC
+        FROM tenants t ORDER BY t.business_name ASC
     ")->fetchAll();
 } catch (PDOException $e) {
     $tenants = [];
@@ -1378,7 +1421,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
         <div id="notifDropdown" style="display:none;position:absolute;right:0;top:44px;width:320px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:999;overflow:hidden;">
           <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
             <span style="font-size:.82rem;font-weight:700;color:#0f172a;">💳 Recent Payments</span>
-            <span style="font-size:.72rem;color:#64748b;">Last 7 days</span>
+            <span style="font-size:.72rem;color:#64748b;">Last 30 days</span>
           </div>
           <div style="max-height:320px;overflow-y:auto;">
             <?php if (empty($notif_items)): ?>
@@ -1391,7 +1434,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 </div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:.8rem;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($n['business_name']) ?></div>
-                  <div style="font-size:.73rem;color:#475569;margin-top:1px;"><?= htmlspecialchars($n['owner_name']) ?> · <span style="color:#16a34a;font-weight:600;"><?= htmlspecialchars($n['plan']) ?> Plan paid</span></div>
+                  <div style="font-size:.73rem;color:#475569;margin-top:1px;"><?= htmlspecialchars($n['owner_name']) ?> · <span style="color:#16a34a;font-weight:600;"><?= htmlspecialchars($n['plan']) ?> Plan</span> <span style="color:#2563eb;font-weight:600;"><?php $pt=$n['payment_type']??'signup'; echo match($pt){'renewal'=>'Renewed','upgrade'=>'Upgraded','reactivation'=>'Reactivated','downgrade'=>'Downgraded',default=>'Signup'}; ?></span></div>
                   <div style="font-size:.68rem;color:#94a3b8;margin-top:2px;"><?= date('M d, Y · h:i A', strtotime($n['paymongo_paid_at'])) ?></div>
                 </div>
               </div>
