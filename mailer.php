@@ -1,9 +1,9 @@
 <?php
 // ── GMAIL SETTINGS — palitan ng sarili mong Gmail ─────────────
 define('MAIL_FROM',     'mendozalesterjames7@gmail.com');
-define('MAIL_FROM_NAME','Pawnshop');
+define('MAIL_FROM_NAME','PawnHub System');
 define('MAIL_USERNAME', 'mendozalesterjames7@gmail.com');
-define('MAIL_PASSWORD', 'aigdkjcbcrbqmzdu');
+define('MAIL_PASSWORD', 'odhlbonvsclpjzaw');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 
 
