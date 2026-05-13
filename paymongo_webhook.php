@@ -524,7 +524,7 @@ if ($event_type === 'checkout_session.payment.paid') {
         try {
             $pdo->prepare("
                 INSERT INTO payment_logs
-                    (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
+                    (tenant_id, user_id, session_id, plan, amount, method, status, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
             ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
         } catch (PDOException $e) {
