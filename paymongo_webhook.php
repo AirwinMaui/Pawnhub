@@ -490,7 +490,7 @@ if ($event_type === 'checkout_session.payment.paid') {
                         // Send login credentials email
                         if (!empty($t_row['email']) && !empty($slug)) {
                             try {
-                                require_once __DIR__ . '/mailer.php';
+                                require __DIR__ . '/mailer.php';
                                 // Check for SA-invited tenant (any token — renew if expired)
                                 $inv = $pdo->prepare("SELECT id, token, status FROM tenant_invitations WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1");
                                 $inv->execute([$tenant_id]);
@@ -501,13 +501,17 @@ if ($event_type === 'checkout_session.payment.paid') {
                                     $new_exp = date('Y-m-d H:i:s', strtotime('+24 hours'));
                                     $pdo->prepare("UPDATE tenant_invitations SET token=?, expires_at=?, status='pending', used_at=NULL WHERE id=?")
                                         ->execute([$new_tok, $new_exp, $inv_row['id']]);
-                                    sendTenantInvitation($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $new_tok, $slug);
+                                    $mail_result = sendTenantInvitation($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $new_tok, $slug);
+                                    error_log("[Webhook] sendTenantInvitation result: " . ($mail_result ? 'SUCCESS' : 'FAILED') . " to: " . $t_row['email']);
                                 } else {
-                                    sendTenantApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $slug);
+                                    $mail_result = sendTenantApproved($t_row['email'], $t_row['owner_name'], $t_row['business_name'], $slug);
+                                    error_log("[Webhook] sendTenantApproved result: " . ($mail_result ? 'SUCCESS' : 'FAILED') . " to: " . $t_row['email']);
                                 }
                             } catch (Throwable $mail_err) {
                                 error_log("[Webhook] Auto-approve email error: " . $mail_err->getMessage());
                             }
+                        } else {
+                            error_log("[Webhook] Email skipped — email: '{$t_row['email']}', slug: '{$slug}'");
                         }
 
                         error_log("[Webhook] SIGNUP AUTO-APPROVED: tenant_id={$tenant_id}, user_id={$user_id}, plan={$plan}, method={$payment_method}, slug={$slug}");
@@ -524,7 +528,7 @@ if ($event_type === 'checkout_session.payment.paid') {
         try {
             $pdo->prepare("
                 INSERT INTO payment_logs
-                    (tenant_id, user_id, session_id, plan, amount, method, status, created_at)
+                    (tenant_id, user_id, session_id, plan, amount, payment_method, status, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'paid', NOW())
             ")->execute([$tenant_id, $user_id, $session_id, $plan, $amount_paid, 'PayMongo — ' . $payment_method]);
         } catch (PDOException $e) {
