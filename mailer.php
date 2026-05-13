@@ -1,9 +1,9 @@
 <?php
 // ── GMAIL SETTINGS — palitan ng sarili mong Gmail ─────────────
-define('MAIL_FROM',     'mendozalesterjames7@gmail.com');
+define('MAIL_FROM',     'mendozakiaro@gmail.com');
 define('MAIL_FROM_NAME','PawnHub System');
-define('MAIL_USERNAME', 'mendozalesterjames7@gmail.com');
-define('MAIL_PASSWORD', 'kwrussfymluo wcfe');
+define('MAIL_USERNAME', 'aa1bc0001@smtp-brevo.com');
+define('MAIL_PASSWORD', 'xsmtpsib-4e68dc0abe6290ed0d7e2a776b05e433436eae6eea9b9f34c423d03845ae179a-Q0viVKlPivNWphRE');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
 // ── Load PHPMailer ─────────────────────────────────────────────
 $_autoload = __DIR__ . '/vendor/autoload.php';
