@@ -5,6 +5,7 @@ define('MAIL_FROM_NAME','PawnHub System');
 define('MAIL_USERNAME', 'mendozalesterjames7@gmail.com');
 define('MAIL_PASSWORD', 'kwrussfymluo wcfe');
 define('APP_URL', 'https://pawnhub-bjesb8gqh5d3eqfy.southeastasia-01.azurewebsites.net');
+
 // ── Load PHPMailer ─────────────────────────────────────────────
 $_autoload = __DIR__ . '/vendor/autoload.php';
 if (!file_exists($_autoload)) {
@@ -43,7 +44,7 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
-        $mail->Host       = 'smtp-relay.brevo.com';
+        $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
         $mail->Username   = MAIL_USERNAME;
         $mail->Password   = MAIL_PASSWORD;
