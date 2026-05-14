@@ -517,7 +517,7 @@ html { scroll-behavior: smooth; }
               </div>
             </div>
             <!-- OCR Auto-filled fields -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
               <div>
                 <label class="field-label">DTI Number <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
                 <div style="position:relative;">
@@ -527,7 +527,7 @@ html { scroll-behavior: smooth; }
                     maxlength="50" style="padding-right:36px;">
                   <span id="dti_ocr_icon" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none;font-size:14px;">✅</span>
                 </div>
-                <div id="dti_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;">Will auto-fill when you upload your Business Permit below</div>
+                <div id="dti_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;min-height:16px;">Will auto-fill when you upload your Business Permit below</div>
               </div>
               <div>
                 <label class="field-label">Permit Expiry Date <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
@@ -538,7 +538,7 @@ html { scroll-behavior: smooth; }
                     maxlength="50" style="padding-right:36px;">
                   <span id="expiry_ocr_icon" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none;font-size:14px;">✅</span>
                 </div>
-                <div id="expiry_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;">Will auto-fill when you upload your Business Permit below</div>
+                <div id="expiry_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;min-height:16px;">Will auto-fill when you upload your Business Permit below</div>
               </div>
             </div>
             <!-- OCR Status Bar -->
@@ -1126,15 +1126,26 @@ function extractFromPermit(rawText) {
   const mShort = 'JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC';
 
   // DTI / Registration Number
+  // Priority: most specific label first, then fallback to any number near DTI keyword.
+  // Each pattern must capture an actual alphanumeric token (not just a keyword word like "LICENSE").
   let dtiNumber = '';
   const dtiPatterns = [
-    /DTI\s*(?:REG(?:ISTRATION)?)?\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i,
-    /(?:REGISTRATION|REG)\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{6,20})/i,
-    /\bDTI\b[^\n]{0,25}?(\d{5,15})/i,
-    /CERT(?:IFICATE)?\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i,
-    /(?:LICENSE|PERMIT)\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i,
+    // "DTI REG NO: 12345" or "DTI REGISTRATION NUMBER: ABC-123"
+    /DTI\s*(?:REG(?:ISTRATION)?)?\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-\/]{4,19})/i,
+    // "REGISTRATION NO: 12345" — must have a digit somewhere to avoid grabbing plain words
+    /(?:REGISTRATION|REG)\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{3,19})/i,
+    // "DTI" anywhere then a number nearby (digits only block)
+    /\bDTI\b[^:\n]{0,30}?[:\-\s](\d{5,15})/i,
+    // "CERT NO: 12345" — must start or contain a digit
+    /CERT(?:IFICATE)?\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{3,19})/i,
+    // "LICENSE NO: 12345" or "PERMIT NO: 12345" — require digit in capture group
+    /(?:LICENSE|PERMIT)\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{3,19})/i,
   ];
-  for (const p of dtiPatterns) { const m = text.match(p); if (m && m[1]) { dtiNumber = m[1].trim(); break; } }
+  for (const p of dtiPatterns) {
+    const m = text.match(p);
+    // Extra guard: captured value must contain at least one digit
+    if (m && m[1] && /\d/.test(m[1])) { dtiNumber = m[1].trim(); break; }
+  }
 
   // Expiry / Validity Date
   let expiryDate = '';
