@@ -1588,16 +1588,16 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
           <td style="font-size:.78rem;color:var(--text-dim);"><?=htmlspecialchars($t['owner_name'])?></td>
           <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':'plan-pro'?>"><?=$t['plan']?></span></td>
           <td>
-            <?php if (!empty($t['business_permit_url'])): ?>
-              <?php $ext = strtolower(pathinfo($t['business_permit_url'], PATHINFO_EXTENSION)); ?>
-              <?php if ($ext === 'pdf'): ?>
-                <a href="<?=htmlspecialchars($t['business_permit_url'])?>" target="_blank" class="btn-sm" style="font-size:.69rem;background:#0f172a;color:#fff;border:none;">📄 View PDF</a>
-              <?php else: ?>
-                <a href="<?=htmlspecialchars($t['business_permit_url'])?>" target="_blank" class="btn-sm" style="font-size:.69rem;background:#0f172a;color:#fff;border:none;">🖼 View Image</a>
-              <?php endif; ?>
-            <?php else: ?>
-              <span style="font-size:.72rem;color:#94a3b8;">No file</span>
-            <?php endif; ?>
+            <button onclick="openDocsModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm" style="font-size:.69rem;background:#1e293b;color:#93c5fd;border:1px solid #334155;">
+              📂 View Documents
+              <?php
+                $doc_count = 0;
+                foreach(['business_permit_url','bsp_certificate_url','aml_certificate_url','fire_safety_cert_url','sanitary_permit_url'] as $dk) {
+                  if (!empty($t[$dk])) $doc_count++;
+                }
+              ?>
+              <span style="background:#3b82f6;color:#fff;border-radius:10px;padding:1px 6px;font-size:.62rem;margin-left:3px;"><?=$doc_count?>/5</span>
+            </button>
           </td>
           <td>
             <?php if ($t['payment_status'] === 'paid'): ?>
@@ -2660,6 +2660,32 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 </div>
 
 <!-- ── REJECT PERMIT MODAL ─────────────────────────────── -->
+<!-- ══ DOCUMENTS MODAL ════════════════════════════════════════ -->
+<div class="modal-overlay" id="docsModal">
+  <div class="modal" style="width:560px;max-width:98vw;">
+    <div class="mhdr">
+      <div>
+        <div class="mtitle">📂 Submitted Documents</div>
+        <div class="msub" id="docs_modal_title" style="color:#93c5fd;font-weight:600;"></div>
+      </div>
+      <button class="mclose" onclick="document.getElementById('docsModal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="mbody">
+      <div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:10px;padding:10px 14px;font-size:.78rem;color:#93c5fd;margin-bottom:14px;line-height:1.6;">
+        ℹ️ Review each document before approving the tenant. Click <strong>View PDF</strong> or <strong>View Image</strong> to open in a new tab.
+      </div>
+      <div id="docs_modal_body" style="display:flex;flex-direction:column;gap:10px;">
+        <!-- Populated by JS -->
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:18px;">
+        <button type="button" class="btn-sm" onclick="document.getElementById('docsModal').classList.remove('open')" style="padding:8px 20px;">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="rejectPermitModal">
   <div class="modal">
     <div class="mhdr"><div><div class="mtitle">✗ Reject Business Permit</div><div class="msub" id="reject_permit_sub"></div></div><button class="mclose" onclick="document.getElementById('rejectPermitModal').classList.remove('open')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -2702,6 +2728,12 @@ const tenantsData = <?php
     }
     $td_map[(int)$t['id']] = [
       'permit'          => !empty($t['business_permit_url']) ? htmlspecialchars($t['business_permit_url'], ENT_QUOTES) : null,
+      'bsp_cert'        => !empty($t['bsp_certificate_url']) ? htmlspecialchars($t['bsp_certificate_url'], ENT_QUOTES) : null,
+      'aml_cert'        => !empty($t['aml_certificate_url']) ? htmlspecialchars($t['aml_certificate_url'], ENT_QUOTES) : null,
+      'fire_cert'       => !empty($t['fire_safety_cert_url']) ? htmlspecialchars($t['fire_safety_cert_url'], ENT_QUOTES) : null,
+      'sanitary'        => !empty($t['sanitary_permit_url']) ? htmlspecialchars($t['sanitary_permit_url'], ENT_QUOTES) : null,
+      'sec_dti'         => !empty($t['sec_dti_url']) ? htmlspecialchars($t['sec_dti_url'], ENT_QUOTES) : null,
+      'business_name'   => htmlspecialchars($t['business_name'] ?? '', ENT_QUOTES),
       'payment'         => $payment,
       'payment_status'  => $t['payment_status'] ?? null,
       'paymongo_paid_at'=> !empty($t['paymongo_paid_at']) ? date('M d, Y g:i A', strtotime($t['paymongo_paid_at'])) : null,
@@ -2710,6 +2742,51 @@ const tenantsData = <?php
   }
   echo json_encode($td_map);
 ?>;
+
+// ── Documents Modal ──────────────────────────────────────────
+function openDocsModal(tid, name) {
+  const td = tenantsData[tid];
+  document.getElementById('docs_modal_title').textContent = name;
+
+  const docs = [
+    { key: 'permit',    label: 'Business Permit',                 group: 'Capital & Registrations',          icon: '🏛️', color: '#3b82f6' },
+    { key: 'bsp_cert',  label: 'BSP Certificate of Authority',    group: 'BSP Requirements',                  icon: '⚖️', color: '#a855f7' },
+    { key: 'aml_cert',  label: 'AML/CFT Compliance Certificate',  group: 'BSP Requirements',                  icon: '🛡️', color: '#a855f7' },
+    { key: 'fire_cert', label: 'Fire Safety Inspection Cert',     group: 'Physical & Security',               icon: '🔥', color: '#f97316' },
+    { key: 'sanitary',  label: 'Sanitary Permit',                 group: 'Physical & Security',               icon: '🏥', color: '#22c55e' },
+    { key: 'sec_dti',   label: 'SEC / DTI Registration',          group: 'Capital & Registrations (Optional)', icon: '📋', color: '#64748b' },
+  ];
+
+  let html = '';
+  docs.forEach(doc => {
+    const url = td ? td[doc.key] : null;
+    const ext = url ? url.split('.').pop().toLowerCase() : '';
+    const isPdf = ext === 'pdf';
+    const hasFile = !!url;
+
+    html += `
+      <div style="background:#1e293b;border:1px solid ${hasFile ? doc.color + '55' : '#334155'};border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+          <div style="width:36px;height:36px;background:${doc.color}22;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1rem;">${doc.icon}</div>
+          <div style="min-width:0;">
+            <div style="font-size:.82rem;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${doc.label}</div>
+            <div style="font-size:.7rem;color:#64748b;">${doc.group}</div>
+          </div>
+        </div>
+        <div style="flex-shrink:0;">
+          ${hasFile
+            ? `<a href="${url}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:${doc.color};color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;text-decoration:none;cursor:pointer;">
+                ${isPdf ? '📄 View PDF' : '🖼 View Image'}
+              </a>`
+            : `<span style="background:#0f172a;color:#475569;border:1px solid #334155;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:600;">⚠ Not Uploaded</span>`
+          }
+        </div>
+      </div>`;
+  });
+
+  document.getElementById('docs_modal_body').innerHTML = html;
+  document.getElementById('docsModal').classList.add('open');
+}
 
 function openApproveModal(tid,uid,name){
   document.getElementById('approve_tid').value=tid;
