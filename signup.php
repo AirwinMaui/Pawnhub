@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Your upload is too large for the server. Max total form size: ' . $post_max_str . '. Please compress or resize your file.';
     }
 
-    if (!$error):
+    if (!$error) {
 
     $fullname   = trim($_POST['fullname']      ?? '');
     $email      = trim($_POST['email']         ?? '');
@@ -35,6 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $address    = trim($_POST['address']       ?? '');
     $plan       = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
     $branches   = intval($_POST['branches'] ?? 1);
+
+    // ── New requirement document fields ─────────────────────────
+    // Group 1: Capital & Registrations
+    // Group 2: BSP (Bangko Sentral) Requirements
+    // Group 3: Physical & Security
+    // (Business Permit stays as Group 0)
 
     $needs_payment = in_array($plan, ['Pro', 'Enterprise']);
 
@@ -65,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($pass) < 8) {
         $error = 'Password must be at least 8 characters.';
     } elseif (empty($_FILES['business_permit']['name']) || ($_FILES['business_permit']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        $error = 'Please upload your Business Permit.';
+        $error = 'Please upload your Business Permit (Group 1: Capital & Registrations).';
     } elseif (($_FILES['business_permit']['error'] ?? 0) !== UPLOAD_ERR_OK) {
         $upload_errors = [
             UPLOAD_ERR_INI_SIZE   => 'File exceeds server upload limit (' . ini_get('upload_max_filesize') . 'B). Please compress or resize it.',
@@ -77,15 +83,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         $err_code = $_FILES['business_permit']['error'];
         $error = $upload_errors[$err_code] ?? 'File upload failed (error ' . $err_code . '). Please try again.';
-    } else {
-        $file_size = $_FILES['business_permit']['size'];
-        $file_tmp  = $_FILES['business_permit']['tmp_name'];
-        $file_name = $_FILES['business_permit']['name'];
 
-        if ($file_size > 5 * 1024 * 1024) {
-            $error = 'Business permit file must be less than 5MB.';
-        } else {
-            // Check duplicate username
+    // ── Group 2: BSP Requirements validation ──────────────────────────────
+    } elseif (empty($_FILES['bsp_certificate']['name']) || ($_FILES['bsp_certificate']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $error = 'Please upload your BSP Certificate of Authority (Group 2: BSP Requirements).';
+    } elseif (($_FILES['bsp_certificate']['error'] ?? 0) !== UPLOAD_ERR_OK) {
+        $err_code = $_FILES['bsp_certificate']['error'];
+        $upload_errors = [UPLOAD_ERR_INI_SIZE=>'File too large.',UPLOAD_ERR_PARTIAL=>'Partial upload, please retry.'];
+        $error = $upload_errors[$err_code] ?? 'BSP Certificate upload failed (error '.$err_code.').';
+    } elseif ($_FILES['bsp_certificate']['size'] > 5 * 1024 * 1024) {
+        $error = 'BSP Certificate file must be less than 5MB.';
+
+    } elseif (empty($_FILES['aml_certificate']['name']) || ($_FILES['aml_certificate']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $error = 'Please upload your AML/CFT Compliance Certificate (Group 2: BSP Requirements).';
+    } elseif (($_FILES['aml_certificate']['error'] ?? 0) !== UPLOAD_ERR_OK) {
+        $err_code = $_FILES['aml_certificate']['error'];
+        $error = 'AML/CFT Certificate upload failed (error '.$err_code.').';
+    } elseif ($_FILES['aml_certificate']['size'] > 5 * 1024 * 1024) {
+        $error = 'AML/CFT Certificate file must be less than 5MB.';
+
+    // ── Group 3: Physical & Security validation ──────────────────────────────
+    } elseif (empty($_FILES['fire_safety_cert']['name']) || ($_FILES['fire_safety_cert']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $error = 'Please upload your Fire Safety Inspection Certificate (Group 3: Physical & Security).';
+    } elseif (($_FILES['fire_safety_cert']['error'] ?? 0) !== UPLOAD_ERR_OK) {
+        $err_code = $_FILES['fire_safety_cert']['error'];
+        $error = 'Fire Safety Certificate upload failed (error '.$err_code.').';
+    } elseif ($_FILES['fire_safety_cert']['size'] > 5 * 1024 * 1024) {
+        $error = 'Fire Safety Certificate file must be less than 5MB.';
+
+    } elseif (empty($_FILES['sanitary_permit']['name']) || ($_FILES['sanitary_permit']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $error = 'Please upload your Sanitary Permit (Group 3: Physical & Security).';
+    } elseif (($_FILES['sanitary_permit']['error'] ?? 0) !== UPLOAD_ERR_OK) {
+        $err_code = $_FILES['sanitary_permit']['error'];
+        $error = 'Sanitary Permit upload failed (error '.$err_code.').';
+    } elseif ($_FILES['sanitary_permit']['size'] > 5 * 1024 * 1024) {
+        $error = 'Sanitary Permit file must be less than 5MB.';
+
+    } else {
+        // Check duplicate username
             $chk_user = $pdo->prepare("SELECT id FROM users WHERE username=? LIMIT 1");
             $chk_user->execute([$username]);
             // Check duplicate email in BOTH users AND tenants tables
@@ -106,22 +141,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $upload_dir = __DIR__ . '/uploads/permits/';
                 if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-                $ext         = pathinfo($file_name, PATHINFO_EXTENSION);
-                $safe_name   = 'permit_' . time() . '_' . bin2hex(random_bytes(6)) . ($ext ? '.' . $ext : '');
-                $upload_path = $upload_dir . $safe_name;
-                $permit_url  = 'uploads/permits/' . $safe_name;
 
-                if (!move_uploaded_file($file_tmp, $upload_path)) {
-                    $error = 'Failed to upload file. Please try again.';
-                } else {
+                // ── Helper: save one uploaded file ──────────────────────
+                $saved_urls = [];
+                $uploaded_paths = [];
+                $doc_fields = [
+                    'business_permit'  => 'permit',
+                    'bsp_certificate'  => 'bsp',
+                    'aml_certificate'  => 'aml',
+                    'fire_safety_cert' => 'fire',
+                    'sanitary_permit'  => 'sanitary',
+                ];
+                foreach ($doc_fields as $field => $prefix) {
+                    if (!empty($_FILES[$field]['name']) && ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                        $ext  = pathinfo($_FILES[$field]['name'], PATHINFO_EXTENSION);
+                        $safe = $prefix . '_' . time() . '_' . bin2hex(random_bytes(4)) . ($ext ? '.' . $ext : '');
+                        $path = $upload_dir . $safe;
+                        if (move_uploaded_file($_FILES[$field]['tmp_name'], $path)) {
+                            $saved_urls[$field]    = 'uploads/permits/' . $safe;
+                            $uploaded_paths[$field] = $path;
+                        } else {
+                            $error = 'Failed to upload ' . $field . '. Please try again.';
+                            break;
+                        }
+                    }
+                }
+
+                if (!$error && count($saved_urls) < count($doc_fields)) {
+                    $error = 'One or more required documents failed to upload. Please try again.';
+                    foreach ($uploaded_paths as $p) @unlink($p);
+                }
+
+                if (!$error) {
+                    $permit_url = $saved_urls['business_permit'];
 
                     // Starter is free — use 'free' so the ENUM doesn't truncate.
                     // Pro / Enterprise start as 'unpaid' until the PayMongo webhook sets 'paid'.
                     $payment_status = 'pending'; // ENUM: pending|paid|failed|free — webhook sets 'paid' after PayMongo confirms
                     $pdo->beginTransaction();
                     try {
-                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?)")
-                            ->execute([$biz_name, $fullname, $email, $phone, $address, $plan, $branches, $payment_status, $permit_url]);
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url,bsp_certificate_url,aml_certificate_url,fire_safety_cert_url,sanitary_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?,?)")
+                            ->execute([
+                                $biz_name, $fullname, $email, $phone, $address, $plan, $branches,
+                                $payment_status,
+                                $saved_urls['business_permit'],
+                                $saved_urls['bsp_certificate']  ?? null,
+                                $saved_urls['aml_certificate']  ?? null,
+                                $saved_urls['fire_safety_cert'] ?? null,
+                                $saved_urls['sanitary_permit']  ?? null,
+                            ]);
                         $new_tid = $pdo->lastInsertId();
                         $pdo->prepare("INSERT INTO users (tenant_id,fullname,email,username,password,role,status) VALUES (?,?,?,?,?,'admin','pending')")
                             ->execute([$new_tid, $fullname, $email, $username, password_hash($pass, PASSWORD_BCRYPT)]);
@@ -129,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pdo->commit();
                     } catch (Throwable $dbErr) {
                         $pdo->rollBack();
-                        @unlink($upload_path); // clean up uploaded file
+                        foreach ($uploaded_paths as $p) @unlink($p);
                         error_log('[Signup] DB error: ' . $dbErr->getMessage());
                         $error = 'Registration failed due to a server error. Please try again.';
                         goto end_processing;
@@ -152,8 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-    }
-    endif; // end if (!$error) — post_max_size guard
+    } // end if (!$error) — post_max_size guard
 }
 
 $plans = [
@@ -445,25 +512,150 @@ html { scroll-behavior: smooth; }
           </div>
         </div>
 
-        <!-- ── SECTION 2: Business Permit Upload ─────────────── -->
+        <!-- ── SECTION 2: Required Documents (4 Groups) ─────────────── -->
         <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:16px;">
-          <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:12px;">📄 Business Permit <span style="color:#f87171;">*</span></p>
-          <div class="file-upload-zone" id="permitDropZone" onclick="document.getElementById('business_permit').click()">
-            <input type="file" name="business_permit" id="business_permit" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handlePermitFile(this)">
-            <div id="permitPlaceholder">
-              <span class="material-symbols-outlined" style="font-size:32px;color:rgba(255,255,255,0.3);margin-bottom:8px;display:block;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;">upload_file</span>
-              <p style="font-size:0.82rem;font-weight:600;color:rgba(255,255,255,0.5);margin-bottom:4px;">Click or drag & drop your Business Permit</p>
-              <p style="font-size:0.72rem;color:rgba(255,255,255,0.3);">JPG, PNG, WEBP, or PDF only · Max 5MB</p>
-            </div>
-            <div id="permitPreview" style="display:none;">
-              <span class="material-symbols-outlined" style="font-size:28px;color:#34d399;margin-bottom:6px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
-              <p id="permitFileName" style="font-size:0.82rem;font-weight:700;color:#86efac;"></p>
-              <p style="font-size:0.7rem;color:rgba(255,255,255,0.35);margin-top:2px;">Click to change file</p>
-            </div>
-          </div>
-          <!-- OCR Status Banner (hidden until file selected) -->
+          <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);margin-bottom:4px;">📄 Required Documents</p>
+          <p style="font-size:0.73rem;color:rgba(255,255,255,0.35);margin-bottom:16px;">Upload clear photos or scans of each document. JPG, PNG, WEBP, or PDF · Max 5MB each.</p>
 
-          <p style="font-size:0.71rem;color:rgba(255,255,255,0.3);margin-top:6px;">📌 This will be reviewed by the Super Admin before your account is approved.</p>
+          <div style="display:flex;flex-direction:column;gap:18px;">
+
+            <!-- Group 1: Capital & Registrations -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:28px;height:28px;background:rgba(59,130,246,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <span class="material-symbols-outlined" style="font-size:15px;color:#93c5fd;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">account_balance</span>
+                </div>
+                <div>
+                  <p style="font-size:0.78rem;font-weight:700;color:#93c5fd;margin:0;">Capital &amp; Registrations</p>
+                  <p style="font-size:0.68rem;color:rgba(255,255,255,0.35);margin:0;">SEC/DTI registration, Mayor's Permit, business permit</p>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <!-- Business Permit -->
+                <div>
+                  <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Business Permit <span style="color:#f87171;">*</span></p>
+                  <div class="file-upload-zone" id="dz_business_permit" onclick="document.getElementById('business_permit').click()" style="padding:14px;">
+                    <input type="file" name="business_permit" id="business_permit" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_business_permit')">
+                    <div id="prev_business_permit_placeholder">
+                      <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
+                      <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
+                    </div>
+                    <div id="prev_business_permit" style="display:none;">
+                      <span class="material-symbols-outlined" style="font-size:22px;color:#34d399;margin-bottom:4px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
+                      <p class="doc-file-name" style="font-size:0.7rem;font-weight:700;color:#86efac;word-break:break-all;"></p>
+                    </div>
+                  </div>
+                </div>
+                <!-- SEC / DTI Registration -->
+                <div>
+                  <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">SEC / DTI Registration <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional)</span></p>
+                  <div class="file-upload-zone" id="dz_sec_dti" onclick="document.getElementById('sec_dti').click()" style="padding:14px;">
+                    <input type="file" name="sec_dti" id="sec_dti" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_sec_dti')">
+                    <div id="prev_sec_dti_placeholder">
+                      <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
+                      <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
+                    </div>
+                    <div id="prev_sec_dti" style="display:none;">
+                      <span class="material-symbols-outlined" style="font-size:22px;color:#34d399;margin-bottom:4px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
+                      <p class="doc-file-name" style="font-size:0.7rem;font-weight:700;color:#86efac;word-break:break-all;"></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 2: BSP (Bangko Sentral) Requirements -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:28px;height:28px;background:rgba(168,85,247,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <span class="material-symbols-outlined" style="font-size:15px;color:#c4b5fd;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">gavel</span>
+                </div>
+                <div>
+                  <p style="font-size:0.78rem;font-weight:700;color:#c4b5fd;margin:0;">BSP (Bangko Sentral) Requirements</p>
+                  <p style="font-size:0.68rem;color:rgba(255,255,255,0.35);margin:0;">BSP Certificate of Authority, AML/CFT Compliance Certificate</p>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <!-- BSP Certificate -->
+                <div>
+                  <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">BSP Certificate of Authority <span style="color:#f87171;">*</span></p>
+                  <div class="file-upload-zone" id="dz_bsp_certificate" onclick="document.getElementById('bsp_certificate').click()" style="padding:14px;">
+                    <input type="file" name="bsp_certificate" id="bsp_certificate" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_bsp_certificate')">
+                    <div id="prev_bsp_certificate_placeholder">
+                      <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
+                      <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
+                    </div>
+                    <div id="prev_bsp_certificate" style="display:none;">
+                      <span class="material-symbols-outlined" style="font-size:22px;color:#34d399;margin-bottom:4px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
+                      <p class="doc-file-name" style="font-size:0.7rem;font-weight:700;color:#86efac;word-break:break-all;"></p>
+                    </div>
+                  </div>
+                </div>
+                <!-- AML Certificate -->
+                <div>
+                  <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">AML/CFT Compliance Cert <span style="color:#f87171;">*</span></p>
+                  <div class="file-upload-zone" id="dz_aml_certificate" onclick="document.getElementById('aml_certificate').click()" style="padding:14px;">
+                    <input type="file" name="aml_certificate" id="aml_certificate" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_aml_certificate')">
+                    <div id="prev_aml_certificate_placeholder">
+                      <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
+                      <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
+                    </div>
+                    <div id="prev_aml_certificate" style="display:none;">
+                      <span class="material-symbols-outlined" style="font-size:22px;color:#34d399;margin-bottom:4px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
+                      <p class="doc-file-name" style="font-size:0.7rem;font-weight:700;color:#86efac;word-break:break-all;"></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 3: Physical & Security -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:28px;height:28px;background:rgba(234,179,8,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <span class="material-symbols-outlined" style="font-size:15px;color:#fde047;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">security</span>
+                </div>
+                <div>
+                  <p style="font-size:0.78rem;font-weight:700;color:#fde047;margin:0;">Physical &amp; Security</p>
+                  <p style="font-size:0.68rem;color:rgba(255,255,255,0.35);margin:0;">Fire Safety Certificate, Sanitary Permit, CCTV clearance</p>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <!-- Fire Safety -->
+                <div>
+                  <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Fire Safety Inspection Cert <span style="color:#f87171;">*</span></p>
+                  <div class="file-upload-zone" id="dz_fire_safety_cert" onclick="document.getElementById('fire_safety_cert').click()" style="padding:14px;">
+                    <input type="file" name="fire_safety_cert" id="fire_safety_cert" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_fire_safety_cert')">
+                    <div id="prev_fire_safety_cert_placeholder">
+                      <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
+                      <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
+                    </div>
+                    <div id="prev_fire_safety_cert" style="display:none;">
+                      <span class="material-symbols-outlined" style="font-size:22px;color:#34d399;margin-bottom:4px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
+                      <p class="doc-file-name" style="font-size:0.7rem;font-weight:700;color:#86efac;word-break:break-all;"></p>
+                    </div>
+                  </div>
+                </div>
+                <!-- Sanitary Permit -->
+                <div>
+                  <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Sanitary Permit <span style="color:#f87171;">*</span></p>
+                  <div class="file-upload-zone" id="dz_sanitary_permit" onclick="document.getElementById('sanitary_permit').click()" style="padding:14px;">
+                    <input type="file" name="sanitary_permit" id="sanitary_permit" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_sanitary_permit')">
+                    <div id="prev_sanitary_permit_placeholder">
+                      <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
+                      <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
+                    </div>
+                    <div id="prev_sanitary_permit" style="display:none;">
+                      <span class="material-symbols-outlined" style="font-size:22px;color:#34d399;margin-bottom:4px;display:block;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">task</span>
+                      <p class="doc-file-name" style="font-size:0.7rem;font-weight:700;color:#86efac;word-break:break-all;"></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- end flex col -->
+          <p style="font-size:0.71rem;color:rgba(255,255,255,0.3);margin-top:10px;">📌 All documents will be reviewed by the Super Admin before your account is approved.</p>
         </div>
 
         <!-- ── SECTION 3: Owner Info ──────────────────────────── -->
@@ -659,37 +851,50 @@ function selectPlan(name) {
   if (btn) btn.textContent = isPaid ? 'Continue to Payment →' : 'Submit Application →';
 }
 
-// ── Business Permit File Handling ────────────────────────────
-function handlePermitFile(input) {
+// ── Document File Handling (all upload zones) ────────────────
+const DOC_FIELDS = [
+  'business_permit','sec_dti','bsp_certificate','aml_certificate','fire_safety_cert','sanitary_permit'
+];
+const ALLOWED_TYPES = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
+
+function handleDocFile(input, previewId) {
   const file = input.files[0];
   if (!file) return;
-
-  // Client-side type guard
-  const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
-  if (!allowed.includes(file.type)) {
+  if (!ALLOWED_TYPES.includes(file.type)) {
     input.value = '';
-    document.getElementById('permitPlaceholder').style.display = 'block';
-    document.getElementById('permitPreview').style.display = 'none';
-    alert('Invalid file type. Please upload your business permit as a JPG, PNG, WEBP, or PDF.');
+    alert('Invalid file type. Please upload JPG, PNG, WEBP, or PDF.');
     return;
   }
-
-  // Show file name preview
-  document.getElementById('permitPlaceholder').style.display = 'none';
-  document.getElementById('permitFileName').textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
-  document.getElementById('permitPreview').style.display = 'block';
+  if (file.size > 5 * 1024 * 1024) {
+    input.value = '';
+    alert('File is too large. Maximum size is 5MB.');
+    return;
+  }
+  const placeholder = document.getElementById(previewId + '_placeholder');
+  const preview     = document.getElementById(previewId);
+  if (placeholder) placeholder.style.display = 'none';
+  if (preview) {
+    preview.style.display = 'block';
+    const nameEl = preview.querySelector('.doc-file-name');
+    if (nameEl) nameEl.textContent = file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)';
+  }
 }
 
-// Drag & drop
-const dz = document.getElementById('permitDropZone');
-dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
-dz.addEventListener('drop', e => {
-  e.preventDefault(); dz.classList.remove('drag-over');
-  const dt = new DataTransfer();
-  dt.items.add(e.dataTransfer.files[0]);
-  document.getElementById('business_permit').files = dt.files;
-  handlePermitFile(document.getElementById('business_permit'));
+// Wire drag-and-drop for each zone
+DOC_FIELDS.forEach(function(field) {
+  const dz = document.getElementById('dz_' + field);
+  if (!dz) return;
+  dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', function() { dz.classList.remove('drag-over'); });
+  dz.addEventListener('drop', function(e) {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const input = document.getElementById(field);
+    if (!input || !e.dataTransfer.files[0]) return;
+    const dt = new DataTransfer();
+    dt.items.add(e.dataTransfer.files[0]);
+    input.files = dt.files;
+    handleDocFile(input, 'prev_' + field);
+  });
 });
 
 // On page load, show payment section and permit warning for paid plans
@@ -796,6 +1001,25 @@ document.getElementById('regForm').addEventListener('submit', function(e) {
     showFieldErr(conf);
     valid = false;
     alert('Passwords do not match.');
+  }
+
+  // Required documents check
+  const requiredDocs = [
+    { id: 'business_permit',  label: 'Business Permit' },
+    { id: 'bsp_certificate',  label: 'BSP Certificate of Authority' },
+    { id: 'aml_certificate',  label: 'AML/CFT Compliance Certificate' },
+    { id: 'fire_safety_cert', label: 'Fire Safety Inspection Certificate' },
+    { id: 'sanitary_permit',  label: 'Sanitary Permit' },
+  ];
+  for (const doc of requiredDocs) {
+    const inp = document.getElementById(doc.id);
+    if (!inp || !inp.files || inp.files.length === 0) {
+      valid = false;
+      alert('Please upload your ' + doc.label + '.');
+      const dz = document.getElementById('dz_' + doc.id);
+      if (dz) { dz.style.borderColor = 'rgba(239,68,68,0.8)'; dz.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.2)'; }
+      break;
+    }
   }
 
   if (!valid) e.preventDefault();
