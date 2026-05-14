@@ -33,8 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $biz_name   = trim($_POST['business_name'] ?? '');
     $phone      = trim($_POST['phone']         ?? '');
     $address    = trim($_POST['address']       ?? '');
-    $plan       = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
-    $branches   = intval($_POST['branches'] ?? 1);
+    $plan           = in_array($_POST['plan'] ?? '', ['Starter','Pro','Enterprise']) ? $_POST['plan'] : 'Starter';
+    $branches       = intval($_POST['branches'] ?? 1);
+    $dti_number     = trim($_POST['dti_number']    ?? '');
+    $permit_expiry  = trim($_POST['permit_expiry'] ?? '');
 
     // ── New requirement document fields ─────────────────────────
     // Group 1: Capital & Registrations
@@ -180,9 +182,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $payment_status = 'pending'; // ENUM: pending|paid|failed|free — webhook sets 'paid' after PayMongo confirms
                     $pdo->beginTransaction();
                     try {
-                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,plan,branches,status,payment_status,business_permit_url,bsp_certificate_url,aml_certificate_url,fire_safety_cert_url,sanitary_permit_url) VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?,?,?)")
+                        $pdo->prepare("INSERT INTO tenants (business_name,owner_name,email,phone,address,dti_number,permit_expiry,plan,branches,status,payment_status,business_permit_url,bsp_certificate_url,aml_certificate_url,fire_safety_cert_url,sanitary_permit_url) VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?)")
                             ->execute([
-                                $biz_name, $fullname, $email, $phone, $address, $plan, $branches,
+                                $biz_name, $fullname, $email, $phone, $address,
+                                $dti_number,
+                                $permit_expiry,
+                                $plan, $branches,
                                 $payment_status,
                                 $saved_urls['business_permit'],
                                 $saved_urls['bsp_certificate']  ?? null,
