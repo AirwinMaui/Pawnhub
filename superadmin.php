@@ -1504,17 +1504,24 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
 
       <?php
-      // Pending Approval: SA-added tenants + self-signup Starter + self-signup Paid but NOT yet paid
-      // Self-signup Paid+Paid tenants are auto-moved to Permit Review — no need to approve here
+      // Pending Approval:
+      // - SA-added tenants (invited) who haven't paid yet
+      // - Self-signup Starter plan tenants (free, need SA approval)
+      // NOTE: Self-signup Pro/Enterprise tenants auto-proceed to PayMongo after OCR
+      //       and are auto-activated after payment — they never need SA approval here.
       $pts = array_filter($tenants, function($t) {
           if ($t['status'] !== 'pending') return false;
-          $is_sa_added   = !empty($t['invite_status']);
-          $is_free       = ($t['plan'] === 'Starter');
-          $is_paid_plan  = in_array($t['plan'], ['Pro','Enterprise']);
-          $has_paid      = ($t['payment_status'] === 'paid');
-          // Exclude self-signup paid-plan tenants who already paid — they belong in Permit Review
-          if (!$is_sa_added && $is_paid_plan && $has_paid) return false;
-          return true;
+          $is_sa_added  = !empty($t['invite_status']);
+          $is_paid_plan = in_array($t['plan'], ['Pro','Enterprise']);
+
+          // SA-added tenants always show (they need monitoring until paid)
+          if ($is_sa_added) return true;
+
+          // Self-signup: only show Starter (free) plan — needs SA approval
+          // Pro/Enterprise self-signup are auto-handled via PayMongo + OCR
+          if (!$is_sa_added && !$is_paid_plan) return true;
+
+          return false;
       });
       if(!empty($pts)):?>
       <div class="card" style="border-color:#fde68a;">
@@ -1562,19 +1569,17 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
       <?php
       // Pending Permit Review:
-      // 1. Active tenants (Pro/Enterprise, self-signup) whose permit not yet reviewed
-      // 2. ALSO pending self-signup paid-plan tenants who already paid — show here instead of Pending Approval
+      // Only shows tenants that NEED manual SA review of their permit:
+      // - SA-added tenants (invited by SA) whose permit hasn't been reviewed
+      // - Tenants flagged with permit issues (sa_rejected needing re-review)
+      // NOTE: Self-signup tenants auto-pass OCR at signup, so they no longer
+      //       appear here for permit review. SA can still reject via All Tenants.
       $permit_review_tenants = array_filter($tenants, function($t) {
-          $is_sa_added  = !empty($t['invite_status']);
-          $is_paid_plan = in_array($t['plan'], ['Pro','Enterprise']);
-          $has_paid     = ($t['payment_status'] === 'paid');
+          $is_sa_added     = !empty($t['invite_status']);
           $permit_reviewed = in_array($t['business_permit_status'] ?? 'pending', ['sa_approved','sa_rejected']);
 
-          // Case 1: already active, self-signup, paid plan, has permit, not yet reviewed
-          if ($t['status'] === 'active' && $is_paid_plan && !$is_sa_added && !empty($t['business_permit_url']) && !$permit_reviewed) return true;
-
-          // Case 2: still pending, self-signup, paid plan, already paid — needs permit review + approval
-          if ($t['status'] === 'pending' && !$is_sa_added && $is_paid_plan && $has_paid) return true;
+          // Only show SA-added tenants whose permit hasn't been reviewed yet
+          if ($is_sa_added && $t['status'] === 'active' && !empty($t['business_permit_url']) && !$permit_reviewed) return true;
 
           return false;
       });

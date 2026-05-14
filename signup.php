@@ -518,28 +518,32 @@ html { scroll-behavior: smooth; }
             </div>
             <!-- OCR Auto-filled fields -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
-              <div>
+              <div style="display:flex;flex-direction:column;">
                 <label class="field-label">DTI Number <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
-                <div style="position:relative;">
+                <div style="position:relative;flex:1;">
                   <input type="text" name="dti_number" id="dti_number" class="glass-input"
                     placeholder="Auto-fill via OCR scan"
                     value="<?= htmlspecialchars($_POST['dti_number'] ?? '') ?>"
-                    maxlength="50" style="padding-right:36px;">
+                    maxlength="50" style="padding-right:36px;width:100%;box-sizing:border-box;">
                   <span id="dti_ocr_icon" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none;font-size:14px;">✅</span>
                 </div>
                 <div id="dti_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;min-height:16px;">Will auto-fill when you upload your Business Permit below</div>
               </div>
-              <div>
+              <div style="display:flex;flex-direction:column;">
                 <label class="field-label">Permit Expiry Date <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
-                <div style="position:relative;">
+                <div style="position:relative;flex:1;">
                   <input type="text" name="permit_expiry" id="permit_expiry" class="glass-input"
                     placeholder="Auto-fill via OCR scan"
                     value="<?= htmlspecialchars($_POST['permit_expiry'] ?? '') ?>"
-                    maxlength="50" style="padding-right:36px;">
+                    maxlength="50" style="padding-right:36px;width:100%;box-sizing:border-box;">
                   <span id="expiry_ocr_icon" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none;font-size:14px;">✅</span>
                 </div>
                 <div id="expiry_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;min-height:16px;">Will auto-fill when you upload your Business Permit below</div>
               </div>
+            </div>
+            <!-- Expired permit warning banner -->
+            <div id="expired_permit_banner" style="display:none;background:rgba(220,38,38,0.15);border:1.5px solid rgba(220,38,38,0.5);border-radius:10px;padding:12px 16px;font-size:0.81rem;color:#fca5a5;">
+              ❌ <strong style="color:#f87171;">Permit is EXPIRED.</strong> Your business permit has already expired. Please renew your permit before registering. Expired permits are <strong style="color:#f87171;">not accepted</strong>.
             </div>
             <!-- OCR Status Bar -->
             <div id="ocr_status_bar" style="display:none;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:10px 14px;font-size:0.78rem;color:#93c5fd;display:none;align-items:center;gap:8px;">
@@ -1059,6 +1063,14 @@ document.getElementById('regForm').addEventListener('submit', function(e) {
     }
   }
 
+  // Block submission if permit is expired
+  if (permitIsExpired) {
+    valid = false;
+    const banner = document.getElementById('expired_permit_banner');
+    if (banner) { banner.style.display = 'block'; banner.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    alert('❌ Your business permit is EXPIRED. Please renew your permit before registering.');
+  }
+
   if (!valid) e.preventDefault();
 });
 
@@ -1185,11 +1197,113 @@ function extractFromPermit(rawText) {
   setOcrFieldPlain('address',       address,  'Address');
 }
 
+// Global flag for expired permit
+let permitIsExpired = false;
+
+function parsePermitDate(str) {
+  if (!str) return null;
+  // Try "DECEMBER 31, 2026" or "DEC 31, 2026"
+  const monthNames = {
+    JANUARY:1,FEBRUARY:2,MARCH:3,APRIL:4,MAY:5,JUNE:6,
+    JULY:7,AUGUST:8,SEPTEMBER:9,OCTOBER:10,NOVEMBER:11,DECEMBER:12,
+    JAN:1,FEB:2,MAR:3,APR:4,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12
+  };
+  const mNameMatch = str.toUpperCase().match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (mNameMatch && monthNames[mNameMatch[1]]) {
+    return new Date(parseInt(mNameMatch[3]), monthNames[mNameMatch[1]] - 1, parseInt(mNameMatch[2]));
+  }
+  // Try "31 DECEMBER 2026"
+  const mNameMatch2 = str.toUpperCase().match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+  if (mNameMatch2 && monthNames[mNameMatch2[2]]) {
+    return new Date(parseInt(mNameMatch2[3]), monthNames[mNameMatch2[2]] - 1, parseInt(mNameMatch2[1]));
+  }
+  // Try MM/DD/YYYY or MM-DD-YYYY
+  const slashMatch = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (slashMatch) {
+    let y = parseInt(slashMatch[3]);
+    if (y < 100) y += 2000;
+    return new Date(y, parseInt(slashMatch[1]) - 1, parseInt(slashMatch[2]));
+  }
+  return null;
+}
+
+function checkExpiryAndSetField(value) {
+  const banner = document.getElementById('expired_permit_banner');
+  const field  = document.getElementById('permit_expiry');
+  const hint   = document.getElementById('expiry_hint');
+  const icon   = document.getElementById('expiry_ocr_icon');
+  const submitBtn = document.getElementById('submit_btn');
+
+  if (!value) {
+    permitIsExpired = false;
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+
+  const parsedDate = parsePermitDate(value);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (parsedDate && parsedDate < today) {
+    // EXPIRED — show red
+    permitIsExpired = true;
+    field.value             = value;
+    field.style.borderColor = 'rgba(220,38,38,0.8)';
+    field.style.boxShadow   = '0 0 0 3px rgba(220,38,38,0.2)';
+    hint.textContent        = '❌ EXPIRED permit detected — cannot proceed!';
+    hint.style.color        = 'rgba(248,113,113,0.9)';
+    icon.style.display      = 'none';
+    if (banner) banner.style.display = 'block';
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '0.35'; submitBtn.style.cursor = 'not-allowed'; }
+  } else {
+    // VALID
+    permitIsExpired = false;
+    field.value             = value;
+    field.style.borderColor = 'rgba(52,211,153,0.7)';
+    field.style.boxShadow   = '0 0 0 3px rgba(52,211,153,0.15)';
+    hint.textContent        = '\u2705 Auto-filled. You may edit if incorrect.';
+    hint.style.color        = 'rgba(134,239,172,0.8)';
+    icon.textContent        = '✅';
+    icon.style.display      = 'inline';
+    if (banner) banner.style.display = 'none';
+    const agreeChecked = document.getElementById('agree_terms')?.checked;
+    if (submitBtn && agreeChecked) { submitBtn.disabled = false; submitBtn.style.opacity = '1'; submitBtn.style.cursor = 'pointer'; }
+  }
+}
+
+// Also validate when user manually edits the expiry field
+document.addEventListener('DOMContentLoaded', function() {
+  const expiryField = document.getElementById('permit_expiry');
+  if (expiryField) {
+    expiryField.addEventListener('change', function() {
+      checkExpiryAndSetField(this.value.trim());
+    });
+    expiryField.addEventListener('blur', function() {
+      checkExpiryAndSetField(this.value.trim());
+    });
+  }
+});
+
 function setOcrField(fieldId, hintId, iconId, value, label) {
   const field = document.getElementById(fieldId);
   const hint  = document.getElementById(hintId);
   const icon  = document.getElementById(iconId);
   field.removeAttribute('readonly');
+
+  // Special handling for expiry date field — check if expired
+  if (fieldId === 'permit_expiry') {
+    if (value) {
+      checkExpiryAndSetField(value);
+    } else {
+      field.placeholder       = 'Not detected \u2014 please type manually';
+      field.style.borderColor = 'rgba(251,191,36,0.6)';
+      field.style.boxShadow   = '0 0 0 3px rgba(251,191,36,0.1)';
+      hint.textContent        = '\u26A0\uFE0F Expiry Date not detected. Please type manually.';
+      hint.style.color        = 'rgba(251,191,36,0.8)';
+    }
+    return;
+  }
+
   if (value) {
     field.value             = value;
     field.style.borderColor = 'rgba(52,211,153,0.7)';
