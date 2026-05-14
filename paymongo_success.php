@@ -11,8 +11,8 @@
  *   • If webhook hasn't fired yet (race condition), we do a
  *     lightweight fallback: mark paid + activate directly.
  *
- *   NOTE: Permit is still reviewed by SA after activation.
- *         If fake/expired → SA deactivates manually.
+ *   NOTE: OCR already validated the Business Permit at signup.
+ *         If SA finds it fake/expired later → deactivates manually.
  *         No refund per Terms & Conditions.
  * ─────────────────────────────────────────────────────────────
  */
@@ -199,7 +199,20 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
       </div>
     </div>
 
-    <!-- Step 2: Auto-activated -->
+    <!-- Step 2: Permit verified -->
+    <div class="flex items-start gap-3 mb-4">
+      <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-white">Business Permit verified ✅</p>
+        <p class="text-xs text-gray-400 mt-0.5">Your permit was scanned and verified during registration.</p>
+      </div>
+    </div>
+
+    <!-- Step 3: Auto-activated -->
     <div class="flex items-start gap-3 mb-4">
       <div class="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
@@ -212,7 +225,7 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
       </div>
     </div>
 
-    <!-- Step 3: Check email -->
+    <!-- Step 4: Check email -->
     <div class="flex items-start gap-3">
       <div class="w-7 h-7 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center flex-shrink-0 mt-0.5">
         <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
@@ -221,18 +234,6 @@ $plan_display     = htmlspecialchars($tenant['plan'] ?? $plan);
         <p class="text-sm font-semibold text-blue-300">Check your email &amp; log in</p>
         <p class="text-xs text-gray-400 mt-0.5">A login link has been sent to your registered email address.</p>
       </div>
-    </div>
-  </div>
-
-  <!-- Permit review notice -->
-  <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-sm text-yellow-300 mb-4 text-left">
-    <div class="flex items-start gap-2">
-      <span class="text-base mt-0.5">⚠️</span>
-      <span>
-        Your <strong>Business Permit</strong> will still be reviewed by our Super Admin.
-        If it is found to be <strong>fake or expired</strong>, your account will be
-        deactivated <strong>without refund</strong> as stated in our Terms &amp; Conditions.
-      </span>
     </div>
   </div>
 

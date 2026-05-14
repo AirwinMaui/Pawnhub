@@ -1153,12 +1153,18 @@ function extractFromPermit(rawText) {
 
   // ── Expiry / Validity Date ────────────────────────────────────────────────
   let expiryDate = '';
+  // Use literal regex (not new RegExp string) to avoid double-escape issues
   const expiryPatterns = [
-    new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO|THROUGH)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?|VALIDITY(?:\\s*(?:DATE|PERIOD))?)\\s*[:\\-]?\\s*((?:' + months + '|' + mShort + ')\\s+\\d{1,2},?\\s+\\d{4})', 'i'),
-    new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?)\\s*[:\\-]?\\s*(\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4})', 'i'),
-    new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?)\\s*[:\\-]?\\s*(\\d{1,2}\\s+(?:' + months + '|' + mShort + ')\\s+\\d{4})', 'i'),
+    // "VALID UNTIL: DECEMBER 31, 2026" — most common PH format
+    /VALID\s+UNTIL\s*[:\-]?\s*((JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{1,2},?\s*\d{4})/i,
+    // "EXPIRY DATE: DECEMBER 31, 2026" or "EXPIRES: Dec 31 2026"
+    /EXPIR(?:Y|ES|ED?)\s*(?:DATE)?\s*[:\-]?\s*((JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{1,2},?\s*\d{4})/i,
+    // "VALIDITY: 12/31/2026" or "VALID THRU: 12-31-2026"
+    /(?:VALID\s*(?:THRU|THROUGH|TO)|VALIDITY|EXPIR(?:Y|ES|ED?))\s*[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+    // "VALIDITY: Jan 1, 2024 - Dec 31, 2026" — grab the end date
     /VALIDITY\s*[:\-]?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*[-–to]+\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
-    new RegExp('\\b((?:' + months + ')\\s+\\d{1,2},?\\s+\\d{4})\\b', 'i'),
+    // Fallback: any month-name date in text e.g. "DECEMBER 31, 2026"
+    /\b((JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{1,2},?\s*\d{4})\b/i,
   ];
   for (const p of expiryPatterns) {
     const m = text.match(p);
@@ -1189,20 +1195,30 @@ function extractFromPermit(rawText) {
   }
 
   // ── Owner / Proprietor Name ───────────────────────────────────────────────
-  // Looks for: "owned by / proprietor / registered to / owner: FULL NAME"
-  // Also tries: "this certifies that BUSINESS NAME owned by OWNER NAME located..."
+  // Handles PH business permit formats:
+  //   "owned / operated by Juan Dela Cruz"
+  //   "owned and operated by Juan Dela Cruz"
+  //   "owned by Juan Dela Cruz"
+  //   "operated by Juan Dela Cruz"
+  //   "proprietor: Juan Dela Cruz"
+  //   "registered to / owner: Juan Dela Cruz"
+  //   "MR./MS./MRS. Juan Dela Cruz"
   let ownerName = '';
   const ownerPatterns = [
-    /(?:OWNED\s+BY|PROPRIETOR\s*[:\-]?|REGISTRANT\s*[:\-]?|REGISTERED\s+(?:TO|BY|OWNER)\s*[:\-]?|OWNER\s*[:\-])\s*([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\,\']{3,60})(?=\s{2,}|,|\||$)/i,
-    /(?:this\s+certifies\s+that\s*[:\-]?\s*[A-Z0-9\s\.\'\&\-]{3,60}\s+owned\s+by\s+)([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\']{3,60})(?=\s+(?:located|with|is\s+hereby))/i,
+    // "owned / operated by NAME" or "owned and operated by NAME" or "owned by NAME" or "operated by NAME"
+    /owned\s*(?:\/\s*operated|and\s+operated|and\s+managed)?\s+by\s+([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\']{3,60})(?=\s+(?:located|with\s+address|is\s+hereby|having|$))/i,
+    // "operated by NAME located..."
+    /operated\s+by\s+([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\']{3,60})(?=\s+(?:located|with\s+address|is\s+hereby|having|$))/i,
+    // "PROPRIETOR: NAME" or "OWNER: NAME" or "REGISTRANT: NAME"
+    /(?:PROPRIETOR|OWNER|REGISTRANT|REGISTERED\s+(?:TO|BY|OWNER))\s*[:\-]\s*([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\,\']{3,60})(?=\s{2,}|,|\||$)/i,
+    // "MR./MS./MRS./DR. NAME"
     /(?:MR\.?|MS\.?|MRS\.?|DR\.?|ENGR\.?|ATTY\.?)\s+([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\']{3,60})(?=\s{2,}|,|\||\n|$)/i,
   ];
   for (const p of ownerPatterns) {
     const m = text.match(p);
     if (m && m[1]) {
-      // Clean up — remove trailing commas, dots, and common noise words
       const cleaned = m[1].trim().replace(/\s+/g, ' ').replace(/[,\.]+$/, '');
-      // Sanity check: must look like a real name (letters only, at least 2 words or 6 chars)
+      // Must look like a real name: letters/spaces/dots only, at least 4 chars
       if (cleaned.length >= 4 && /^[A-Za-zÀ-ÖØ-öø-ÿ\s\.\']+$/.test(cleaned)) {
         ownerName = cleaned;
         break;
