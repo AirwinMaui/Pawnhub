@@ -516,11 +516,11 @@ html { scroll-behavior: smooth; }
                   minlength="3" maxlength="255">
               </div>
             </div>
-            <!-- OCR Auto-filled fields -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
-              <div style="display:flex;flex-direction:column;">
-                <label class="field-label">DTI Number <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
-                <div style="position:relative;flex:1;">
+            <!-- OCR Auto-filled fields — use table layout so both columns share the same row baselines -->
+            <div style="display:table;width:100%;table-layout:fixed;border-spacing:12px 0;margin:0 -12px;width:calc(100% + 24px);">
+              <div style="display:table-cell;vertical-align:top;padding:0 0 0 12px;">
+                <label class="field-label" style="display:block;">DTI Number <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill</span></label>
+                <div style="position:relative;">
                   <input type="text" name="dti_number" id="dti_number" class="glass-input"
                     placeholder="Auto-fill via OCR scan"
                     value="<?= htmlspecialchars($_POST['dti_number'] ?? '') ?>"
@@ -529,9 +529,9 @@ html { scroll-behavior: smooth; }
                 </div>
                 <div id="dti_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;min-height:16px;">Will auto-fill when you upload your Business Permit below</div>
               </div>
-              <div style="display:flex;flex-direction:column;">
-                <label class="field-label">Permit Expiry Date <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
-                <div style="position:relative;flex:1;">
+              <div style="display:table-cell;vertical-align:top;padding:0 12px 0 0;">
+                <label class="field-label" style="display:block;">Permit Expiry Date <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill</span></label>
+                <div style="position:relative;">
                   <input type="text" name="permit_expiry" id="permit_expiry" class="glass-input"
                     placeholder="Auto-fill via OCR scan"
                     value="<?= htmlspecialchars($_POST['permit_expiry'] ?? '') ?>"
@@ -1138,7 +1138,6 @@ function extractFromPermit(rawText) {
   const mShort = 'JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC';
 
   // ── DTI / Registration Number ─────────────────────────────────────────────
-  // Captured value MUST contain at least one digit (guards against grabbing plain words like "LICENSE")
   let dtiNumber = '';
   const dtiPatterns = [
     /DTI\s*(?:REG(?:ISTRATION)?)?\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-\/]{4,19})/i,
@@ -1167,11 +1166,10 @@ function extractFromPermit(rawText) {
   }
 
   // ── Business Name ─────────────────────────────────────────────────────────
-  // "This certifies that: BUSINESS NAME owned/operated/located..."
   let bizName = '';
   const bizPatterns = [
     /(?:this\s+certifies\s+that\s*[:\-]?\s*)([A-Z][A-Z0-9\s\.\'\&\-]{3,60})(?=\s+(?:owned|operated|located|is\s+hereby))/i,
-    /(?:BUSINESS\s*NAME|TRADE\s*NAME|ESTABLISHMENT\s*NAME)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\s\.\'\&\-]{2,60?)(?=\s{2,}|\||$)/i,
+    /(?:BUSINESS\s*NAME|TRADE\s*NAME|ESTABLISHMENT\s*NAME)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\s\.\'\&\-]{2,60])(?=\s{2,}|\||$)/i,
   ];
   for (const p of bizPatterns) {
     const m = text.match(p);
@@ -1179,7 +1177,6 @@ function extractFromPermit(rawText) {
   }
 
   // ── Address ───────────────────────────────────────────────────────────────
-  // "located at 123 Rizal St., Brgy. Poblacion... is hereby granted..."
   let address = '';
   const addrPatterns = [
     /(?:located\s+at)\s*([A-Z0-9][A-Z0-9\s\.,\#\-\/Brgy\.]{5,150})(?=\s+is\s+hereby)/i,
@@ -1191,10 +1188,33 @@ function extractFromPermit(rawText) {
     if (m && m[1]) { address = m[1].trim().replace(/\s+/g, ' '); break; }
   }
 
+  // ── Owner / Proprietor Name ───────────────────────────────────────────────
+  // Looks for: "owned by / proprietor / registered to / owner: FULL NAME"
+  // Also tries: "this certifies that BUSINESS NAME owned by OWNER NAME located..."
+  let ownerName = '';
+  const ownerPatterns = [
+    /(?:OWNED\s+BY|PROPRIETOR\s*[:\-]?|REGISTRANT\s*[:\-]?|REGISTERED\s+(?:TO|BY|OWNER)\s*[:\-]?|OWNER\s*[:\-])\s*([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\,\']{3,60})(?=\s{2,}|,|\||$)/i,
+    /(?:this\s+certifies\s+that\s*[:\-]?\s*[A-Z0-9\s\.\'\&\-]{3,60}\s+owned\s+by\s+)([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\']{3,60})(?=\s+(?:located|with|is\s+hereby))/i,
+    /(?:MR\.?|MS\.?|MRS\.?|DR\.?|ENGR\.?|ATTY\.?)\s+([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s\.\']{3,60})(?=\s{2,}|,|\||\n|$)/i,
+  ];
+  for (const p of ownerPatterns) {
+    const m = text.match(p);
+    if (m && m[1]) {
+      // Clean up — remove trailing commas, dots, and common noise words
+      const cleaned = m[1].trim().replace(/\s+/g, ' ').replace(/[,\.]+$/, '');
+      // Sanity check: must look like a real name (letters only, at least 2 words or 6 chars)
+      if (cleaned.length >= 4 && /^[A-Za-zÀ-ÖØ-öø-ÿ\s\.\']+$/.test(cleaned)) {
+        ownerName = cleaned;
+        break;
+      }
+    }
+  }
+
   setOcrField('dti_number',    'dti_hint',    'dti_ocr_icon',    dtiNumber,  'DTI No.');
   setOcrField('permit_expiry', 'expiry_hint', 'expiry_ocr_icon', expiryDate, 'Expiry Date');
-  setOcrFieldPlain('business_name', bizName,  'Business Name');
-  setOcrFieldPlain('address',       address,  'Address');
+  setOcrFieldPlain('business_name', bizName,   'Business Name');
+  setOcrFieldPlain('address',       address,   'Address');
+  setOcrFieldPlain('fullname',      ownerName, 'Owner Name');
 }
 
 // Global flag for expired permit
@@ -1343,9 +1363,9 @@ function ocrFailed(msg) {
     f.placeholder       = 'Please type manually';
     f.style.borderColor = 'rgba(255,255,255,0.25)';
   });
-  ['business_name','address'].forEach(id => {
+  ['business_name','address','fullname'].forEach(id => {
     const f = document.getElementById(id);
-    if (f) { f.style.borderColor = 'rgba(255,255,255,0.25)'; f.style.boxShadow = ''; }
+    if (f) { f.style.borderColor = 'rgba(255,255,255,0.25)'; f.style.boxShadow = ''; f.title = ''; }
   });
   document.getElementById('dti_hint').textContent    = '\u26A0\uFE0F ' + msg;
   document.getElementById('expiry_hint').textContent = '\u26A0\uFE0F ' + msg;
