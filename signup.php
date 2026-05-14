@@ -497,7 +497,7 @@ html { scroll-behavior: smooth; }
           <div style="display:flex;flex-direction:column;gap:12px;">
             <div>
               <label class="field-label">Business Name *</label>
-              <input type="text" name="business_name" class="glass-input" placeholder="e.g. GoldKing Pawnshop"
+              <input type="text" name="business_name" id="business_name" class="glass-input" placeholder="e.g. GoldKing Pawnshop"
                 autocomplete="off" value="<?= htmlspecialchars($_POST['business_name'] ?? '') ?>"
                 required minlength="2" maxlength="100">
             </div>
@@ -511,7 +511,7 @@ html { scroll-behavior: smooth; }
               </div>
               <div>
                 <label class="field-label">Address</label>
-                <input type="text" name="address" class="glass-input" placeholder="City, Province"
+                <input type="text" name="address" id="address" class="glass-input" placeholder="City, Province"
                   autocomplete="off" value="<?= htmlspecialchars($_POST['address'] ?? '') ?>"
                   minlength="3" maxlength="255">
               </div>
@@ -1072,7 +1072,7 @@ async function scanBusinessPermit(input) {
   const statusBar  = document.getElementById('ocr_status_bar');
   const statusText = document.getElementById('ocr_status_text');
   statusBar.style.display = 'flex';
-  statusText.textContent  = 'Scanning Business Permit for DTI Number & Expiry Date...';
+  statusText.textContent  = 'Scanning Business Permit...';
 
   const dtiField    = document.getElementById('dti_number');
   const expiryField = document.getElementById('permit_expiry');
@@ -1125,29 +1125,22 @@ function extractFromPermit(rawText) {
   const months = 'JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER';
   const mShort = 'JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC';
 
-  // DTI / Registration Number
-  // Priority: most specific label first, then fallback to any number near DTI keyword.
-  // Each pattern must capture an actual alphanumeric token (not just a keyword word like "LICENSE").
+  // ── DTI / Registration Number ─────────────────────────────────────────────
+  // Captured value MUST contain at least one digit (guards against grabbing plain words like "LICENSE")
   let dtiNumber = '';
   const dtiPatterns = [
-    // "DTI REG NO: 12345" or "DTI REGISTRATION NUMBER: ABC-123"
     /DTI\s*(?:REG(?:ISTRATION)?)?\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-\/]{4,19})/i,
-    // "REGISTRATION NO: 12345" — must have a digit somewhere to avoid grabbing plain words
     /(?:REGISTRATION|REG)\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{3,19})/i,
-    // "DTI" anywhere then a number nearby (digits only block)
     /\bDTI\b[^:\n]{0,30}?[:\-\s](\d{5,15})/i,
-    // "CERT NO: 12345" — must start or contain a digit
     /CERT(?:IFICATE)?\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{3,19})/i,
-    // "LICENSE NO: 12345" or "PERMIT NO: 12345" — require digit in capture group
     /(?:LICENSE|PERMIT)\s*(?:NO\.?|NUMBER|#)\s*[:\-]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]{3,19})/i,
   ];
   for (const p of dtiPatterns) {
     const m = text.match(p);
-    // Extra guard: captured value must contain at least one digit
     if (m && m[1] && /\d/.test(m[1])) { dtiNumber = m[1].trim(); break; }
   }
 
-  // Expiry / Validity Date
+  // ── Expiry / Validity Date ────────────────────────────────────────────────
   let expiryDate = '';
   const expiryPatterns = [
     new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO|THROUGH)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?|VALIDITY(?:\\s*(?:DATE|PERIOD))?)\\s*[:\\-]?\\s*((?:' + months + '|' + mShort + ')\\s+\\d{1,2},?\\s+\\d{4})', 'i'),
@@ -1156,10 +1149,40 @@ function extractFromPermit(rawText) {
     /VALIDITY\s*[:\-]?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*[-–to]+\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
     new RegExp('\\b((?:' + months + ')\\s+\\d{1,2},?\\s+\\d{4})\\b', 'i'),
   ];
-  for (const p of expiryPatterns) { const m = text.match(p); if (m && m[1]) { expiryDate = m[1].trim(); break; } }
+  for (const p of expiryPatterns) {
+    const m = text.match(p);
+    if (m && m[1]) { expiryDate = m[1].trim(); break; }
+  }
 
-  setOcrField('dti_number',    'dti_hint',    'dti_ocr_icon',    dtiNumber,   'DTI No.');
-  setOcrField('permit_expiry', 'expiry_hint', 'expiry_ocr_icon', expiryDate,  'Expiry Date');
+  // ── Business Name ─────────────────────────────────────────────────────────
+  // "This certifies that: BUSINESS NAME owned/operated/located..."
+  let bizName = '';
+  const bizPatterns = [
+    /(?:this\s+certifies\s+that\s*[:\-]?\s*)([A-Z][A-Z0-9\s\.\'\&\-]{3,60})(?=\s+(?:owned|operated|located|is\s+hereby))/i,
+    /(?:BUSINESS\s*NAME|TRADE\s*NAME|ESTABLISHMENT\s*NAME)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\s\.\'\&\-]{2,60?)(?=\s{2,}|\||$)/i,
+  ];
+  for (const p of bizPatterns) {
+    const m = text.match(p);
+    if (m && m[1]) { bizName = m[1].trim().replace(/\s+/g, ' '); break; }
+  }
+
+  // ── Address ───────────────────────────────────────────────────────────────
+  // "located at 123 Rizal St., Brgy. Poblacion... is hereby granted..."
+  let address = '';
+  const addrPatterns = [
+    /(?:located\s+at)\s*([A-Z0-9][A-Z0-9\s\.,\#\-\/Brgy\.]{5,150})(?=\s+is\s+hereby)/i,
+    /(?:ADDRESS\s*[:\-])\s*([A-Z0-9][A-Z0-9\s\.,\#\-\/]{5,150})(?=\s{2,}|$)/i,
+    /(?:SITUATED\s+AT)\s*([A-Z0-9][A-Z0-9\s\.,\#\-\/]{5,150})(?=\s{2,}|$)/i,
+  ];
+  for (const p of addrPatterns) {
+    const m = text.match(p);
+    if (m && m[1]) { address = m[1].trim().replace(/\s+/g, ' '); break; }
+  }
+
+  setOcrField('dti_number',    'dti_hint',    'dti_ocr_icon',    dtiNumber,  'DTI No.');
+  setOcrField('permit_expiry', 'expiry_hint', 'expiry_ocr_icon', expiryDate, 'Expiry Date');
+  setOcrFieldPlain('business_name', bizName,  'Business Name');
+  setOcrFieldPlain('address',       address,  'Address');
 }
 
 function setOcrField(fieldId, hintId, iconId, value, label) {
@@ -1183,12 +1206,32 @@ function setOcrField(fieldId, hintId, iconId, value, label) {
   }
 }
 
+// For plain fields without a separate hint/icon (business_name, address)
+function setOcrFieldPlain(fieldId, value, label) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  if (value) {
+    if (!field.value.trim()) field.value = value;  // only fill if empty
+    field.style.borderColor = 'rgba(52,211,153,0.7)';
+    field.style.boxShadow   = '0 0 0 3px rgba(52,211,153,0.15)';
+    field.title = '\u2705 Auto-filled from permit. You may edit if incorrect.';
+  } else {
+    field.style.borderColor = 'rgba(251,191,36,0.6)';
+    field.style.boxShadow   = '0 0 0 3px rgba(251,191,36,0.1)';
+    field.title = '\u26A0\uFE0F ' + label + ' not detected \u2014 please type manually.';
+  }
+}
+
 function ocrFailed(msg) {
   ['dti_number','permit_expiry'].forEach(id => {
     const f = document.getElementById(id);
     f.removeAttribute('readonly');
     f.placeholder       = 'Please type manually';
     f.style.borderColor = 'rgba(255,255,255,0.25)';
+  });
+  ['business_name','address'].forEach(id => {
+    const f = document.getElementById(id);
+    if (f) { f.style.borderColor = 'rgba(255,255,255,0.25)'; f.style.boxShadow = ''; }
   });
   document.getElementById('dti_hint').textContent    = '\u26A0\uFE0F ' + msg;
   document.getElementById('expiry_hint').textContent = '\u26A0\uFE0F ' + msg;
