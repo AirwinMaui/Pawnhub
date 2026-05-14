@@ -382,6 +382,8 @@ input, select, textarea { font-size: max(16px, 1rem) !important; }
 /* Smooth scrolling on mobile */
 html { scroll-behavior: smooth; }
 
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
 /* Form mobile fixes */
 @media (max-width: 480px) {
     .panel, .card { 
@@ -509,6 +511,36 @@ html { scroll-behavior: smooth; }
                   minlength="3" maxlength="255">
               </div>
             </div>
+            <!-- OCR Auto-filled fields -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="field-label">DTI Number <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
+                <div style="position:relative;">
+                  <input type="text" name="dti_number" id="dti_number" class="glass-input"
+                    placeholder="Auto-fill via OCR scan"
+                    value="<?= htmlspecialchars($_POST['dti_number'] ?? '') ?>"
+                    maxlength="50" style="padding-right:36px;">
+                  <span id="dti_ocr_icon" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none;font-size:14px;">✅</span>
+                </div>
+                <div id="dti_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;">Will auto-fill when you upload your Business Permit below</div>
+              </div>
+              <div>
+                <label class="field-label">Permit Expiry Date <span style="color:rgba(59,130,246,0.8);font-size:0.6rem;font-weight:400;text-transform:none;letter-spacing:0;">📷 auto-fill from Business Permit</span></label>
+                <div style="position:relative;">
+                  <input type="text" name="permit_expiry" id="permit_expiry" class="glass-input"
+                    placeholder="Auto-fill via OCR scan"
+                    value="<?= htmlspecialchars($_POST['permit_expiry'] ?? '') ?>"
+                    maxlength="50" style="padding-right:36px;">
+                  <span id="expiry_ocr_icon" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none;font-size:14px;">✅</span>
+                </div>
+                <div id="expiry_hint" style="font-size:0.62rem;color:rgba(255,255,255,0.3);margin-top:3px;">Will auto-fill when you upload your Business Permit below</div>
+              </div>
+            </div>
+            <!-- OCR Status Bar -->
+            <div id="ocr_status_bar" style="display:none;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:10px 14px;font-size:0.78rem;color:#93c5fd;display:none;align-items:center;gap:8px;">
+              <svg style="width:16px;height:16px;flex-shrink:0;animation:spin 1s linear infinite;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+              <span id="ocr_status_text">Scanning Business Permit...</span>
+            </div>
           </div>
         </div>
 
@@ -535,7 +567,7 @@ html { scroll-behavior: smooth; }
                 <div>
                   <p style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Business Permit <span style="color:#f87171;">*</span></p>
                   <div class="file-upload-zone" id="dz_business_permit" onclick="document.getElementById('business_permit').click()" style="padding:14px;">
-                    <input type="file" name="business_permit" id="business_permit" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_business_permit')">
+                    <input type="file" name="business_permit" id="business_permit" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" onchange="handleDocFile(this,'prev_business_permit'); scanBusinessPermit(this);">
                     <div id="prev_business_permit_placeholder">
                       <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.25);margin-bottom:4px;display:block;">upload_file</span>
                       <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);">Click or drop file</p>
@@ -1024,6 +1056,130 @@ document.getElementById('regForm').addEventListener('submit', function(e) {
 
   if (!valid) e.preventDefault();
 });
+
+// ── OCR.space Business Permit Scanner ────────────────────────────────────────
+const OCR_API_KEY = 'K88053534088957';
+
+async function scanBusinessPermit(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusBar  = document.getElementById('ocr_status_bar');
+  const statusText = document.getElementById('ocr_status_text');
+  statusBar.style.display = 'flex';
+  statusText.textContent  = 'Scanning Business Permit for DTI Number & Expiry Date...';
+
+  const dtiField    = document.getElementById('dti_number');
+  const expiryField = document.getElementById('permit_expiry');
+  dtiField.value    = '';
+  expiryField.value = '';
+  document.getElementById('dti_ocr_icon').style.display    = 'none';
+  document.getElementById('expiry_ocr_icon').style.display = 'none';
+  document.getElementById('dti_hint').textContent    = 'Scanning...';
+  document.getElementById('expiry_hint').textContent = 'Scanning...';
+
+  try {
+    const base64 = await fileToBase64(file);
+    const formData = new FormData();
+    formData.append('base64Image', base64);
+    formData.append('apikey', OCR_API_KEY);
+    formData.append('language', 'eng');
+    formData.append('isOverlayRequired', 'false');
+    formData.append('OCREngine', '2');
+    formData.append('scale', 'true');
+    formData.append('detectOrientation', 'true');
+
+    const response = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: formData });
+    const result   = await response.json();
+
+    if (result.IsErroredOnProcessing) { ocrFailed('OCR failed: ' + (result.ErrorMessage || 'Unknown error')); return; }
+
+    const rawText = result.ParsedResults?.[0]?.ParsedText || '';
+    console.log('[OCR] Raw text:\n', rawText);
+    extractFromPermit(rawText);
+
+  } catch (err) {
+    console.error('[OCR] Error:', err);
+    ocrFailed('Could not reach OCR service. Please fill in manually.');
+  } finally {
+    statusBar.style.display = 'none';
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function extractFromPermit(rawText) {
+  const text = rawText.replace(/\s+/g, ' ');
+  const months = 'JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER';
+  const mShort = 'JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC';
+
+  // DTI / Registration Number
+  let dtiNumber = '';
+  const dtiPatterns = [
+    /DTI\s*(?:REG(?:ISTRATION)?)?\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i,
+    /(?:REGISTRATION|REG)\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{6,20})/i,
+    /\bDTI\b[^\n]{0,25}?(\d{5,15})/i,
+    /CERT(?:IFICATE)?\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i,
+    /(?:LICENSE|PERMIT)\s*(?:NO|NUMBER|#|NO\.)\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i,
+  ];
+  for (const p of dtiPatterns) { const m = text.match(p); if (m && m[1]) { dtiNumber = m[1].trim(); break; } }
+
+  // Expiry / Validity Date
+  let expiryDate = '';
+  const expiryPatterns = [
+    new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO|THROUGH)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?|VALIDITY(?:\\s*(?:DATE|PERIOD))?)\\s*[:\\-]?\\s*((?:' + months + '|' + mShort + ')\\s+\\d{1,2},?\\s+\\d{4})', 'i'),
+    new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?)\\s*[:\\-]?\\s*(\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4})', 'i'),
+    new RegExp('(?:VALID\\s*(?:UNTIL|THRU|TO)|EXPIR(?:Y|ES|ED?)\\s*(?:DATE)?)\\s*[:\\-]?\\s*(\\d{1,2}\\s+(?:' + months + '|' + mShort + ')\\s+\\d{4})', 'i'),
+    /VALIDITY\s*[:\-]?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*[-–to]+\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+    new RegExp('\\b((?:' + months + ')\\s+\\d{1,2},?\\s+\\d{4})\\b', 'i'),
+  ];
+  for (const p of expiryPatterns) { const m = text.match(p); if (m && m[1]) { expiryDate = m[1].trim(); break; } }
+
+  setOcrField('dti_number',    'dti_hint',    'dti_ocr_icon',    dtiNumber,   'DTI No.');
+  setOcrField('permit_expiry', 'expiry_hint', 'expiry_ocr_icon', expiryDate,  'Expiry Date');
+}
+
+function setOcrField(fieldId, hintId, iconId, value, label) {
+  const field = document.getElementById(fieldId);
+  const hint  = document.getElementById(hintId);
+  const icon  = document.getElementById(iconId);
+  field.removeAttribute('readonly');
+  if (value) {
+    field.value             = value;
+    field.style.borderColor = 'rgba(52,211,153,0.7)';
+    field.style.boxShadow   = '0 0 0 3px rgba(52,211,153,0.15)';
+    hint.textContent        = '\u2705 Auto-filled. You may edit if incorrect.';
+    hint.style.color        = 'rgba(134,239,172,0.8)';
+    icon.style.display      = 'inline';
+  } else {
+    field.placeholder       = 'Not detected \u2014 please type manually';
+    field.style.borderColor = 'rgba(251,191,36,0.6)';
+    field.style.boxShadow   = '0 0 0 3px rgba(251,191,36,0.1)';
+    hint.textContent        = '\u26A0\uFE0F ' + label + ' not detected. Please type manually.';
+    hint.style.color        = 'rgba(251,191,36,0.8)';
+  }
+}
+
+function ocrFailed(msg) {
+  ['dti_number','permit_expiry'].forEach(id => {
+    const f = document.getElementById(id);
+    f.removeAttribute('readonly');
+    f.placeholder       = 'Please type manually';
+    f.style.borderColor = 'rgba(255,255,255,0.25)';
+  });
+  document.getElementById('dti_hint').textContent    = '\u26A0\uFE0F ' + msg;
+  document.getElementById('expiry_hint').textContent = '\u26A0\uFE0F ' + msg;
+  document.getElementById('dti_hint').style.color    = 'rgba(251,191,36,0.8)';
+  document.getElementById('expiry_hint').style.color = 'rgba(251,191,36,0.8)';
+}
+// ── End OCR ──────────────────────────────────────────────────────────────────
 
 function checkSignupStrength(pw) {
   const bar = document.getElementById('signup_str_bar');
