@@ -27,16 +27,19 @@ if (!$tenant) {
 
 // Block login if tenant is deactivated OR subscription expired 7+ days ago
 // (covers cases where cron hasn't run yet but tenant should be locked out)
-$is_deactivated    = false;
-$is_permit_rejected = false;  // Deactivated specifically due to permit rejection by SA
-$is_trial_ended    = false;  // Starter free trial ended
-$sub_expired_days  = 0;
-$rejection_reason  = '';
+$is_deactivated      = false;
+$is_permit_rejected  = false;
+$is_permit_expired   = false;  // Disabled specifically due to expired business permit
+$is_trial_ended      = false;
+$sub_expired_days    = 0;
+$rejection_reason    = '';
 
 if (isset($tenant['status']) && $tenant['status'] === 'inactive') {
-    // Check if deactivated due to permit rejection (has rejection_reason set by SA)
     $permit_status = $tenant['business_permit_status'] ?? '';
-    if ($permit_status === 'sa_rejected' || !empty($tenant['rejection_reason'])) {
+    if ($permit_status === 'permit_expired_disabled') {
+        // Disabled because business permit expired — can re-enable by uploading renewed permit
+        $is_permit_expired = true;
+    } elseif ($permit_status === 'sa_rejected' || !empty($tenant['rejection_reason'])) {
         $is_permit_rejected = true;
         $rejection_reason   = $tenant['rejection_reason'] ?? '';
     } else {
@@ -182,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
 
 // ── Handle LOGIN POST ─────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POST['form_type'] === 'login'
-    && !$is_deactivated && !$is_trial_ended && !$is_permit_rejected) {
+    && !$is_deactivated && !$is_trial_ended && !$is_permit_rejected && !$is_permit_expired) {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
@@ -254,6 +257,179 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_type']) && $_POS
             elseif ($row['status'] === 'pending')    $error = 'Your account is pending approval.';
             elseif ($row['status'] === 'rejected')   $error = 'Your account was rejected.';
             else                                     $error = 'Incorrect password.';
+        }
+    }
+}
+
+// ── Handle PERMIT RENEWAL UPLOAD POST ────────────────────────
+$permit_upload_msg   = '';
+$permit_upload_error = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'renew_permit' && $is_permit_expired) {
+    $ocr_key = defined('OCR_SPACE_API_KEY') ? OCR_SPACE_API_KEY : (getenv('OCR_SPACE_API_KEY') ?: 'K84738757788957');
+    $uploaded_file = $_FILES['new_permit'] ?? null;
+
+    if (!$uploaded_file || $uploaded_file['error'] !== UPLOAD_ERR_OK) {
+        $permit_upload_error = 'Please select a valid image or PDF file to upload.';
+    } else {
+        $allowed_types = ['image/jpeg','image/png','image/webp','application/pdf'];
+        if (!in_array($uploaded_file['type'], $allowed_types)) {
+            $permit_upload_error = 'Invalid file type. Please upload JPG, PNG, WEBP, or PDF.';
+        } elseif ($uploaded_file['size'] > 5 * 1024 * 1024) {
+            $permit_upload_error = 'File too large. Maximum size is 5MB.';
+        } else {
+            // Save temp file
+            $tmp = $uploaded_file['tmp_name'];
+            $ext = strtolower(pathinfo($uploaded_file['name'], PATHINFO_EXTENSION));
+            $save_dir = __DIR__ . '/uploads/permits/';
+            if (!is_dir($save_dir)) @mkdir($save_dir, 0755, true);
+            $filename = 'permit_renewal_' . $tenant['id'] . '_' . time() . '.' . $ext;
+            $save_path = $save_dir . $filename;
+            move_uploaded_file($tmp, $save_path);
+            $public_url = '/uploads/permits/' . $filename;
+
+            // Send to OCR.space
+            $ocr_ok      = false;
+            $expiry_date = '';
+            $permit_no   = '';
+            $ocr_error   = '';
+
+            try {
+                $ch = curl_init('https://api.ocr.space/parse/image');
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POST           => true,
+                    CURLOPT_POSTFIELDS     => [
+                        'apikey'      => $ocr_key,
+                        'language'    => 'eng',
+                        'isOverlayRequired' => 'false',
+                        'detectOrientation' => 'true',
+                        'scale'       => 'true',
+                        'OCREngine'   => '2',
+                        'file'        => new CURLFile($save_path, $uploaded_file['type'], $filename),
+                    ],
+                    CURLOPT_TIMEOUT => 30,
+                ]);
+                $ocr_raw  = curl_exec($ch);
+                $ocr_http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                $ocr_result  = json_decode($ocr_raw, true);
+                $ocr_text    = $ocr_result['ParsedResults'][0]['ParsedText'] ?? '';
+                $ocr_exit    = $ocr_result['OCRExitCode'] ?? 99;
+
+                if ($ocr_exit <= 1 && !empty($ocr_text)) {
+                    $ocr_ok = true;
+                    $text   = preg_replace('/\s+/', ' ', strtoupper($ocr_text));
+
+                    // Extract expiry
+                    $months = 'JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC';
+                    if (preg_match('/VALID\s+UNTIL\s*[:\-]?\s*((' . $months . ')\s+\d{1,2},?\s*\d{4})/i', $text, $m)) {
+                        $expiry_date = trim($m[1]);
+                    } elseif (preg_match('/EXPIR(?:Y|ES|ED?)\s*(?:DATE)?\s*[:\-]?\s*((' . $months . ')\s+\d{1,2},?\s*\d{4})/i', $text, $m)) {
+                        $expiry_date = trim($m[1]);
+                    } elseif (preg_match('/VALID\s+UNTIL\s*[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i', $text, $m)) {
+                        $expiry_date = trim($m[1]);
+                    }
+
+                    // Extract permit no
+                    if (preg_match('/(?:PERMIT|LICENSE)\s*NO\.?\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i', $text, $m)) {
+                        $permit_no = trim($m[1]);
+                    } elseif (preg_match('/DTI\s*(?:REGISTRATION)?\s*NO\.?\s*[:\-]?\s*([A-Z0-9\-\/]{5,20})/i', $text, $m)) {
+                        $permit_no = trim($m[1]);
+                    }
+                } else {
+                    $ocr_error = 'OCR could not read the document. Please upload a clearer image.';
+                }
+            } catch (Throwable $e) {
+                $ocr_error = 'OCR service error. Please try again.';
+                error_log('[PermitRenewal OCR] ' . $e->getMessage());
+            }
+
+            if (!$ocr_ok) {
+                $permit_upload_error = $ocr_error ?: 'Could not read permit. Please upload a clearer image.';
+            } elseif (empty($expiry_date)) {
+                $permit_upload_error = '⚠️ Could not detect expiry date from your permit. Please make sure the permit is clear and shows "VALID UNTIL" or "EXPIRY DATE".';
+            } else {
+                // Check if the new permit is still valid (not expired)
+                $parsed_expiry = null;
+                $month_map = [
+                    'JANUARY'=>1,'FEBRUARY'=>2,'MARCH'=>3,'APRIL'=>4,'MAY'=>5,'JUNE'=>6,
+                    'JULY'=>7,'AUGUST'=>8,'SEPTEMBER'=>9,'OCTOBER'=>10,'NOVEMBER'=>11,'DECEMBER'=>12,
+                    'JAN'=>1,'FEB'=>2,'MAR'=>3,'APR'=>4,'JUN'=>6,'JUL'=>7,'AUG'=>8,
+                    'SEP'=>9,'OCT'=>10,'NOV'=>11,'DEC'=>12,
+                ];
+                // Try "MONTH DD, YYYY"
+                if (preg_match('/(' . implode('|', array_keys($month_map)) . ')\s+(\d{1,2}),?\s*(\d{4})/i', $expiry_date, $dm)) {
+                    $mon = $month_map[strtoupper($dm[1])] ?? 0;
+                    if ($mon) $parsed_expiry = mktime(0,0,0,$mon,(int)$dm[2],(int)$dm[3]);
+                }
+                // Try MM/DD/YYYY
+                if (!$parsed_expiry && preg_match('/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/', $expiry_date, $dm)) {
+                    $y = (int)$dm[3]; if ($y < 100) $y += 2000;
+                    $parsed_expiry = mktime(0,0,0,(int)$dm[1],(int)$dm[2],$y);
+                }
+
+                if ($parsed_expiry && $parsed_expiry < strtotime('today')) {
+                    $permit_upload_error = '❌ Your uploaded permit is still EXPIRED (expires: ' . htmlspecialchars($expiry_date) . '). Please upload your RENEWED permit with a future expiry date.';
+                } else {
+                    // ✅ Valid new permit — re-activate tenant
+                    try {
+                        $expiry_db = $parsed_expiry ? date('Y-m-d', $parsed_expiry) : null;
+
+                        $pdo->prepare("
+                            UPDATE tenants SET
+                                status                 = 'active',
+                                business_permit_status = 'ocr_verified',
+                                business_permit_url    = ?,
+                                permit_expiry          = ?,
+                                dti_number             = COALESCE(NULLIF(?, ''), dti_number)
+                            WHERE id = ?
+                        ")->execute([$public_url, $expiry_db, $permit_no, $tenant['id']]);
+
+                        // Unsuspend all users
+                        $pdo->prepare("
+                            UPDATE users SET
+                                is_suspended      = 0,
+                                suspended_at      = NULL,
+                                suspension_reason = NULL
+                            WHERE tenant_id = ?
+                        ")->execute([$tenant['id']]);
+
+                        // Send confirmation email
+                        try {
+                            require_once __DIR__ . '/mailer.php';
+                            if (function_exists('sendPermitRenewalApproved')) {
+                                sendPermitRenewalApproved(
+                                    $tenant['email'], $tenant['owner_name'],
+                                    $tenant['business_name'], $expiry_date, $tenant['slug']
+                                );
+                            }
+                        } catch (Throwable $e) {}
+
+                        // Audit log
+                        try {
+                            $pdo->prepare("
+                                INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+                                VALUES (?,NULL,'system','system','PERMIT_RENEWED_OCR','tenant',?,?,'::1',NOW())
+                            ")->execute([
+                                $tenant['id'], $tenant['id'],
+                                "Tenant \"{$tenant['business_name']}\" permit renewed via OCR upload. New expiry: {$expiry_date}.",
+                            ]);
+                        } catch (Throwable $e) {}
+
+                        // Re-fetch tenant & update flags
+                        $stmt = $pdo->prepare("SELECT * FROM tenants WHERE slug = ? LIMIT 1");
+                        $stmt->execute([$slug]);
+                        $tenant = $stmt->fetch();
+                        $is_permit_expired   = false;
+                        $permit_upload_msg   = '✅ Permit verified! Your account has been re-activated. You can now log in.';
+
+                    } catch (Throwable $e) {
+                        $permit_upload_error = 'Database error while re-activating. Please try again or contact support.';
+                        error_log('[PermitRenewal] DB error: ' . $e->getMessage());
+                    }
+                }
+            }
         }
     }
 }
@@ -560,6 +736,142 @@ html { scroll-behavior: smooth; }
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 14px;font-size:.77rem;color:#92400e;line-height:1.6;">
           ⚡ <strong>Instant activation</strong> — upgrade via PayMongo and your full access is restored immediately.
         </div>
+
+        <?php elseif ($is_permit_expired):
+            $pe_tenant_id = $tenant['id'] ?? 0;
+            $pe_expiry    = htmlspecialchars($tenant['permit_expiry'] ?? '');
+        ?>
+        <!-- ══ PERMIT EXPIRED SCREEN — Upload Renewed Permit ══ -->
+        <div style="text-align:center;margin-bottom:18px;">
+          <div style="width:64px;height:64px;border-radius:50%;background:#fff7ed;border:2px solid #fed7aa;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+            <span class="material-symbols-outlined" style="font-size:32px;color:#ea580c;">badge</span>
+          </div>
+          <h1 class="card-title" style="font-size:1.35rem;color:#111827;">Business Permit Expired</h1>
+          <p class="card-sub" style="margin-bottom:0;">Access to <strong><?= $bizName ?></strong> has been temporarily disabled because your Business Permit has expired<?= $pe_expiry ? ' on <strong>' . $pe_expiry . '</strong>' : '' ?>. Upload your renewed permit to restore access instantly.</p>
+        </div>
+
+        <?php if ($permit_upload_msg): ?>
+        <!-- Success message after successful upload -->
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:14px;padding:16px 18px;margin-bottom:16px;text-align:center;">
+          <div style="font-size:2rem;margin-bottom:6px;">🎉</div>
+          <div style="font-size:.92rem;font-weight:700;color:#15803d;margin-bottom:4px;">Account Restored!</div>
+          <div style="font-size:.81rem;color:#166534;"><?= $permit_upload_msg ?></div>
+        </div>
+        <!-- Show login form directly after successful permit upload -->
+        <form method="POST" action="/<?= htmlspecialchars($slug) ?>?login=1" class="form" style="margin-top:8px;">
+          <input type="hidden" name="form_type" value="login">
+          <div>
+            <label class="lbl">Username</label>
+            <input type="text" name="username" class="inp" placeholder="Enter your username" required>
+          </div>
+          <div>
+            <label class="lbl">Password</label>
+            <div class="pw-wrap">
+              <input type="password" name="password" id="pw_restored" class="inp" placeholder="••••••••" required>
+              <button type="button" class="pw-btn"
+                onclick="const f=document.getElementById('pw_restored');f.type=f.type==='password'?'text':'password';this.querySelector('span').textContent=f.type==='password'?'visibility':'visibility_off'">
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="btn" style="background:linear-gradient(135deg,#16a34a,#15803d);">Sign In →</button>
+        </form>
+
+        <?php else: ?>
+
+        <?php if ($permit_upload_error): ?>
+        <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:12px;padding:13px 16px;font-size:.82rem;color:#dc2626;margin-bottom:14px;display:flex;gap:9px;align-items:flex-start;">
+          <span class="material-symbols-outlined" style="font-size:17px;flex-shrink:0;margin-top:1px;">error</span>
+          <span><?= $permit_upload_error ?></span>
+        </div>
+        <?php endif; ?>
+
+        <!-- OCR Upload Form -->
+        <div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:14px;padding:16px 18px;margin-bottom:16px;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#c2410c;margin-bottom:8px;">📋 What you need to do</div>
+          <ul style="font-size:.81rem;color:#9a3412;line-height:1.9;padding-left:18px;margin:0;">
+            <li>Renew your Business Permit at your local government office</li>
+            <li>Upload a clear photo or scan of your <strong>new permit</strong> below</li>
+            <li>Our system will verify it instantly via OCR scan</li>
+            <li>Your account will be <strong>re-activated immediately</strong> if valid</li>
+          </ul>
+        </div>
+
+        <form method="POST" action="/<?= htmlspecialchars($slug) ?>?login=1" enctype="multipart/form-data" id="permit_renew_form">
+          <input type="hidden" name="form_type" value="renew_permit">
+
+          <!-- File drop zone -->
+          <div id="drop_zone" style="border:2px dashed #fdba74;border-radius:14px;padding:28px 20px;text-align:center;cursor:pointer;background:#fffbf5;margin-bottom:14px;transition:all .2s;"
+            onclick="document.getElementById('permit_file_input').click()"
+            ondragover="event.preventDefault();this.style.background='#fff7ed';this.style.borderColor='#f97316';"
+            ondragleave="this.style.background='#fffbf5';this.style.borderColor='#fdba74';"
+            ondrop="event.preventDefault();this.style.background='#fffbf5';this.style.borderColor='#fdba74';handlePermitDrop(event);">
+            <div id="drop_icon" style="font-size:2.5rem;margin-bottom:8px;">📄</div>
+            <div id="drop_label" style="font-size:.85rem;font-weight:700;color:#c2410c;margin-bottom:4px;">Tap to upload your renewed Business Permit</div>
+            <div style="font-size:.73rem;color:#9a3412;">JPG, PNG, WEBP, or PDF · Max 5MB</div>
+            <input type="file" name="new_permit" id="permit_file_input" accept="image/jpeg,image/png,image/webp,application/pdf" required
+              style="display:none;" onchange="onPermitFileSelected(this)">
+          </div>
+
+          <!-- Preview -->
+          <div id="permit_preview_wrap" style="display:none;margin-bottom:14px;text-align:center;">
+            <img id="permit_preview_img" src="" alt="Preview" style="max-width:100%;max-height:180px;border-radius:10px;border:1.5px solid #fed7aa;object-fit:contain;">
+            <div id="permit_preview_name" style="font-size:.73rem;color:#64748b;margin-top:5px;"></div>
+          </div>
+
+          <!-- Scanning indicator -->
+          <div id="ocr_scanning" style="display:none;text-align:center;padding:14px;background:#fffbf5;border-radius:12px;margin-bottom:14px;">
+            <div style="font-size:1.5rem;animation:spin 1s linear infinite;display:inline-block;">🔍</div>
+            <div style="font-size:.82rem;font-weight:600;color:#c2410c;margin-top:6px;">Scanning permit via OCR...</div>
+            <div style="font-size:.73rem;color:#9a3412;margin-top:3px;">This may take a few seconds</div>
+          </div>
+
+          <button type="submit" id="permit_submit_btn" class="btn"
+            style="background:linear-gradient(135deg,#ea580c,#c2410c);"
+            onclick="document.getElementById('ocr_scanning').style.display='block';this.disabled=true;this.textContent='Verifying...';">
+            🔍 Verify &amp; Restore Access
+          </button>
+        </form>
+
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:11px 14px;font-size:.77rem;color:#64748b;margin-top:14px;line-height:1.6;">
+          ℹ️ Your permit is scanned automatically — <strong>no waiting</strong> for admin review. If valid and not expired, your account is restored <strong>instantly</strong>.
+        </div>
+
+        <?php endif; // end permit_upload_msg ?>
+
+        <style>
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        </style>
+        <script>
+        function onPermitFileSelected(input) {
+          const file = input.files[0];
+          if (!file) return;
+          document.getElementById('drop_label').textContent = file.name;
+          document.getElementById('drop_icon').textContent = '✅';
+          const preview = document.getElementById('permit_preview_wrap');
+          const img     = document.getElementById('permit_preview_img');
+          const name    = document.getElementById('permit_preview_name');
+          name.textContent = file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)';
+          if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = e => { img.src = e.target.result; preview.style.display = 'block'; };
+            reader.readAsDataURL(file);
+          } else {
+            img.style.display = 'none';
+            preview.style.display = 'block';
+          }
+        }
+        function handlePermitDrop(e) {
+          const dt    = e.dataTransfer;
+          const file  = dt.files[0];
+          if (!file) return;
+          const input = document.getElementById('permit_file_input');
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          input.files = dataTransfer.files;
+          onPermitFileSelected(input);
+        }
+        </script>
 
         <?php elseif ($is_permit_rejected):
             $deact_tenant_id = $tenant['id'] ?? 0;

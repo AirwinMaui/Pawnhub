@@ -301,6 +301,174 @@ foreach ($deact_tenants as $tenant) {
     $log[] = "[AUTO-DEACTIVATED] {$tenant['business_name']} — expired {$tenant['subscription_end']}";
 }
 
+// ─────────────────────────────────────────────────────────────
+// STEP 4 — Business Permit Expiry: 7-day warning + auto-disable
+// ─────────────────────────────────────────────────────────────
+
+// 4A — Send 7-day warning email to tenants whose permit expires in 7 days
+$permit_warn_date = (clone $now)->modify('+7 days')->format('Y-m-d');
+try {
+    $pw_stmt = $pdo->prepare("
+        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.permit_expiry, t.slug
+        FROM tenants t
+        WHERE t.status = 'active'
+          AND t.permit_expiry IS NOT NULL
+          AND t.permit_expiry != ''
+          AND DATE(t.permit_expiry) = ?
+    ");
+    $pw_stmt->execute([$permit_warn_date]);
+    $permit_warn_tenants = $pw_stmt->fetchAll();
+} catch (Throwable $e) {
+    $permit_warn_tenants = [];
+    $log[] = "[ERROR] Could not query permit expiry warning tenants: " . $e->getMessage();
+}
+
+foreach ($permit_warn_tenants as $tenant) {
+    if (already_notified($pdo, (int)$tenant['id'], 'permit_expiry_7d')) {
+        $log[] = "[SKIP] Permit 7d warning already sent to {$tenant['business_name']}";
+        continue;
+    }
+    $sent = function_exists('sendPermitExpiryWarning')
+        ? sendPermitExpiryWarning(
+            $tenant['email'], $tenant['owner_name'], $tenant['business_name'],
+            $tenant['permit_expiry'], 7, $tenant['slug']
+          )
+        : false;
+    if ($sent) {
+        mark_notified($pdo, (int)$tenant['id'], 'permit_expiry_7d');
+        $log[] = "[OK] Sent permit 7d warning to {$tenant['business_name']} ({$tenant['email']})";
+    } else {
+        $log[] = "[FAIL] Could not send permit 7d warning to {$tenant['email']}";
+    }
+}
+
+// 4B — Send 3-day warning
+$permit_warn_3d = (clone $now)->modify('+3 days')->format('Y-m-d');
+try {
+    $pw3_stmt = $pdo->prepare("
+        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.permit_expiry, t.slug
+        FROM tenants t
+        WHERE t.status = 'active'
+          AND t.permit_expiry IS NOT NULL
+          AND t.permit_expiry != ''
+          AND DATE(t.permit_expiry) = ?
+    ");
+    $pw3_stmt->execute([$permit_warn_3d]);
+    $permit_warn_3d_tenants = $pw3_stmt->fetchAll();
+} catch (Throwable $e) {
+    $permit_warn_3d_tenants = [];
+}
+foreach ($permit_warn_3d_tenants as $tenant) {
+    if (already_notified($pdo, (int)$tenant['id'], 'permit_expiry_3d')) continue;
+    $sent = function_exists('sendPermitExpiryWarning')
+        ? sendPermitExpiryWarning(
+            $tenant['email'], $tenant['owner_name'], $tenant['business_name'],
+            $tenant['permit_expiry'], 3, $tenant['slug']
+          )
+        : false;
+    if ($sent) {
+        mark_notified($pdo, (int)$tenant['id'], 'permit_expiry_3d');
+        $log[] = "[OK] Sent permit 3d warning to {$tenant['business_name']}";
+    }
+}
+
+// 4C — Send 1-day warning
+$permit_warn_1d = (clone $now)->modify('+1 day')->format('Y-m-d');
+try {
+    $pw1_stmt = $pdo->prepare("
+        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.permit_expiry, t.slug
+        FROM tenants t
+        WHERE t.status = 'active'
+          AND t.permit_expiry IS NOT NULL
+          AND t.permit_expiry != ''
+          AND DATE(t.permit_expiry) = ?
+    ");
+    $pw1_stmt->execute([$permit_warn_1d]);
+    $permit_warn_1d_tenants = $pw1_stmt->fetchAll();
+} catch (Throwable $e) {
+    $permit_warn_1d_tenants = [];
+}
+foreach ($permit_warn_1d_tenants as $tenant) {
+    if (already_notified($pdo, (int)$tenant['id'], 'permit_expiry_1d')) continue;
+    $sent = function_exists('sendPermitExpiryWarning')
+        ? sendPermitExpiryWarning(
+            $tenant['email'], $tenant['owner_name'], $tenant['business_name'],
+            $tenant['permit_expiry'], 1, $tenant['slug']
+          )
+        : false;
+    if ($sent) {
+        mark_notified($pdo, (int)$tenant['id'], 'permit_expiry_1d');
+        $log[] = "[OK] Sent permit 1d warning to {$tenant['business_name']}";
+    }
+}
+
+// 4D — Auto-disable tenants whose permit has already expired (past today)
+try {
+    $pe_stmt = $pdo->prepare("
+        SELECT t.id, t.business_name, t.email, t.owner_name, t.plan, t.permit_expiry, t.slug
+        FROM tenants t
+        WHERE t.status = 'active'
+          AND t.permit_expiry IS NOT NULL
+          AND t.permit_expiry != ''
+          AND DATE(t.permit_expiry) < CURDATE()
+          AND (t.business_permit_status IS NULL OR t.business_permit_status NOT IN ('permit_expired_disabled'))
+    ");
+    $pe_stmt->execute();
+    $permit_expired_tenants = $pe_stmt->fetchAll();
+} catch (Throwable $e) {
+    $permit_expired_tenants = [];
+    $log[] = "[ERROR] Could not query permit-expired tenants: " . $e->getMessage();
+}
+
+foreach ($permit_expired_tenants as $tenant) {
+    // Mark as disabled due to permit expiry
+    try {
+        $pdo->prepare("
+            UPDATE tenants SET
+                status = 'inactive',
+                business_permit_status = 'permit_expired_disabled'
+            WHERE id = ?
+        ")->execute([$tenant['id']]);
+
+        // Suspend all users (admin too — they need to upload new permit via login page)
+        $pdo->prepare("
+            UPDATE users SET
+                is_suspended      = 1,
+                suspended_at      = NOW(),
+                suspension_reason = 'Business permit expired — please upload your renewed permit to restore access.'
+            WHERE tenant_id = ?
+        ")->execute([$tenant['id']]);
+    } catch (Throwable $e) {
+        $log[] = "[ERROR] Could not disable permit-expired tenant {$tenant['business_name']}: " . $e->getMessage();
+        continue;
+    }
+
+    // Send permit expired email (once)
+    if (!already_notified($pdo, (int)$tenant['id'], 'permit_expired_disabled')) {
+        $sent = function_exists('sendPermitExpiryWarning')
+            ? sendPermitExpiryWarning(
+                $tenant['email'], $tenant['owner_name'], $tenant['business_name'],
+                $tenant['permit_expiry'], 0, $tenant['slug']
+              )
+            : false;
+        if ($sent) {
+            mark_notified($pdo, (int)$tenant['id'], 'permit_expired_disabled');
+        }
+    }
+
+    try {
+        $pdo->prepare("
+            INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at)
+            VALUES (?,NULL,'system','system','PERMIT_EXPIRED_DISABLED','tenant',?,?,'::1',NOW())
+        ")->execute([
+            $tenant['id'], $tenant['id'],
+            "Tenant \"{$tenant['business_name']}\" auto-disabled — business permit expired on {$tenant['permit_expiry']}. Awaiting permit renewal upload.",
+        ]);
+    } catch (Throwable $e) {}
+
+    $log[] = "[PERMIT-DISABLED] {$tenant['business_name']} — permit expired {$tenant['permit_expiry']}";
+}
+
 // ── Respond ───────────────────────────────────────────────────
 // (lock is released by register_shutdown_function above)
 http_response_code(200);
