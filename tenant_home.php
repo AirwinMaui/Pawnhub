@@ -597,31 +597,31 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   padding: 3px 9px; border-radius: 100px;
   border: 1px solid var(--border);
 }
-.item-body { padding: 16px 18px; flex: 1; display: flex; flex-direction: column; }
+.item-body { padding: 18px 20px; flex: 1; display: flex; flex-direction: column; }
 .item-name {
-  font-size: 1rem; font-weight: 700; color: var(--item-name-color);
-  line-height: 1.35; margin-bottom: 5px;
+  font-size: 1.05rem; font-weight: 700; color: var(--item-name-color);
+  line-height: 1.4; margin-bottom: 6px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .item-cond {
-  font-size: .71rem; color: var(--text-dim);
-  margin-bottom: 10px;
+  font-size: .82rem; color: var(--text-dim);
+  margin-bottom: 10px; font-weight: 500;
 }
 .item-footer {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: auto;
+  margin-top: auto; gap: 8px;
 }
 .item-price {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.25rem; color: var(--item-price-color);
+  font-size: 1.35rem; color: var(--item-price-color);
 }
-.item-price-label { font-size: .62rem; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-weight: 500; }
+.item-price-label { font-size: .72rem; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .item-stock {
-  font-size: .68rem; font-weight: 600;
+  font-size: .75rem; font-weight: 700;
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: color-mix(in srgb, var(--accent) 90%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  padding: 3px 8px; border-radius: 100px;
+  padding: 4px 10px; border-radius: 100px; white-space: nowrap;
 }
 
 /* ── FEATURED STRIP ── */
@@ -1107,10 +1107,10 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">campaign</span>Promos
     </a>
     <?php endif; ?>
-    <a href="#how-it-works" class="nav-link">Paano</a>
-    <a href="#services" class="nav-link">Serbisyo</a>
+    <a href="#how-it-works" class="nav-link">How It Works</a>
+    <a href="#services" class="nav-link">Services</a>
     <?php if($biz_addr || $biz_phone): ?>
-    <a href="#info" class="nav-link">Lokasyon</a>
+    <a href="#info" class="nav-link">Visit Us</a>
     <?php endif; ?>
     <a href="#mobile-app" class="nav-link">
       <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">download</span>Download
@@ -1142,9 +1142,8 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <?= htmlspecialchars($hero_title) ?><br><span class="accent"><?= htmlspecialchars($hero_subtitle) ?></span>
     </h1>
     <p class="hero-sub">
-      Kumita ng cash sa inyong mga gamit — jewelry, gadget, relo, at marami pa.
-      Mabilis, ligtas, at patas ang aming serbisyo.
-      <?php if($biz_addr): ?>Bisitahin kami sa <?= $biz_addr ?>.<?php endif; ?>
+      Get cash fast using your valuables as collateral — jewelry, watches, gadgets, and more. No credit check required.
+      <?php if($biz_addr): ?>Visit us at <?= $biz_addr ?>.<?php endif; ?>
     </p>
     <div class="hero-actions">
       <?php if($total_items > 0): ?>
@@ -1419,8 +1418,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <div class="item-body">
         <div class="item-name"><?= htmlspecialchars($item['item_name'] ?? 'Item') ?></div>
         <?php if(!empty($item['condition_notes'])): ?>
-        <div class="item-cond">Condition: <?= htmlspecialchars($item['condition_notes']) ?></div>
-        <?php endif; ?>
+        <div class="item-cond">Condition: <?= htmlspecialchars($item['condition_notes']) ?></div>        <?php endif; ?>
         <div class="item-footer">
           <div>
             <?php if($on_sale && $orig_price > 0): ?>
@@ -1433,7 +1431,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
             <?php endif; ?>
           </div>
           <div class="item-stock">
-            <?= $item['stock_qty'] ?> in stock
+            <?= $item['stock_qty'] ?> <?= $item['stock_qty'] == 1 ? 'piece' : 'pieces' ?> available
           </div>
         </div>
       </div>
@@ -1443,34 +1441,9 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <?php endif; ?>
 </section>
 
-<!-- INFO -->
-<?php if($biz_addr || $biz_phone): ?>
-<section id="info">
-  <div class="section-hdr">
-    <div>
-      <div class="section-label">📍 Find Us</div>
-      <h2 class="section-title">Visit Our Branch</h2>
-    </div>
-  </div>
-  <div class="info-grid">
-    <?php if($biz_addr): ?>
-    <div class="info-card">
-      <div class="info-card-icon"><span class="material-symbols-outlined">location_on</span></div>
-      <div class="info-card-title">Address</div>
-      <div class="info-card-val"><?= $biz_addr ?></div>
-    </div>
-    <?php endif; ?>
-    <?php if($biz_phone): ?>
-    <div class="info-card">
-      <div class="info-card-icon"><span class="material-symbols-outlined">call</span></div>
-      <div class="info-card-title">Contact Number</div>
-      <div class="info-card-val"><?= $biz_phone ?></div>
-    </div>
-    <?php endif; ?>
 
-  </div>
-</section>
-<?php endif; ?>
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- CTA -->
 
 <!-- DOWNLOAD APP SECTION -->
 <section id="mobile-app" style="padding-top:0;">
@@ -1622,68 +1595,68 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 </section>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!-- HOW PAWNING WORKS — Step-by-step guide for new customers  -->
+<!-- HOW PAWNING WORKS                                          -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <section id="how-it-works" style="padding-top:0;">
   <div class="section-hdr">
     <div>
-      <div class="section-label">📖 Guide</div>
-      <h2 class="section-title">Paano Mag-Pawn?</h2>
+      <div class="section-label">📖 Simple Steps</div>
+      <h2 class="section-title">How Pawning Works</h2>
     </div>
   </div>
   <p style="font-size:1.05rem;color:var(--text-m);margin-bottom:36px;max-width:600px;line-height:1.75;">
-    Simple lang ang proseso — dalhin ang inyong item at ID, at makakakuha kayo ng pautang agad.
+    Get cash fast — just bring your item and a valid ID. No credit check. No lengthy application.
   </p>
 
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;">
 
     <!-- Step 1 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;position:relative;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--primary) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">diamond</span>
       </div>
-      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--primary);margin-bottom:6px;">Hakbang 1</div>
-      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Dalhin ang Item</div>
-      <div style="font-size:.95rem;color:var(--text-m);line-height:1.7;">Magdala ng inyong jewelry, gadget, relo, o iba pang item. Siguraduhing may dalang valid ID.</div>
+      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--primary);margin-bottom:6px;">Step 1</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Bring Your Item</div>
+      <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Bring your jewelry, gadget, watch, or other valuables to our branch. Bring a valid government ID.</div>
     </div>
 
     <!-- Step 2 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;position:relative;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--accent) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">fact_check</span>
       </div>
-      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px;">Hakbang 2</div>
-      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Tasahin ang Item</div>
-      <div style="font-size:.95rem;color:var(--text-m);line-height:1.7;">Susuriin ng aming appraiser ang inyong item at magbibigay ng patas na halaga sa maikling panahon.</div>
+      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px;">Step 2</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Item Appraisal</div>
+      <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Our appraiser will assess your item and give you a fair loan offer — usually done within minutes.</div>
     </div>
 
     <!-- Step 3 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;position:relative;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">payments</span>
       </div>
-      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#f59e0b;margin-bottom:6px;">Hakbang 3</div>
-      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Tumanggap ng Pautang</div>
-      <div style="font-size:.95rem;color:var(--text-m);line-height:1.7;">Makatatanggap kayo ng cash agad pagkatapos mapagkasunduan ang halaga. Mabilis at walang abala.</div>
+      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#f59e0b;margin-bottom:6px;">Step 3</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Receive Your Cash</div>
+      <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Once you agree to the loan amount, you receive cash on the spot. You will also get a pawn ticket.</div>
     </div>
 
     <!-- Step 4 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;position:relative;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">redeem</span>
       </div>
-      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#22c55e;margin-bottom:6px;">Hakbang 4</div>
-      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">I-Redeem ang Item</div>
-      <div style="font-size:.95rem;color:var(--text-m);line-height:1.7;">Bayaran ang pautang at ang interest bago mag-expire ang ticket upang mabawi ang inyong item.</div>
+      <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#22c55e;margin-bottom:6px;">Step 4</div>
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Redeem Your Item</div>
+      <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Pay back the loan plus interest before your pawn ticket expires to get your item back. You may also renew.</div>
     </div>
 
   </div>
 
-  <!-- Important note box -->
+  <!-- Important note -->
   <div style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
     <span class="material-symbols-outlined" style="font-size:24px;color:var(--primary);flex-shrink:0;margin-top:2px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">info</span>
     <div style="font-size:.98rem;color:var(--text-m);line-height:1.75;">
-      <strong style="color:var(--text);">Tandaan:</strong> Magdala ng valid government ID (SSS, GSIS, Passport, Driver's License, o Voter's ID). Ang mga item ay mananatiling ligtas sa aming bodega habang tumatagal ang pautang.
+      <strong style="color:var(--text);">Reminder:</strong> Please bring a valid government-issued ID — SSS, GSIS, Passport, Driver's License, or Voter's ID. Your pawned items are kept safely in our secured storage for the full duration of your loan.
     </div>
   </div>
 </section>
@@ -1694,52 +1667,52 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 <section id="services" style="padding-top:0;">
   <div class="section-hdr">
     <div>
-      <div class="section-label">🏪 Services</div>
-      <h2 class="section-title">Aming Mga Serbisyo</h2>
+      <div class="section-label">🏪 What We Offer</div>
+      <h2 class="section-title">Our Services</h2>
     </div>
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:20px;">
 
-    <!-- Pawn -->
+    <!-- Pawn a Loan -->
     <div style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">💍</div>
-      <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Mag-Pawn</div>
-      <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">I-pawn ang inyong jewelry, gadget, relo, o electronics. Mabilis na appraisal at cash agad.</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <?php foreach(['Jewelry at Alahas','Cellphone at Gadget','Relo (Watches)','Laptop at Electronics','Iba pa'] as $svc): ?>
-        <div style="display:flex;align-items:center;gap:8px;font-size:.95rem;color:var(--text-m);">
-          <span class="material-symbols-outlined" style="font-size:17px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
+      <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Pawn a Loan</div>
+      <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Use your valuables as collateral and get instant cash. We accept a wide range of items.</div>
+      <div style="display:flex;flex-direction:column;gap:9px;">
+        <?php foreach(['Gold & Silver Jewelry','Mobile Phones & Tablets','Watches & Timepieces','Laptops & Electronics','Power Tools','Other Valuables'] as $svc): ?>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.97rem;color:var(--text-m);">
+          <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
           <?= $svc ?>
         </div>
         <?php endforeach; ?>
       </div>
     </div>
 
-    <!-- Redeem -->
+    <!-- Redeem Your Item -->
     <div style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🔓</div>
-      <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">I-Redeem</div>
-      <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Bawiin ang inyong item sa pamamagitan ng pagbabayad ng pautang at interes bago mag-expire.</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <?php foreach(['Dalhin ang pawn ticket','Bayaran ang pautang + interes','Matanggap ang item','Maaaring mag-renew ng ticket','Walang hidden charges'] as $svc): ?>
-        <div style="display:flex;align-items:center;gap:8px;font-size:.95rem;color:var(--text-m);">
-          <span class="material-symbols-outlined" style="font-size:17px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
+      <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Redeem Your Item</div>
+      <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Reclaim your pawned item by settling your loan plus interest before the ticket expires.</div>
+      <div style="display:flex;flex-direction:column;gap:9px;">
+        <?php foreach(['Present your pawn ticket','Pay the loan + interest','Receive your item back','Renew your ticket if needed','No hidden charges'] as $svc): ?>
+        <div style="display:flex;align-items:center;gap:10px;font-size:.97rem;color:var(--text-m);">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">check_circle</span>
           <?= $svc ?>
         </div>
         <?php endforeach; ?>
       </div>
     </div>
 
-    <!-- Buy Items -->
+    <!-- Buy Pre-Owned Items -->
     <?php if($total_items > 0): ?>
     <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🛍️</div>
-      <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Bumili ng Items</div>
-      <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Pumili mula sa aming koleksyon ng mga second-hand na items sa abot-kayang presyo.</div>
-      <a href="#shop" style="display:inline-flex;align-items:center;gap:8px;font-size:1rem;font-weight:700;color:#f59e0b;text-decoration:none;background:rgba(245,158,11,.12);border:1.5px solid rgba(245,158,11,.28);padding:12px 22px;border-radius:12px;transition:all .2s;" onmouseover="this.style.background='rgba(245,158,11,.2)'" onmouseout="this.style.background='rgba(245,158,11,.12)'">
-        <span class="material-symbols-outlined" style="font-size:19px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">shopping_bag</span>
-        Tingnan ang Shop
+      <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Buy Pre-Owned Items</div>
+      <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Browse our selection of quality second-hand items available for purchase at affordable prices.</div>
+      <a href="#shop" style="display:inline-flex;align-items:center;gap:8px;font-size:1rem;font-weight:700;color:#f59e0b;text-decoration:none;background:rgba(245,158,11,.12);border:1.5px solid rgba(245,158,11,.28);padding:13px 22px;border-radius:12px;transition:all .2s;" onmouseover="this.style.background='rgba(245,158,11,.22)'" onmouseout="this.style.background='rgba(245,158,11,.12)'">
+        <span class="material-symbols-outlined" style="font-size:20px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">shopping_bag</span>
+        Browse Available Items
       </a>
     </div>
     <?php endif; ?>
@@ -1753,8 +1726,8 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 <section id="why-us" style="padding-top:0;">
   <div class="section-hdr">
     <div>
-      <div class="section-label">⭐ Trust</div>
-      <h2 class="section-title">Bakit Kami ang Piliin?</h2>
+      <div class="section-label">⭐ Our Promise</div>
+      <h2 class="section-title">Why Choose Us</h2>
     </div>
   </div>
 
@@ -1762,12 +1735,12 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 
     <?php
     $why_items = [
-      ['🏛️', 'Licensed & Registered', 'DTI at lokal na pamahalaan ang nagbibigay ng aming lisensya. Ligtas at lehitimo ang aming operasyon.'],
-      ['⚡', 'Mabilis na Proseso', 'Sa loob ng 15 minuto, maaari na kayong makatanggap ng cash mula sa inyong item.'],
-      ['🔒', 'Ligtas ang Inyong Item', 'Nakaimbak ang lahat ng pawn items sa aming secure na bodega na may CCTV surveillance.'],
-      ['💰', 'Patas na Halaga', 'Ibinibigay namin ang pinakamataas na appraised value para sa inyong mga item.'],
-      ['📄', 'Malinaw ang Kontrata', 'Lahat ng termino ay malinaw na nakasulat sa inyong pawn ticket. Walang nakatagong bayarin.'],
-      ['🤝', 'Magalang na Serbisyo', 'Ang aming mga kawani ay handang tumulong sa inyo sa bawat hakbang ng proseso.'],
+      ['🏛️', 'Licensed & Registered', 'We are duly registered with the DTI and local government. All transactions are fully compliant with BSP pawnshop regulations.'],
+      ['⚡', 'Fast Cash — No Waiting', 'Walk in, present your item and ID, and leave with cash in as little as 15 minutes.'],
+      ['🔒', 'Your Items Are Safe', 'All pawned items are stored in our secured vault with 24/7 CCTV monitoring throughout the loan period.'],
+      ['💰', 'Highest Loan Value', 'We offer the best appraised value for your items so you get the most out of every pawn transaction.'],
+      ['📄', 'Clear Loan Terms', 'All loan terms, interest rates, and maturity dates are clearly stated on your pawn ticket. No surprises.'],
+      ['🤝', 'Friendly Staff', 'Our staff are trained to assist you with patience and respect — whether you are pawning for the first time or the hundredth.'],
     ];
     foreach($why_items as [$icon, $title, $desc]):
     ?>
@@ -1775,7 +1748,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <div style="font-size:2rem;flex-shrink:0;line-height:1;"><?= $icon ?></div>
       <div>
         <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3;"><?= $title ?></div>
-        <div style="font-size:.92rem;color:var(--text-m);line-height:1.7;"><?= $desc ?></div>
+        <div style="font-size:.94rem;color:var(--text-m);line-height:1.75;"><?= $desc ?></div>
       </div>
     </div>
     <?php endforeach; ?>
@@ -1784,14 +1757,14 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 </section>
 
 <!-- ══════════════════════════════════════════════════════════ -->
-<!-- CONTACT / VISIT US                                         -->
+<!-- VISIT US / CONTACT                                         -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <?php if($biz_addr || $biz_phone): ?>
 <section id="info" style="padding-top:0;">
   <div class="section-hdr">
     <div>
-      <div class="section-label">📍 Lokasyon</div>
-      <h2 class="section-title">Bisitahin Kami</h2>
+      <div class="section-label">📍 Find Us</div>
+      <h2 class="section-title">Visit Our Branch</h2>
     </div>
   </div>
 
@@ -1803,13 +1776,13 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
       </div>
       <div>
-        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-dim);margin-bottom:6px;">Address</div>
-        <div style="font-size:1.05rem;font-weight:600;color:var(--text);line-height:1.5;"><?= $biz_addr ?></div>
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-dim);margin-bottom:6px;">Branch Address</div>
+        <div style="font-size:1.08rem;font-weight:600;color:var(--text);line-height:1.6;"><?= $biz_addr ?></div>
       </div>
       <a href="https://maps.google.com?q=<?= urlencode($tenant['address'] ?? '') ?>" target="_blank" rel="noopener"
-        style="display:inline-flex;align-items:center;gap:7px;font-size:.95rem;font-weight:700;color:var(--primary);text-decoration:none;background:color-mix(in srgb,var(--primary) 10%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);padding:11px 18px;border-radius:12px;transition:all .2s;" onmouseover="this.style.background='color-mix(in srgb,var(--primary) 18%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--primary) 10%,transparent)'">
-        <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">near_me</span>
-        Hanapin sa Maps
+        style="display:inline-flex;align-items:center;gap:7px;font-size:.97rem;font-weight:700;color:var(--primary);text-decoration:none;background:color-mix(in srgb,var(--primary) 10%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);padding:12px 18px;border-radius:12px;transition:all .2s;" onmouseover="this.style.background='color-mix(in srgb,var(--primary) 18%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--primary) 10%,transparent)'">
+        <span class="material-symbols-outlined" style="font-size:19px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">near_me</span>
+        Get Directions
       </a>
     </div>
     <?php endif; ?>
@@ -1820,37 +1793,37 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">phone</span>
       </div>
       <div>
-        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-dim);margin-bottom:6px;">Telepono</div>
-        <div style="font-size:1.3rem;font-weight:700;color:var(--text);letter-spacing:.02em;"><?= $biz_phone ?></div>
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-dim);margin-bottom:6px;">Contact Number</div>
+        <div style="font-size:1.4rem;font-weight:700;color:var(--text);letter-spacing:.02em;"><?= $biz_phone ?></div>
       </div>
       <a href="tel:<?= preg_replace('/[^0-9+]/','',$tenant['phone'] ?? '') ?>"
-        style="display:inline-flex;align-items:center;gap:7px;font-size:.95rem;font-weight:700;color:#22c55e;text-decoration:none;background:rgba(34,197,94,.10);border:1.5px solid rgba(34,197,94,.25);padding:11px 18px;border-radius:12px;transition:all .2s;" onmouseover="this.style.background='rgba(34,197,94,.18)'" onmouseout="this.style.background='rgba(34,197,94,.10)'">
-        <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
-        Tumawag Ngayon
+        style="display:inline-flex;align-items:center;gap:7px;font-size:.97rem;font-weight:700;color:#22c55e;text-decoration:none;background:rgba(34,197,94,.10);border:1.5px solid rgba(34,197,94,.25);padding:12px 18px;border-radius:12px;transition:all .2s;" onmouseover="this.style.background='rgba(34,197,94,.18)'" onmouseout="this.style.background='rgba(34,197,94,.10)'">
+        <span class="material-symbols-outlined" style="font-size:19px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
+        Call Us Now
       </a>
     </div>
     <?php endif; ?>
 
-    <!-- Business hours placeholder — can be customized -->
+    <!-- Branch Hours -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.12);border:1.5px solid rgba(245,158,11,.28);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">schedule</span>
       </div>
-      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-dim);margin-bottom:12px;">Oras ng Operasyon</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.97rem;">
-          <span style="color:var(--text-m);">Lunes – Biyernes</span>
+      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-dim);margin-bottom:14px;">Branch Hours</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.98rem;">
+          <span style="color:var(--text-m);">Monday – Friday</span>
           <span style="color:var(--text);font-weight:600;">8:00 AM – 5:00 PM</span>
         </div>
         <div style="height:1px;background:var(--border);"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.97rem;">
-          <span style="color:var(--text-m);">Sabado</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.98rem;">
+          <span style="color:var(--text-m);">Saturday</span>
           <span style="color:var(--text);font-weight:600;">8:00 AM – 12:00 PM</span>
         </div>
         <div style="height:1px;background:var(--border);"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.97rem;">
-          <span style="color:var(--text-m);">Linggo</span>
-          <span style="color:#ef4444;font-weight:600;">Sarado</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:.98rem;">
+          <span style="color:var(--text-m);">Sunday & Holidays</span>
+          <span style="color:#ef4444;font-weight:700;">Closed</span>
         </div>
       </div>
     </div>
