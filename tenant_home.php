@@ -608,8 +608,8 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   margin-bottom: 10px; font-weight: 500;
 }
 .item-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: auto; gap: 8px;
+  display: flex; flex-direction: column;
+  margin-top: auto; gap: 4px;
 }
 .item-price {
   font-family: 'DM Serif Display', serif;
@@ -627,13 +627,12 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 [data-theme="dark"] .item-orig-price { color: rgba(240,242,247,0.35); }
 .item-stock {
-  font-size: .82rem; font-weight: 700;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  font-size: .8rem; font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 75%, #000);
+  white-space: nowrap;
+}
+[data-theme="dark"] .item-stock {
   color: color-mix(in srgb, var(--accent) 90%, #fff);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  padding: 5px 12px; border-radius: 100px;
-  white-space: normal; word-break: break-word;
-  text-align: right; max-width: 120px; line-height: 1.3;
 }
 
 /* ── FEATURED STRIP ── */
@@ -1135,6 +1134,9 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <button class="dm-toggle" onclick="toggleDarkMode()" id="dmBtn" title="Toggle dark mode">
       <span class="material-symbols-outlined" id="dmIcon">dark_mode</span>
     </button>
+    <a href="<?= htmlspecialchars($register_url) ?>" class="nav-signin" style="background:color-mix(in srgb,var(--accent) 80%,#000);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 35%,transparent);">
+      <span class="material-symbols-outlined">person_add</span>Register
+    </a>
     <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin nav-signin-login" style="background:var(--primary);box-shadow:0 4px 18px color-mix(in srgb,var(--primary) 35%,transparent);">
       <span class="material-symbols-outlined">login</span>Sign In
     </a>
