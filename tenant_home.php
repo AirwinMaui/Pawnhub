@@ -258,16 +258,16 @@ body {
 .bg-gradient {
   position: absolute; inset: 0;
 }
-/* Light mode: white wash gradient so text stays readable over image */
+/* Light mode: strong white wash gradient so text is always readable over image */
 :root .bg-gradient,
 [data-theme="light"] .bg-gradient {
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
     linear-gradient(to bottom,
-      rgba(245,246,250,0.10) 0%,
-      rgba(245,246,250,0.45) 40%,
-      rgba(245,246,250,0.88) 68%,
-      var(--bg) 88%);
+      rgba(245,246,250,0.20) 0%,
+      rgba(245,246,250,0.65) 25%,
+      rgba(245,246,250,0.92) 50%,
+      var(--bg) 70%);
 }
 /* Dark mode: strong dark overlay so ALL content below hero is readable */
 [data-theme="dark"] .bg-gradient {
@@ -282,7 +282,23 @@ body {
 
 /* ── BACKGROUND IMAGE: solid card/section backgrounds ── */
 
-/* Section-card class: solid dark background when bg image is present */
+/* Section-card class: solid backgrounds for readability in all modes */
+/* LIGHT MODE: solid white card - no bleed-through from bg image */
+[data-theme="light"] .section-card {
+  background: rgba(255,255,255,0.95) !important;
+  border-color: rgba(0,0,0,0.10) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06) !important;
+}
+/* DARK MODE: solid dark card */
+[data-theme="dark"] .section-card {
+  background: rgba(16,18,28,0.88) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+/* has-bg-img always forces dark-style cards */
 .has-bg-img .section-card {
   background: rgba(10,12,20,0.90) !important;
   border-color: rgba(255,255,255,0.15) !important;
@@ -290,11 +306,22 @@ body {
   -webkit-backdrop-filter: blur(4px) !important;
 }
 
-/* Text inside section-cards: force readable over dark bg */
+/* Text inside section-cards: force readable over their bg */
+[data-theme="light"] .section-card .step-title,
+[data-theme="light"] .section-card [style*="color:var(--text)"] { color: #0f1117 !important; }
+[data-theme="light"] .section-card .step-body,
+[data-theme="light"] .section-card [style*="color:var(--text-m)"] { color: rgba(15,17,23,0.72) !important; }
 .has-bg-img .section-card [style*="color:var(--text)"] { color: #ffffff !important; }
 .has-bg-img .section-card [style*="color:var(--text-m)"] { color: rgba(240,242,247,0.78) !important; }
+[data-theme="dark"] .section-card [style*="color:var(--text)"] { color: #ffffff !important; }
+[data-theme="dark"] .section-card [style*="color:var(--text-m)"] { color: rgba(240,242,247,0.75) !important; }
 
-/* Item cards */
+/* Item cards — solid backgrounds so bg image never bleeds through */
+[data-theme="light"] .item-card {
+  background: rgba(255,255,255,0.95) !important;
+  border-color: rgba(0,0,0,0.09) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
 .has-bg-img .item-card {
   background: rgba(10,12,20,0.90) !important;
   border-color: rgba(255,255,255,0.12) !important;
@@ -328,8 +355,16 @@ body {
 /* Section labels / titles */
 .has-bg-img .section-title { color: #ffffff !important; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
 .has-bg-img .section-label { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
+[data-theme="light"] .section-title { color: #0f1117 !important; }
+[data-theme="light"] .section-label { color: color-mix(in srgb, var(--primary) 80%, #000) !important; }
+
+/* Section note text readable in light mode */
+[data-theme="light"] .section-note [style*="color:var(--text-m)"] { color: rgba(15,17,23,0.72) !important; }
+[data-theme="light"] .section-note strong { color: #0f1117 !important; }
 
 /* Section paragraph text */
+[data-theme="light"] section > p { color: rgba(15,17,23,0.72) !important; }
+[data-theme="dark"]  section > p { color: rgba(240,242,247,0.75) !important; }
 .has-bg-img section > p { color: rgba(240,242,247,0.82) !important; }
 
 /* Category filter pills */
@@ -340,6 +375,10 @@ body {
 }
 
 /* Important note/reminder box */
+[data-theme="light"] .section-note {
+  background: rgba(255,255,255,0.92) !important;
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent) !important;
+}
 .has-bg-img .section-note {
   background: rgba(10,12,20,0.85) !important;
   border-color: color-mix(in srgb, var(--primary) 45%, transparent) !important;
@@ -764,10 +803,11 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   border-radius: 20px; padding: 24px;
 }
 [data-theme="light"] .info-card {
-  background: rgba(255,255,255,0.82);
+  background: rgba(255,255,255,0.95);
   border-color: rgba(0,0,0,0.09);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06);
 }
 [data-theme="dark"] .info-card {
   background: rgba(10,12,18,0.72);
@@ -825,7 +865,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 .has-bg-img          .hero-stat-label  { color: rgba(255,255,255,.55) !important; }
 /* Category pills */
 [data-theme="dark"]  .cat-pill         { color: rgba(240,242,247,0.75) !important; }
-[data-theme="light"] .cat-pill         { color: rgba(15,17,23,0.7) !important; }
+[data-theme="light"] .cat-pill         { color: rgba(15,17,23,0.78) !important; background: rgba(255,255,255,0.85) !important; border-color: rgba(0,0,0,0.14) !important; }
 /* Nav */
 [data-theme="dark"]  .nav-name         { color: #ffffff !important; }
 [data-theme="light"] .nav-name         { color: #0f1117 !important; }
@@ -842,7 +882,7 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 /* Promo cards — titles and body text readable in both modes */
 [data-theme="dark"]  .promo-title      { color: #ffffff !important; }
 [data-theme="light"] .promo-title      { color: #0f1117 !important; }
-[data-theme="light"] .promo-card       { background: rgba(255,255,255,0.88) !important; border-color: rgba(0,0,0,0.10) !important; }
+[data-theme="light"] .promo-card       { background: rgba(255,255,255,0.95) !important; border-color: rgba(0,0,0,0.10) !important; box-shadow: 0 2px 16px rgba(0,0,0,0.06) !important; }
 /* Promo body text */
 [data-theme="light"] #promos [style*="color:var(--text-m)"] { color: rgba(15,17,23,0.7) !important; }
 [data-theme="light"] #promos [style*="color:var(--text-dim)"] { color: rgba(15,17,23,0.5) !important; }
