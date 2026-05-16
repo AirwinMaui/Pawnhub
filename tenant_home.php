@@ -145,12 +145,12 @@ foreach ($promos as $p) {
   --secondary: <?= $secondary ?>;
   --accent: <?= $accent ?>;
   --bg: #f5f6fa;
-  --surface: rgba(255,255,255,0.90);
-  --surface-2: rgba(0,0,0,0.06);
-  --border: rgba(0,0,0,0.10);
+  --surface: rgba(0,0,0,0.04);
+  --surface-2: rgba(0,0,0,0.07);
+  --border: rgba(0,0,0,0.09);
   --text: #0f1117;
-  --text-m: rgba(15,17,23,0.68);
-  --text-dim: rgba(15,17,23,0.45);
+  --text-m: rgba(15,17,23,0.6);
+  --text-dim: rgba(15,17,23,0.35);
   --radius: 16px;
   --nav-h: 68px;
   --nav-bg: rgba(245,246,250,0.85);
@@ -175,9 +175,9 @@ foreach ($promos as $p) {
 /* ── DARK MODE ── */
 [data-theme="dark"] {
   --bg: #08090c;
-  --surface: rgba(255,255,255,0.07);
-  --surface-2: rgba(255,255,255,0.10);
-  --border: rgba(255,255,255,0.10);
+  --surface: rgba(255,255,255,0.04);
+  --surface-2: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
   --text: #f0f2f7;
   --text-m: rgba(240,242,247,0.6);
   --text-dim: rgba(240,242,247,0.3);
@@ -264,115 +264,21 @@ body {
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
     linear-gradient(to bottom,
-      rgba(245,246,250,0.05) 0%,
-      rgba(245,246,250,0.55) 30%,
-      rgba(245,246,250,0.92) 55%,
-      var(--bg) 75%);
+      rgba(245,246,250,0.10) 0%,
+      rgba(245,246,250,0.45) 40%,
+      rgba(245,246,250,0.88) 68%,
+      var(--bg) 88%);
 }
-/* Dark mode: strong dark overlay so ALL content below hero is readable */
+/* Dark mode: light gradient so screen-blended image stays vivid */
 [data-theme="dark"] .bg-gradient {
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
     linear-gradient(to bottom,
       rgba(8,9,12,0.0)  0%,
-      rgba(8,9,12,0.25) 30%,
-      rgba(8,9,12,0.82) 60%,
-      #08090c 80%);
+      rgba(8,9,12,0.12) 40%,
+      rgba(8,9,12,0.60) 75%,
+      #08090c 92%);
 }
-
-/* ── BACKGROUND IMAGE: solid card/section backgrounds ── */
-
-/* Section-card class: solid dark background when bg image is present */
-.has-bg-img .section-card {
-  background: rgba(8,10,18,0.88) !important;
-  border-color: rgba(255,255,255,0.18) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-}
-
-/* ALL cards/divs with var(--surface) border when bg image is present */
-.has-bg-img [style*="background:var(--surface)"],
-.has-bg-img [style*="background: var(--surface)"] {
-  background: rgba(8,10,18,0.88) !important;
-  border-color: rgba(255,255,255,0.16) !important;
-  backdrop-filter: blur(6px) !important;
-  -webkit-backdrop-filter: blur(6px) !important;
-}
-
-/* Light mode: make all surface cards properly white */
-[data-theme="light"]:not(.has-bg-img) [style*="background:var(--surface)"],
-[data-theme="light"]:not(.has-bg-img) [style*="background: var(--surface)"] {
-  background: rgba(255,255,255,0.95) !important;
-  border-color: rgba(0,0,0,0.09) !important;
-}
-
-/* Text inside section-cards: force readable over dark bg */
-.has-bg-img .section-card [style*="color:var(--text)"],
-.has-bg-img [style*="background:var(--surface)"] [style*="color:var(--text)"] { color: #ffffff !important; }
-.has-bg-img .section-card [style*="color:var(--text-m)"],
-.has-bg-img [style*="background:var(--surface)"] [style*="color:var(--text-m)"] { color: rgba(240,242,247,0.80) !important; }
-.has-bg-img .section-card [style*="color:var(--text-dim)"],
-.has-bg-img [style*="background:var(--surface)"] [style*="color:var(--text-dim)"] { color: rgba(240,242,247,0.55) !important; }
-
-/* Item cards */
-.has-bg-img .item-card {
-  background: rgba(8,10,18,0.88) !important;
-  border-color: rgba(255,255,255,0.15) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-}
-/* Light mode item cards: solid white */
-[data-theme="light"]:not(.has-bg-img) .item-card {
-  background: #ffffff !important;
-  border-color: rgba(0,0,0,0.09) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-}
-.has-bg-img .item-name  { color: #ffffff !important; }
-.has-bg-img .item-price { color: #ffffff !important; }
-.has-bg-img .item-cond  { color: rgba(240,242,247,0.55) !important; }
-.has-bg-img .item-stock { color: color-mix(in srgb, var(--accent) 90%, #fff) !important; }
-
-/* Info / visit-us cards */
-.has-bg-img .info-card {
-  background: rgba(8,10,18,0.88) !important;
-  border-color: rgba(255,255,255,0.16) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-}
-.has-bg-img .info-card-val   { color: #ffffff !important; }
-.has-bg-img .info-card-title { color: rgba(240,242,247,0.55) !important; }
-
-/* Promo cards */
-.has-bg-img .promo-card {
-  background: rgba(8,10,18,0.88) !important;
-  border-color: rgba(255,255,255,0.16) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-}
-.has-bg-img .promo-title { color: #ffffff !important; }
-
-/* Section labels / titles */
-.has-bg-img .section-title { color: #ffffff !important; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
-.has-bg-img .section-label { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
-
-/* Section paragraph text */
-.has-bg-img section > p { color: rgba(240,242,247,0.82) !important; }
-
-/* Category filter pills */
-.has-bg-img .cat-pill {
-  color: rgba(240,242,247,0.82) !important;
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(255,255,255,0.15) !important;
-}
-
-/* Important note/reminder box */
-.has-bg-img .section-note {
-  background: rgba(10,12,20,0.85) !important;
-  border-color: color-mix(in srgb, var(--primary) 45%, transparent) !important;
-}
-
-
-
 
 /* ── NAV ── */
 nav {
@@ -790,14 +696,14 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   border-radius: 20px; padding: 24px;
 }
 [data-theme="light"] .info-card {
-  background: rgba(255,255,255,0.95);
-  border-color: rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.82);
+  border-color: rgba(0,0,0,0.09);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
 [data-theme="dark"] .info-card {
-  background: rgba(14,17,26,0.82);
-  border-color: rgba(255,255,255,0.12);
+  background: rgba(10,12,18,0.72);
+  border-color: rgba(255,255,255,0.10);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -874,46 +780,6 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 [data-theme="light"] #promos [style*="color:var(--text-dim)"] { color: rgba(15,17,23,0.5) !important; }
 /* Promo sale price — amber in light, gold in dark */
 [data-theme="dark"] .promo-sale-price { color: #fcd34d !important; }
-
-/* ── SECTION CARD — TEXT COLORS ALL MODES ── */
-/* Light mode: strong dark text */
-[data-theme="light"]:not(.has-bg-img) .section-card { background: #ffffff !important; border-color: rgba(0,0,0,0.09) !important; box-shadow: 0 2px 16px rgba(0,0,0,0.07) !important; }
-[data-theme="light"] .section-card [style*="color:var(--text)"]    { color: #0f1117 !important; }
-[data-theme="light"] .section-card [style*="color:var(--text-m)"]  { color: rgba(15,17,23,0.68) !important; }
-[data-theme="light"] .section-card [style*="color:var(--text-dim)"){ color: rgba(15,17,23,0.50) !important; }
-[data-theme="light"] .section-card strong[style*="color:var(--text)"]  { color: #0f1117 !important; }
-/* Dark mode: white text */
-[data-theme="dark"]  .section-card { background: rgba(14,17,26,0.82) !important; border-color: rgba(255,255,255,0.12) !important; }
-[data-theme="dark"]  .section-card [style*="color:var(--text)"]    { color: #ffffff !important; }
-[data-theme="dark"]  .section-card [style*="color:var(--text-m)"]  { color: rgba(240,242,247,0.72) !important; }
-[data-theme="dark"]  .section-card [style*="color:var(--text-dim)"){ color: rgba(240,242,247,0.45) !important; }
-
-/* Section note light mode */
-[data-theme="light"]:not(.has-bg-img) .section-note { background: color-mix(in srgb, var(--primary) 10%, #ffffff) !important; }
-[data-theme="light"] .section-note [style*="color:var(--text-m)"]  { color: rgba(15,17,23,0.68) !important; }
-[data-theme="light"] .section-note strong[style*="color:var(--text)"] { color: #0f1117 !important; }
-
-/* ── WHY CHOOSE US / GENERIC SECTION CARD TEXT ── */
-[data-theme="light"] .why-card { background: #ffffff !important; border-color: rgba(0,0,0,0.09) !important; box-shadow: 0 2px 16px rgba(0,0,0,0.06) !important; }
-[data-theme="light"] .why-card-title { color: #0f1117 !important; }
-[data-theme="light"] .why-card-desc  { color: rgba(15,17,23,0.68) !important; }
-[data-theme="dark"]  .why-card { background: rgba(14,17,26,0.82) !important; border-color: rgba(255,255,255,0.12) !important; }
-[data-theme="dark"]  .why-card-title { color: #ffffff !important; }
-[data-theme="dark"]  .why-card-desc  { color: rgba(240,242,247,0.72) !important; }
-.has-bg-img          .why-card { background: rgba(8,10,18,0.88) !important; border-color: rgba(255,255,255,0.18) !important; backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important; }
-.has-bg-img          .why-card-title { color: #ffffff !important; }
-.has-bg-img          .why-card-desc  { color: rgba(240,242,247,0.80) !important; }
-
-/* Visit Us section cards — light mode readable */
-[data-theme="light"]:not(.has-bg-img) section#info > div > div[style*="background:var(--surface)"] {
-  background: #ffffff !important; border-color: rgba(0,0,0,0.09) !important; box-shadow: 0 2px 14px rgba(0,0,0,0.06) !important;
-}
-[data-theme="light"] section#info [style*="color:var(--text)"] { color: #0f1117 !important; }
-[data-theme="light"] section#info [style*="color:var(--text-m)"] { color: rgba(15,17,23,0.68) !important; }
-[data-theme="light"] section#info [style*="color:var(--text-dim)"] { color: rgba(15,17,23,0.50) !important; }
-
-/* Promo card light mode — fully opaque */
-[data-theme="light"] .promo-card { background: #ffffff !important; border-color: rgba(0,0,0,0.09) !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -1754,7 +1620,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;">
 
     <!-- Step 1 -->
-    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--primary) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">diamond</span>
       </div>
@@ -1764,7 +1630,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 2 -->
-    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--accent) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">fact_check</span>
       </div>
@@ -1774,7 +1640,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 3 -->
-    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">payments</span>
       </div>
@@ -1784,7 +1650,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 4 -->
-    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">redeem</span>
       </div>
@@ -1796,7 +1662,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   </div>
 
   <!-- Important note -->
-  <div class="section-note" style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
+  <div style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
     <span class="material-symbols-outlined" style="font-size:24px;color:var(--primary);flex-shrink:0;margin-top:2px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">info</span>
     <div style="font-size:.98rem;color:var(--text-m);line-height:1.75;">
       <strong style="color:var(--text);">Reminder:</strong> Please bring a valid government-issued ID — SSS, GSIS, Passport, Driver's License, or Voter's ID. Your pawned items are kept safely in our secured storage for the full duration of your loan.
@@ -1818,7 +1684,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:20px;">
 
     <!-- Pawn a Loan -->
-    <div class="section-card" style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">💍</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Pawn a Loan</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Use your valuables as collateral and get instant cash. We accept a wide range of items.</div>
@@ -1833,7 +1699,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Redeem Your Item -->
-    <div class="section-card" style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🔓</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Redeem Your Item</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Reclaim your pawned item by settling your loan plus interest before the ticket expires.</div>
@@ -1849,7 +1715,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 
     <!-- Buy Pre-Owned Items -->
     <?php if($total_items > 0): ?>
-    <div class="section-card" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🛍️</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Buy Pre-Owned Items</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Browse our selection of quality second-hand items available for purchase at affordable prices.</div>
@@ -1887,11 +1753,11 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     ];
     foreach($why_items as [$icon, $title, $desc]):
     ?>
-    <div class="section-card why-card" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px 22px;display:flex;gap:16px;align-items:flex-start;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px 22px;display:flex;gap:16px;align-items:flex-start;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2rem;flex-shrink:0;line-height:1;"><?= $icon ?></div>
       <div>
-        <div class="why-card-title" style="font-size:1.05rem;font-weight:700;margin-bottom:6px;line-height:1.3;"><?= $title ?></div>
-        <div class="why-card-desc" style="font-size:.94rem;line-height:1.75;"><?= $desc ?></div>
+        <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3;"><?= $title ?></div>
+        <div style="font-size:.94rem;color:var(--text-m);line-height:1.75;"><?= $desc ?></div>
       </div>
     </div>
     <?php endforeach; ?>
