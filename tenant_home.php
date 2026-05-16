@@ -162,7 +162,7 @@ foreach ($promos as $p) {
   --placeholder-bg: linear-gradient(135deg,rgba(0,0,0,.03),rgba(0,0,0,.06));
   --item-name-color: #0f1117;
   --item-price-color: #0f1117;
-  --featured-bg-grad: linear-gradient(to top,rgba(245,246,250,.97) 0%,rgba(245,246,250,.4) 60%,transparent 100%);
+  --featured-bg-grad: linear-gradient(to top,rgba(10,10,18,.92) 0%,rgba(10,10,18,.5) 55%,rgba(10,10,18,.15) 100%);
   --featured-name-color: #0f1117;
   --featured-price-color: #0f1117;
   --info-val-color: #0f1117;
@@ -211,8 +211,8 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   transition: background .3s, color .3s;
-  font-size: 17px; /* Larger base for readability — pawnshop users are often older */
-  line-height: 1.7;
+  font-size: 18px; /* Larger base for readability — pawnshop users are often older */
+  line-height: 1.75;
 }
 
 .material-symbols-outlined {
@@ -599,12 +599,12 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .item-body { padding: 18px 20px; flex: 1; display: flex; flex-direction: column; }
 .item-name {
-  font-size: 1.05rem; font-weight: 700; color: var(--item-name-color);
+  font-size: 1.12rem; font-weight: 700; color: var(--item-name-color);
   line-height: 1.4; margin-bottom: 6px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .item-cond {
-  font-size: .82rem; color: var(--text-dim);
+  font-size: .9rem; color: var(--text-dim);
   margin-bottom: 10px; font-weight: 500;
 }
 .item-footer {
@@ -613,15 +613,27 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .item-price {
   font-family: 'DM Serif Display', serif;
-  font-size: 1.35rem; color: var(--item-price-color);
+  font-size: 1.45rem; color: var(--item-price-color);
 }
-.item-price-label { font-size: .72rem; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.item-price-label { font-size: .78rem; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+/* Sale price - readable in both modes */
+.sale-price-label { color: #d97706 !important; }
+[data-theme="dark"] .sale-price-label { color: #fcd34d !important; }
+.sale-price { color: #d97706 !important; }
+[data-theme="dark"] .sale-price { color: #fcd34d !important; }
+.item-orig-price {
+  font-size: .75rem; text-decoration: line-through; line-height: 1.3; margin-top: 1px;
+  color: rgba(15,17,23,0.4);
+}
+[data-theme="dark"] .item-orig-price { color: rgba(240,242,247,0.35); }
 .item-stock {
-  font-size: .75rem; font-weight: 700;
+  font-size: .82rem; font-weight: 700;
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: color-mix(in srgb, var(--accent) 90%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  padding: 4px 10px; border-radius: 100px; white-space: nowrap;
+  padding: 5px 12px; border-radius: 100px;
+  white-space: normal; word-break: break-word;
+  text-align: right; max-width: 120px; line-height: 1.3;
 }
 
 /* ── FEATURED STRIP ── */
@@ -642,10 +654,10 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   position: absolute; inset: 0;
 }
 .featured-card-bg img {
-  width: 100%; height: 100%; object-fit: cover; opacity: .55;
+  width: 100%; height: 100%; object-fit: cover; opacity: .75;
   transition: transform .4s, opacity .3s;
 }
-.featured-card:hover .featured-card-bg img { transform: scale(1.05); opacity: .65; }
+.featured-card:hover .featured-card-bg img { transform: scale(1.05); opacity: .85; }
 .featured-card-bg-grad {
   position: absolute; inset: 0;
   background: var(--featured-bg-grad);
@@ -767,6 +779,8 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 /* Promo body text */
 [data-theme="light"] #promos [style*="color:var(--text-m)"] { color: rgba(15,17,23,0.7) !important; }
 [data-theme="light"] #promos [style*="color:var(--text-dim)"] { color: rgba(15,17,23,0.5) !important; }
+/* Promo sale price — amber in light, gold in dark */
+[data-theme="dark"] .promo-sale-price { color: #fcd34d !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -928,13 +942,13 @@ footer {
   background: var(--surface); border: 1px solid var(--border);
   color: var(--text-m); box-shadow: none;
 }
-.modal-btn.secondary:hover { background: var(--surface-2); color: #fff; transform: none; }
+.modal-btn.secondary:hover { background: var(--surface-2); color: var(--text); transform: none; }
 .modal-close-x {
   position: absolute; top: 16px; right: 16px;
   width: 32px; height: 32px; border-radius: 9px;
-  background: rgba(255,255,255,.1); border: none; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  color: rgba(255,255,255,.6);
+  color: var(--text-m);
 }
 .modal-box-wrap { position: relative; }
 
@@ -952,12 +966,12 @@ footer {
   margin-bottom: 16px; border: 1px solid var(--border);
 }
 .item-detail-img-placeholder .material-symbols-outlined { font-size: 48px; color: var(--text-dim); }
-.item-detail-name { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: #fff; margin-bottom: 6px; }
-.item-detail-price { font-size: 1.6rem; font-weight: 800; color: var(--primary); margin-bottom: 12px; }
+.item-detail-name { font-family: 'DM Serif Display', serif; font-size: 1.55rem; color: var(--text); margin-bottom: 6px; }
+.item-detail-price { font-size: 1.7rem; font-weight: 800; color: var(--primary); margin-bottom: 12px; }
 .item-detail-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .item-detail-badge {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: .72rem; font-weight: 600; padding: 4px 10px; border-radius: 100px;
+  font-size: .78rem; font-weight: 600; padding: 5px 12px; border-radius: 100px;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-m);
 }
 .item-detail-desc { font-size: .88rem; color: var(--text-m); line-height: 1.65; margin-bottom: 18px; }
@@ -1113,18 +1127,14 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <a href="#info" class="nav-link">Visit Us</a>
     <?php endif; ?>
     <a href="#mobile-app" class="nav-link">
-      <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">download</span>Download
+      <span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">download</span>Download App
     </a>
-    <a href="<?= htmlspecialchars($register_url) ?>" class="nav-link" style="color:color-mix(in srgb,var(--accent) 90%,#fff);">Join Us</a>
   </div>
 
   <div style="display:flex;align-items:center;gap:8px;">
     <button class="dm-toggle" onclick="toggleDarkMode()" id="dmBtn" title="Toggle dark mode">
       <span class="material-symbols-outlined" id="dmIcon">dark_mode</span>
     </button>
-    <a href="<?= htmlspecialchars($register_url) ?>" class="nav-signin" style="background:color-mix(in srgb,var(--accent) 80%,#000);box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 35%,transparent);">
-      <span class="material-symbols-outlined">person_add</span>Apply
-    </a>
     <a href="<?= htmlspecialchars($login_url) ?>" class="nav-signin nav-signin-login" style="background:var(--primary);box-shadow:0 4px 18px color-mix(in srgb,var(--primary) 35%,transparent);">
       <span class="material-symbols-outlined">login</span>Sign In
     </a>
@@ -1153,9 +1163,6 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <?php endif; ?>
       <a href="#mobile-app" class="btn-hero-accent">
         <span class="material-symbols-outlined">download</span>Download App
-      </a>
-      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-secondary">
-        <span class="material-symbols-outlined">person_add</span>Join Our Team
       </a>
       <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-secondary">
         <span class="material-symbols-outlined">login</span>Sign In
@@ -1277,32 +1284,32 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
           <?php endif; ?>
         </div>
         <!-- Title -->
-        <div class="promo-title" style="font-size:1rem;font-weight:700;line-height:1.3;"><?= htmlspecialchars($promo['title']) ?></div>
+        <div class="promo-title" style="font-size:1.08rem;font-weight:700;line-height:1.35;"><?= htmlspecialchars($promo['title']) ?></div>
         <!-- Linked item price (if no photo overlay was shown) -->
         <?php if(!$p_show_photo && $p_has_item && $p_disc > 0 && $p_item_price !== null): ?>
         <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 12px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:12px;">
-          <div style="width:38px;height:38px;border-radius:9px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-            <span class="material-symbols-outlined" style="font-size:19px;color:rgba(255,255,255,.2);">diamond</span>
+          <div style="width:38px;height:38px;border-radius:9px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span class="material-symbols-outlined" style="font-size:19px;color:var(--text-dim);">diamond</span>
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:.77rem;color:rgba(255,255,255,.5);"><?= htmlspecialchars($p_item_name) ?></div>
+            <div style="font-size:.82rem;color:var(--text-m);"><?= htmlspecialchars($p_item_name) ?></div>
             <div style="display:flex;align-items:center;gap:7px;margin-top:2px;">
-              <span style="font-size:1rem;font-weight:800;color:#fcd34d;">₱<?= number_format((float)$p_item_price, 2) ?></span>
+              <span style="font-size:1.05rem;font-weight:800;color:#d97706;" class="promo-sale-price">₱<?= number_format((float)$p_item_price, 2) ?></span>
               <?php if($p_item_orig): ?>
-              <span style="font-size:.78rem;color:rgba(255,255,255,.3);text-decoration:line-through;">₱<?= number_format((float)$p_item_orig, 2) ?></span>
+              <span style="font-size:.82rem;text-decoration:line-through;color:var(--text-dim);">₱<?= number_format((float)$p_item_orig, 2) ?></span>
               <?php endif; ?>
-              <span style="font-size:.62rem;font-weight:800;background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3);padding:1px 7px;border-radius:100px;"><?= $p_disc ?>% OFF</span>
+              <span style="font-size:.62rem;font-weight:800;background:rgba(245,158,11,.2);color:#d97706;border:1px solid rgba(245,158,11,.3);padding:1px 7px;border-radius:100px;"><?= $p_disc ?>% OFF</span>
             </div>
           </div>
         </div>
         <?php endif; ?>
         <!-- Body -->
         <?php if(!empty($promo['body'])): ?>
-        <div style="font-size:.84rem;color:var(--text-m);line-height:1.65;flex:1;"><?= nl2br(htmlspecialchars($promo['body'])) ?></div>
+        <div style="font-size:.92rem;color:var(--text-m);line-height:1.7;flex:1;"><?= nl2br(htmlspecialchars($promo['body'])) ?></div>
         <?php endif; ?>
         <!-- Date range -->
         <?php if(!empty($promo['start_date']) || !empty($promo['end_date'])): ?>
-        <div style="font-size:.72rem;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:4px;">
+        <div style="font-size:.8rem;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:4px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">event</span>
           <?php
             $from = !empty($promo['start_date']) ? date('M d, Y', strtotime($promo['start_date'])) : null;
@@ -1422,9 +1429,9 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         <div class="item-footer">
           <div>
             <?php if($on_sale && $orig_price > 0): ?>
-              <div class="item-price-label" style="color:#fcd34d;">Sale Price</div>
-              <div class="item-price" style="color:#fcd34d;">₱<?= number_format($item['display_price'], 2) ?></div>
-              <div style="font-size:.68rem;color:rgba(255,255,255,.3);text-decoration:line-through;line-height:1.3;margin-top:1px;">₱<?= number_format($orig_price, 2) ?></div>
+              <div class="item-price-label sale-price-label">Sale Price</div>
+              <div class="item-price sale-price">₱<?= number_format($item['display_price'], 2) ?></div>
+              <div class="item-orig-price">₱<?= number_format($orig_price, 2) ?></div>
             <?php else: ?>
               <div class="item-price-label">Price</div>
               <div class="item-price">₱<?= number_format($item['display_price'], 2) ?></div>
@@ -1907,14 +1914,14 @@ function openItem(item) {
   if (item.cat_name) badges.push(`<span class="item-detail-badge"><span class="material-symbols-outlined" style="font-size:13px;">category</span>${escHtml(item.cat_name)}</span>`);
   if (item.condition_notes) badges.push(`<span class="item-detail-badge"><span class="material-symbols-outlined" style="font-size:13px;">info</span>${escHtml(item.condition_notes)}</span>`);
   if (item.stock_qty) badges.push(`<span class="item-detail-badge"><span class="material-symbols-outlined" style="font-size:13px;">inventory_2</span>${item.stock_qty} in stock</span>`);
-  if (item.on_sale) badges.push(`<span class="item-detail-badge" style="background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#fca5a5;">🔖 On Sale</span>`);
+  if (item.on_sale) badges.push(`<span class="item-detail-badge" style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#dc2626;">🔖 On Sale</span>`);
   else if (item.is_featured == 1) badges.push(`<span class="item-detail-badge" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#fcd34d;">⭐ Featured</span>`);
 
   const priceHtml = item.on_sale && item.orig_price > 0
     ? `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-         <div class="item-detail-price" style="color:#fcd34d;">₱${parseFloat(item.display_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
-         <div style="font-size:.9rem;color:rgba(255,255,255,.3);text-decoration:line-through;">₱${parseFloat(item.orig_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
-         <div style="font-size:.72rem;font-weight:800;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25);padding:2px 9px;border-radius:100px;">${item.sale_disc}% OFF</div>
+         <div class="item-detail-price sale-price">₱${parseFloat(item.display_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+         <div class="item-orig-price" style="font-size:1rem;">₱${parseFloat(item.orig_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+         <div style="font-size:.72rem;font-weight:800;background:rgba(239,68,68,.12);color:#dc2626;border:1px solid rgba(239,68,68,.25);padding:2px 9px;border-radius:100px;">${item.sale_disc}% OFF</div>
        </div>`
     : `<div class="item-detail-price">₱${parseFloat(item.display_price).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>`;
 
