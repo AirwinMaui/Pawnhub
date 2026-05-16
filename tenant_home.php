@@ -269,16 +269,84 @@ body {
       rgba(245,246,250,0.88) 68%,
       var(--bg) 88%);
 }
-/* Dark mode: light gradient so screen-blended image stays vivid */
+/* Dark mode: strong dark overlay so ALL content below hero is readable */
 [data-theme="dark"] .bg-gradient {
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
     linear-gradient(to bottom,
       rgba(8,9,12,0.0)  0%,
-      rgba(8,9,12,0.12) 40%,
-      rgba(8,9,12,0.60) 75%,
-      #08090c 92%);
+      rgba(8,9,12,0.25) 30%,
+      rgba(8,9,12,0.82) 60%,
+      #08090c 80%);
 }
+
+/* ── BACKGROUND IMAGE: solid card/section backgrounds ── */
+
+/* Section-card class: solid dark background when bg image is present */
+.has-bg-img .section-card {
+  background: rgba(10,12,20,0.90) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* Text inside section-cards: force readable over dark bg */
+.has-bg-img .section-card [style*="color:var(--text)"] { color: #ffffff !important; }
+.has-bg-img .section-card [style*="color:var(--text-m)"] { color: rgba(240,242,247,0.78) !important; }
+
+/* Item cards */
+.has-bg-img .item-card {
+  background: rgba(10,12,20,0.90) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+.has-bg-img .item-name  { color: #ffffff !important; }
+.has-bg-img .item-price { color: #ffffff !important; }
+.has-bg-img .item-cond  { color: rgba(240,242,247,0.55) !important; }
+.has-bg-img .item-stock { color: color-mix(in srgb, var(--accent) 90%, #fff) !important; }
+
+/* Info / visit-us cards */
+.has-bg-img .info-card {
+  background: rgba(10,12,20,0.90) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+.has-bg-img .info-card-val   { color: #ffffff !important; }
+.has-bg-img .info-card-title { color: rgba(240,242,247,0.55) !important; }
+
+/* Promo cards */
+.has-bg-img .promo-card {
+  background: rgba(10,12,20,0.90) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+.has-bg-img .promo-title { color: #ffffff !important; }
+
+/* Section labels / titles */
+.has-bg-img .section-title { color: #ffffff !important; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+.has-bg-img .section-label { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
+
+/* Section paragraph text */
+.has-bg-img section > p { color: rgba(240,242,247,0.82) !important; }
+
+/* Category filter pills */
+.has-bg-img .cat-pill {
+  color: rgba(240,242,247,0.82) !important;
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+}
+
+/* Important note/reminder box */
+.has-bg-img .section-note {
+  background: rgba(10,12,20,0.85) !important;
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent) !important;
+}
+
+
+
 
 /* ── NAV ── */
 nav {
@@ -1620,7 +1688,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;">
 
     <!-- Step 1 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--primary) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">diamond</span>
       </div>
@@ -1630,7 +1698,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 2 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--accent) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">fact_check</span>
       </div>
@@ -1640,7 +1708,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 3 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">payments</span>
       </div>
@@ -1650,7 +1718,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 4 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">redeem</span>
       </div>
@@ -1662,7 +1730,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   </div>
 
   <!-- Important note -->
-  <div style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
+  <div class="section-note" style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
     <span class="material-symbols-outlined" style="font-size:24px;color:var(--primary);flex-shrink:0;margin-top:2px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">info</span>
     <div style="font-size:.98rem;color:var(--text-m);line-height:1.75;">
       <strong style="color:var(--text);">Reminder:</strong> Please bring a valid government-issued ID — SSS, GSIS, Passport, Driver's License, or Voter's ID. Your pawned items are kept safely in our secured storage for the full duration of your loan.
@@ -1684,7 +1752,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:20px;">
 
     <!-- Pawn a Loan -->
-    <div style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">💍</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Pawn a Loan</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Use your valuables as collateral and get instant cash. We accept a wide range of items.</div>
@@ -1699,7 +1767,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Redeem Your Item -->
-    <div style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🔓</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Redeem Your Item</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Reclaim your pawned item by settling your loan plus interest before the ticket expires.</div>
@@ -1715,7 +1783,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 
     <!-- Buy Pre-Owned Items -->
     <?php if($total_items > 0): ?>
-    <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🛍️</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Buy Pre-Owned Items</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Browse our selection of quality second-hand items available for purchase at affordable prices.</div>
@@ -1753,7 +1821,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     ];
     foreach($why_items as [$icon, $title, $desc]):
     ?>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px 22px;display:flex;gap:16px;align-items:flex-start;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px 22px;display:flex;gap:16px;align-items:flex-start;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2rem;flex-shrink:0;line-height:1;"><?= $icon ?></div>
       <div>
         <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3;"><?= $title ?></div>
