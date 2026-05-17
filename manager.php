@@ -1109,11 +1109,11 @@ $notif_count = count($notifs);
         <div class="card">
           <div class="card-title">👥 My Team</div>
           <?php foreach(array_slice($my_team,0,5) as $m):?>
-          <div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);">
+          <div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid <?=$is_lm2?"rgba(0,0,0,.05)":"rgba(255,255,255,.04)"?>;">
             <div style="width:28px;height:28px;border-radius:50%;background:<?=$m['role']==='cashier'?'rgba(139,92,246,.4)':'rgba(59,130,246,.4)'?>;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($m['fullname'],0,1))?></div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:.8rem;font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?=htmlspecialchars($m["fullname"])?></div>
-              <div style="font-size:.68rem;color:rgba(255,255,255,.3);"><?=ucfirst($m['role'])?></div>
+              <div style="font-size:.68rem;color:<?=$is_lm2?"rgba(0,0,0,.4)":"rgba(255,255,255,.3)"?>;"><?=ucfirst($m['role'])?></div>
             </div>
             <span class="badge <?=$m['is_suspended']?'b-red':'b-green'?>"><?=$m['is_suspended']?'Susp':'Active'?></span>
           </div>
@@ -1391,15 +1391,15 @@ $notif_count = count($notifs);
           <div style="display:flex;align-items:center;gap:9px;">
             <div style="width:28px;height:28px;border-radius:50%;background:<?=$avatar_bg?>;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;"><?=strtoupper(substr($m['fullname'],0,1))?></div>
             <div>
-              <div style="font-weight:600;color:#fff;font-size:.83rem;"><?=htmlspecialchars($m['fullname'])?></div>
-              <div style="font-size:.7rem;color:rgba(255,255,255,.3);"><?=htmlspecialchars($m['email']??'')?></div>
+              <div style="font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;font-size:.83rem;"><?=htmlspecialchars($m['fullname'])?></div>
+              <div style="font-size:.7rem;color:<?=$is_lm2?"rgba(0,0,0,.4)":"rgba(255,255,255,.3)"?>;"><?=htmlspecialchars($m['email']??'')?></div>
             </div>
           </div>
         </td>
-        <td style="font-family:monospace;font-size:.76rem;color:#6ee7b7;"><?=htmlspecialchars($m['username'])?></td>
+        <td style="font-family:monospace;font-size:.76rem;color:<?=$is_lm2?"#059669":"#6ee7b7"?>;"><?=htmlspecialchars($m['username'])?></td>
         <td><span class="badge <?=$role_badge?>"><?=ucfirst($m['role'])?></span></td>
         <td><span class="badge <?=$m['is_suspended']?'b-red':'b-green'?>"><span class="b-dot"></span><?=$m['is_suspended']?'Suspended':'Active'?></span></td>
-        <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($m['created_at']))?></td>
+        <td style="font-size:.72rem;color:<?=$is_lm2?"rgba(0,0,0,.35)":"rgba(255,255,255,.35)"?>;"><?=date('M d, Y',strtotime($m['created_at']))?></td>
         <td>
           <form method="POST" style="display:inline;">
             <input type="hidden" name="action" value="toggle_user">
@@ -1827,8 +1827,8 @@ $notif_count = count($notifs);
     <?php if(empty($mgr_promos)): ?>
     <div class="card" style="text-align:center;padding:56px 24px;">
       <span class="material-symbols-outlined" style="font-size:52px;color:rgba(255,255,255,.1);display:block;margin-bottom:14px;">campaign</span>
-      <div style="font-size:1rem;font-weight:700;color:rgba(255,255,255,.5);margin-bottom:8px;">No promos yet</div>
-      <p style="font-size:.82rem;color:rgba(255,255,255,.25);margin-bottom:20px;">Promos and announcements you create here will appear on your public shop page.</p>
+      <div style="font-size:1rem;font-weight:700;color:<?=$is_lm2?"rgba(0,0,0,.4)":"rgba(255,255,255,.5)"?>;margin-bottom:8px;">No promos yet</div>
+      <p style="font-size:.82rem;color:<?=$is_lm2?"rgba(0,0,0,.3)":"rgba(255,255,255,.25)"?>;margin-bottom:20px;">Promos and announcements you create here will appear on your public shop page.</p>
       <button onclick="openPromoModal()" class="btn-sm btn-primary">
         <span class="material-symbols-outlined" style="font-size:15px;">add</span>Create First Promo
       </button>
@@ -1863,7 +1863,7 @@ $notif_count = count($notifs);
         $is_expired = true;
       }
     ?>
-    <div style="background:rgba(255,255,255,.04);border:1px solid <?= $is_active && !$is_expired ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.05)' ?>;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;<?= $is_pinned ? 'border-color:color-mix(in srgb,'.$type_color.' 50%,transparent);' : '' ?>opacity:<?= $is_active && !$is_expired ? '1' : '.55' ?>;">
+    <div style="background:<?=$is_lm2?"rgba(0,0,0,.03)":"rgba(255,255,255,.04)"?>;border:1px solid <?= $is_active && !$is_expired ? ($is_lm2?"rgba(0,0,0,.12)":"rgba(255,255,255,.1)") : ($is_lm2?"rgba(0,0,0,.06)":"rgba(255,255,255,.05)") ?>;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;<?= $is_pinned ? 'border-color:color-mix(in srgb,'.$type_color.' 50%,transparent);' : '' ?>opacity:<?= $is_active && !$is_expired ? '1' : '.55' ?>;">
       <?php
         $card_photo = $promo['image_url'] ?? '';
         $has_item   = !empty($promo['linked_item_id']);
@@ -1888,13 +1888,13 @@ $notif_count = count($notifs);
         <?php endif; ?>
       </div>
       <?php elseif($has_item): ?>
-      <div style="height:56px;background:rgba(255,255,255,.03);display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.05);">
-        <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <span class="material-symbols-outlined" style="font-size:18px;color:rgba(255,255,255,.2);">diamond</span>
+      <div style="height:56px;background:<?=$is_lm2?"rgba(0,0,0,.02)":"rgba(255,255,255,.03)"?>;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid <?=$is_lm2?"rgba(0,0,0,.06)":"rgba(255,255,255,.05)"?>;">
+        <div style="width:36px;height:36px;border-radius:8px;background:<?=$is_lm2?"rgba(0,0,0,.05)":"rgba(255,255,255,.06)"?>;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:<?=$is_lm2?"rgba(0,0,0,.25)":"rgba(255,255,255,.2)"?>;">diamond</span>
         </div>
         <div>
-          <div style="font-size:.68rem;color:rgba(255,255,255,.3);font-weight:600;">Linked Item</div>
-          <div style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;"><?=htmlspecialchars($item_name)?></div>
+          <div style="font-size:.68rem;color:<?=$is_lm2?"rgba(0,0,0,.35)":"rgba(255,255,255,.3)"?>;font-weight:600;">Linked Item</div>
+          <div style="font-size:.8rem;font-weight:700;color:<?=$is_lm2?"#1c1e21":"rgba(255,255,255,.7)"?>;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;"><?=htmlspecialchars($item_name)?></div>
         </div>
       </div>
       <?php endif; ?>
@@ -1906,37 +1906,37 @@ $notif_count = count($notifs);
             <?=$type_label?>
           </span>
           <?php if($is_pinned): ?>
-          <span style="font-size:.6rem;font-weight:700;color:rgba(255,255,255,.3);display:inline-flex;align-items:center;gap:3px;">
+          <span style="font-size:.6rem;font-weight:700;color:<?=$is_lm2?"rgba(0,0,0,.4)":"rgba(255,255,255,.3)"?>;display:inline-flex;align-items:center;gap:3px;">
             <span class="material-symbols-outlined" style="font-size:11px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">push_pin</span>Pinned
           </span>
           <?php endif; ?>
           <?php if($is_expired): ?>
           <span style="font-size:.6rem;font-weight:700;color:#fca5a5;background:rgba(239,68,68,.1);padding:2px 7px;border-radius:100px;border:1px solid rgba(239,68,68,.2);">Expired</span>
           <?php elseif(!$is_active): ?>
-          <span style="font-size:.6rem;font-weight:700;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:100px;">Inactive</span>
+          <span style="font-size:.6rem;font-weight:700;color:<?=$is_lm2?"rgba(0,0,0,.35)":"rgba(255,255,255,.3)"?>;background:<?=$is_lm2?"rgba(0,0,0,.06)":"rgba(255,255,255,.06)"?>;padding:2px 7px;border-radius:100px;">Inactive</span>
           <?php else: ?>
           <span style="font-size:.6rem;font-weight:700;color:#6ee7b7;background:rgba(16,185,129,.12);padding:2px 7px;border-radius:100px;border:1px solid rgba(16,185,129,.2);">Live</span>
           <?php endif; ?>
         </div>
         <!-- Title -->
-        <div style="font-size:.95rem;font-weight:700;color:#fff;line-height:1.3;"><?=htmlspecialchars($promo['title'])?></div>
+        <div style="font-size:.95rem;font-weight:700;color:<?=$is_lm2?"#1c1e21":"#fff"?>;line-height:1.3;"><?=htmlspecialchars($promo['title'])?></div>
         <!-- Sale price display -->
         <?php if($has_item && !empty($promo['discount_pct']) && (float)$promo['discount_pct'] > 0): ?>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:1rem;font-weight:800;color:#fcd34d;">₱<?=number_format((float)$item_price,2)?></span>
           <?php if($item_orig): ?>
-          <span style="font-size:.78rem;color:rgba(255,255,255,.3);text-decoration:line-through;">₱<?=number_format((float)$item_orig,2)?></span>
+          <span style="font-size:.78rem;color:<?=$is_lm2?"rgba(0,0,0,.3)":"rgba(255,255,255,.3)"?>;text-decoration:line-through;">₱<?=number_format((float)$item_orig,2)?></span>
           <?php endif; ?>
           <span style="font-size:.65rem;font-weight:800;background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3);padding:2px 8px;border-radius:100px;"><?=(float)$promo['discount_pct']?>% OFF</span>
         </div>
         <?php endif; ?>
         <!-- Body preview -->
         <?php if(!empty($promo['body'])): ?>
-        <div style="font-size:.79rem;color:rgba(255,255,255,.45);line-height:1.55;flex:1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;"><?=htmlspecialchars($promo['body'])?></div>
+        <div style="font-size:.79rem;color:<?=$is_lm2?"rgba(0,0,0,.5)":"rgba(255,255,255,.45)"?>;line-height:1.55;flex:1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;"><?=htmlspecialchars($promo['body'])?></div>
         <?php endif; ?>
         <!-- Date range -->
         <?php if(!empty($promo['start_date']) || !empty($promo['end_date'])): ?>
-        <div style="font-size:.7rem;color:rgba(255,255,255,.25);display:flex;align-items:center;gap:4px;">
+        <div style="font-size:.7rem;color:<?=$is_lm2?"rgba(0,0,0,.35)":"rgba(255,255,255,.25)"?>;display:flex;align-items:center;gap:4px;">
           <span class="material-symbols-outlined" style="font-size:13px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">event</span>
           <?php
             $from = !empty($promo['start_date']) ? date('M d, Y', strtotime($promo['start_date'])) : null;
@@ -1948,7 +1948,7 @@ $notif_count = count($notifs);
         </div>
         <?php endif; ?>
         <!-- Action row -->
-        <div style="display:flex;align-items:center;gap:7px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);margin-top:auto;">
+        <div style="display:flex;align-items:center;gap:7px;padding-top:6px;border-top:1px solid <?=$is_lm2?"rgba(0,0,0,.06)":"rgba(255,255,255,.06)"?>;margin-top:auto;">
           <button onclick="openPromoModal(<?=htmlspecialchars(json_encode($promo),ENT_QUOTES)?>)" class="btn-sm" style="flex:1;justify-content:center;font-size:.72rem;">
             <span class="material-symbols-outlined" style="font-size:13px;">edit</span>Edit
           </button>

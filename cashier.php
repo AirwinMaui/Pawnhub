@@ -571,28 +571,28 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
         <div class="card-title">Receipt Preview</div>
         <div style="background:<?=$is_lm4?"#f8fafc":"rgba(255,255,255,.04)"?>;border:1px solid <?=$is_lm4?"#e4e6eb":"rgba(255,255,255,.08)"?>;border-radius:12px;padding:16px;font-size:.79rem;">
           <div style="text-align:center;margin-bottom:12px;color:<?=$is_lm4?"#1c1e21":"#fff"?>;">
-            <div style="font-weight:800;font-size:.94rem;color:#fff;"><?=htmlspecialchars($sys_name)?></div>
+            <div style="font-weight:800;font-size:.94rem;color:<?=$is_lm4?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($sys_name)?></div>
             <div style="font-size:.71rem;color:<?=$is_lm4?"#8a8d91":"rgba(255,255,255,.4)"?>;"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
             <div style="font-size:.71rem;color:<?=$is_lm4?"#9ca3af":"rgba(255,255,255,.3)"?>;">Tenant #<?=$tid?></div>
             <div style="font-size:.71rem;color:<?=$is_lm4?"#9ca3af":"rgba(255,255,255,.3)"?>;"><?=date('M d, Y h:i A')?></div>
           </div>
-          <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
+          <hr style="border:none;border-top:1px dashed <?=$is_lm4?"rgba(0,0,0,.1)":"rgba(255,255,255,.08)"?>;margin:10px 0;">
           <div class="receipt-row"><span>Ticket</span><span id="r_ticket">—</span></div>
           <div class="receipt-row"><span>Customer</span><span id="r_customer">—</span></div>
           <div class="receipt-row"><span>Item</span><span id="r_item">—</span></div>
           <div class="receipt-row"><span>Maturity</span><span id="r_maturity">—</span></div>
-          <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
+          <hr style="border:none;border-top:1px dashed <?=$is_lm4?"rgba(0,0,0,.1)":"rgba(255,255,255,.08)"?>;margin:10px 0;">
           <div class="receipt-row"><span>Principal</span><span id="r_loan">₱0.00</span></div>
           <div class="receipt-row"><span>Interest</span><span id="r_interest">₱0.00</span></div>
-          <div class="receipt-row" style="font-weight:700;"><span style="color:rgba(255,255,255,.6);">Total Due</span><span id="r_total" style="color:#fff;">₱0.00</span></div>
-          <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
+          <div class="receipt-row" style="font-weight:700;"><span style="color:<?=$is_lm4?"rgba(0,0,0,.5)":"rgba(255,255,255,.6)"?>;">Total Due</span><span id="r_total" style="color:<?=$is_lm4?"#1c1e21":"#fff"?>;">₱0.00</span></div>
+          <hr style="border:none;border-top:1px dashed <?=$is_lm4?"rgba(0,0,0,.1)":"rgba(255,255,255,.08)"?>;margin:10px 0;">
           <div class="receipt-row"><span>Cash Received</span><span id="r_cash">₱0.00</span></div>
           <div class="receipt-row" style="font-weight:700;"><span style="color:#6ee7b7;">Change</span><span id="r_change2" style="color:#6ee7b7;">₱0.00</span></div>
-          <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
-          <div class="receipt-row"><span style="color:rgba(255,255,255,.4);">OR No.</span><span id="r_or" style="font-family:monospace;font-size:.72rem;color:rgba(255,255,255,.5);">Auto-generated</span></div>
-          <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
-          <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.3);">Cashier: <?=htmlspecialchars($u['name'])?></div>
-          <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.25);margin-top:2px;">Thank you for choosing <?=htmlspecialchars($sys_name)?>!</div>
+          <hr style="border:none;border-top:1px dashed <?=$is_lm4?"rgba(0,0,0,.1)":"rgba(255,255,255,.08)"?>;margin:10px 0;">
+          <div class="receipt-row"><span style="color:<?=$is_lm4?"rgba(0,0,0,.4)":"rgba(255,255,255,.4)"?>;">OR No.</span><span id="r_or" style="font-family:monospace;font-size:.72rem;color:<?=$is_lm4?"rgba(0,0,0,.45)":"rgba(255,255,255,.5)"?>;">Auto-generated</span></div>
+          <hr style="border:none;border-top:1px dashed <?=$is_lm4?"rgba(0,0,0,.1)":"rgba(255,255,255,.08)"?>;margin:10px 0;">
+          <div style="text-align:center;font-size:.7rem;color:<?=$is_lm4?"rgba(0,0,0,.4)":"rgba(255,255,255,.3)"?>;">Cashier: <?=htmlspecialchars($u['name'])?></div>
+          <div style="text-align:center;font-size:.7rem;color:<?=$is_lm4?"rgba(0,0,0,.3)":"rgba(255,255,255,.25)"?>;margin-top:2px;">Thank you for choosing <?=htmlspecialchars($sys_name)?>!</div>
         </div>
         <button onclick="window.print()" style="width:100%;margin-top:10px;background:<?=$is_lm4?"#f0f2f5":"rgba(255,255,255,.05)"?>;color:<?=$is_lm4?"#65676b":"rgba(255,255,255,.6)"?>;border:1px solid <?=$is_lm4?"#e4e6eb":"rgba(255,255,255,.1)"?>;border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
       </div>

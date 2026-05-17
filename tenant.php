@@ -1804,20 +1804,20 @@ tr:hover td{background:<?= $td_hover ?>;}
         <tr>
           <td>
             <div style="display:flex;align-items:center;gap:9px;">
-              <div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:#fff;flex-shrink:0;">
+              <div style="width:32px;height:32px;border-radius:50%;background:<?=$is_light_mode?'rgba(0,0,0,.08)':'rgba(255,255,255,.08)'?>;display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:700;color:<?=$is_light_mode?'#1c1e21':'#fff'?>;flex-shrink:0;">
                 <?= strtoupper(substr($ap['fullname'],0,1)) ?>
               </div>
               <div>
-                <div style="font-weight:700;color:#fff;font-size:.84rem;"><?= htmlspecialchars($ap['fullname']) ?></div>
-                <div style="font-size:.72rem;color:rgba(255,255,255,.4);"><?= htmlspecialchars($ap['email']) ?></div>
+                <div style="font-weight:700;color:<?=$pg_text?>;font-size:.84rem;"><?= htmlspecialchars($ap['fullname']) ?></div>
+                <div style="font-size:.72rem;color:<?=$pg_text_m?>;"><?= htmlspecialchars($ap['email']) ?></div>
                 <div style="font-family:monospace;font-size:.7rem;color:var(--t-primary,#60a5fa);"><?= htmlspecialchars($ap['username']) ?></div>
               </div>
             </div>
           </td>
           <td><span class="badge <?= $role_badge ?>"><?= ucfirst($ap['role']) ?></span></td>
           <td style="font-family:monospace;font-size:.74rem;"><?= htmlspecialchars($ap['contact_number']??'—') ?></td>
-          <td style="font-size:.77rem;color:rgba(255,255,255,.5);max-width:180px;">
-            <?= $ap['note'] ? htmlspecialchars(mb_strimwidth($ap['note'],0,80,'…')) : '<span style="color:rgba(255,255,255,.2);">—</span>' ?>
+          <td style="font-size:.77rem;color:<?=$pg_text_m?>;max-width:180px;">
+            <?= $ap['note'] ? htmlspecialchars(mb_strimwidth($ap['note'],0,80,'…')) : '<span style="color:'.($is_light_mode?'rgba(0,0,0,.2)':'rgba(255,255,255,.2)').';">—</span>' ?>
           </td>
           <td>
             <?php if($ap['resume_path']): ?>
@@ -1825,7 +1825,7 @@ tr:hover td{background:<?= $td_hover ?>;}
                 <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>View
               </a>
             <?php else: ?>
-              <span style="font-size:.74rem;color:rgba(255,255,255,.25);">—</span>
+              <span style="font-size:.74rem;color:<?=$pg_text_dim?>;">—</span>
             <?php endif; ?>
           </td>
           <td>
@@ -1834,7 +1834,7 @@ tr:hover td{background:<?= $td_hover ?>;}
               <?= ucfirst($ap['status']) ?>
             </span>
           </td>
-          <td style="font-size:.72rem;color:rgba(255,255,255,.35);white-space:nowrap;"><?= date('M d, Y', strtotime($ap['applied_at'])) ?></td>
+          <td style="font-size:.72rem;color:<?=$pg_text_dim?>;white-space:nowrap;"><?= date('M d, Y', strtotime($ap['applied_at'])) ?></td>
           <td>
             <?php if($ap['status']==='pending'): ?>
             <form method="POST" style="display:inline;">
@@ -1852,7 +1852,7 @@ tr:hover td{background:<?= $td_hover ?>;}
               </button>
             </form>
             <?php else: ?>
-              <span style="font-size:.72rem;color:rgba(255,255,255,.25);">Decided</span>
+              <span style="font-size:.72rem;color:<?=$pg_text_dim?>;">Decided</span>
             <?php endif; ?>
           </td>
         </tr>
