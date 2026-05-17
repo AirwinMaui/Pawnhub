@@ -144,17 +144,18 @@ foreach ($promos as $p) {
   --primary: <?= $primary ?>;
   --secondary: <?= $secondary ?>;
   --accent: <?= $accent ?>;
-  --bg: #f5f6fa;
-  --surface: rgba(0,0,0,0.04);
-  --surface-2: rgba(0,0,0,0.07);
-  --border: rgba(0,0,0,0.09);
+  --bg: #f0f2f7;
+  /* Cards: solid white so text is always readable on light-gray page bg */
+  --surface: #ffffff;
+  --surface-2: rgba(0,0,0,0.05);
+  --border: rgba(0,0,0,0.10);
   --text: #0f1117;
-  --text-m: rgba(15,17,23,0.6);
-  --text-dim: rgba(15,17,23,0.35);
+  --text-m: rgba(15,17,23,0.65);
+  --text-dim: rgba(15,17,23,0.42);
   --radius: 16px;
   --nav-h: 68px;
-  --nav-bg: rgba(245,246,250,0.85);
-  --footer-bg: rgba(0,0,0,0.03);
+  --nav-bg: rgba(240,242,247,0.90);
+  --footer-bg: rgba(0,0,0,0.04);
   --modal-bg: #ffffff;
   --hero-title-color: #0f1117;
   --section-title-color: #0f1117;
@@ -163,30 +164,31 @@ foreach ($promos as $p) {
   --item-name-color: #0f1117;
   --item-price-color: #0f1117;
   --featured-bg-grad: linear-gradient(to top,rgba(10,10,18,.92) 0%,rgba(10,10,18,.5) 55%,rgba(10,10,18,.15) 100%);
-  --featured-name-color: #0f1117;
-  --featured-price-color: #0f1117;
+  --featured-name-color: #fff;
+  --featured-price-color: #fff;
   --info-val-color: #0f1117;
   --empty-title-color: rgba(15,17,23,.3);
   --footer-name-color: rgba(15,17,23,.6);
-  --item-cat-badge-bg: rgba(245,246,250,.85);
+  --item-cat-badge-bg: rgba(240,242,247,.95);
   color-scheme: light;
 }
 
 /* ── DARK MODE ── */
 [data-theme="dark"] {
   --bg: #08090c;
-  --surface: rgba(255,255,255,0.04);
-  --surface-2: rgba(255,255,255,0.07);
-  --border: rgba(255,255,255,0.08);
+  /* Cards: visible dark panel on near-black page */
+  --surface: rgba(255,255,255,0.07);
+  --surface-2: rgba(255,255,255,0.11);
+  --border: rgba(255,255,255,0.10);
   --text: #f0f2f7;
-  --text-m: rgba(240,242,247,0.6);
-  --text-dim: rgba(240,242,247,0.3);
-  --nav-bg: rgba(8,9,12,0.7);
+  --text-m: rgba(240,242,247,0.70);
+  --text-dim: rgba(240,242,247,0.38);
+  --nav-bg: rgba(8,9,12,0.80);
   --footer-bg: rgba(255,255,255,0.02);
   --modal-bg: #0e1117;
   --hero-title-color: #fff;
   --section-title-color: #fff;
-  --card-bg: transparent;
+  --card-bg: rgba(255,255,255,0.07);
   --placeholder-bg: linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.06));
   --item-name-color: #fff;
   --item-price-color: #fff;
@@ -196,7 +198,7 @@ foreach ($promos as $p) {
   --info-val-color: #fff;
   --empty-title-color: rgba(255,255,255,.3);
   --footer-name-color: rgba(255,255,255,.6);
-  --item-cat-badge-bg: rgba(8,9,12,.75);
+  --item-cat-badge-bg: rgba(8,9,12,.80);
   color-scheme: dark;
 }
 
@@ -222,63 +224,260 @@ body {
 /* ── BACKGROUND ── */
 .bg-scene {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  /* White base for light mode so multiply-blend white images merge cleanly;
-     dark base for dark mode so screen-blend works correctly */
-  background: #f5f6fa;
+  background: #f0f2f7;
 }
-[data-theme="dark"] .bg-scene {
-  background: #08090c;
-}
+[data-theme="dark"] .bg-scene { background: #08090c; }
 .bg-scene-img {
   width: 100%; height: 100%; object-fit: cover;
   transition: opacity .4s, filter .4s;
 }
-/*
- * LIGHT MODE: multiply blend on a WHITE base page.
- *   • White-bg image  → white × white = white → fully invisible ✓
- *   • Black-bg image  → black × white = black → stays visible ✓
- *   • Colorful image  → colors preserved but softer ✓
- */
-:root .bg-scene-img,
 [data-theme="light"] .bg-scene-img {
   opacity: 1;
   filter: saturate(0.85) brightness(1.0);
   mix-blend-mode: multiply;
 }
-/*
- * DARK MODE: screen blend on a BLACK base page.
- *   • White-bg image  → white screen black = white → visible ✓
- *   • Black-bg image  → black screen black = black → transparent → colors pop ✓
- */
 [data-theme="dark"] .bg-scene-img {
   opacity: 1;
   filter: saturate(1.05) brightness(1.05);
   mix-blend-mode: screen;
 }
-.bg-gradient {
-  position: absolute; inset: 0;
-}
-/* Light mode: white wash gradient so text stays readable over image */
-:root .bg-gradient,
+.bg-gradient { position: absolute; inset: 0; }
+
+/* LIGHT MODE gradient — fades fast so section backgrounds are solid */
 [data-theme="light"] .bg-gradient {
   background:
-    radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 70%),
+    radial-gradient(ellipse 80% 50% at 50% -5%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 65%),
     linear-gradient(to bottom,
-      rgba(245,246,250,0.10) 0%,
-      rgba(245,246,250,0.45) 40%,
-      rgba(245,246,250,0.88) 68%,
-      var(--bg) 88%);
+      rgba(240,242,247,0.0)  0%,
+      rgba(240,242,247,0.6)  25%,
+      rgba(240,242,247,0.96) 50%,
+      #f0f2f7 65%);
 }
-/* Dark mode: light gradient so screen-blended image stays vivid */
+/* DARK MODE gradient */
 [data-theme="dark"] .bg-gradient {
   background:
     radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
     linear-gradient(to bottom,
       rgba(8,9,12,0.0)  0%,
-      rgba(8,9,12,0.12) 40%,
-      rgba(8,9,12,0.60) 75%,
-      #08090c 92%);
+      rgba(8,9,12,0.30) 30%,
+      rgba(8,9,12,0.85) 58%,
+      #08090c 75%);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   DEFINITIVE CARD & TEXT THEMING
+   Strategy: light mode = everything white/dark-text
+             dark mode  = dark panels/white-text
+             has-bg-img = dark-glass panels/white-text
+   Light mode rules use :not([data-theme="dark"]) so toggling
+   back to light ALWAYS wins regardless of initial state.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── LIGHT MODE: solid white cards, dark readable text ── */
+body:not([data-theme="dark"]) .item-card,
+body:not([data-theme="dark"]) .section-card,
+body:not([data-theme="dark"]) .info-card,
+body:not([data-theme="dark"]) .promo-card {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,0.09) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Section note (reminder box) in light mode */
+body:not([data-theme="dark"]) .section-note {
+  background: color-mix(in srgb, var(--primary) 7%, #eef0ff) !important;
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent) !important;
+}
+/* All inline surface-bg divs in content sections — light mode */
+body:not([data-theme="dark"]) #why-us > div > div,
+body:not([data-theme="dark"]) section#info > div > div {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,0.09) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── DARK MODE: visible dark panels, white text ── */
+[data-theme="dark"] .item-card,
+[data-theme="dark"] .section-card,
+[data-theme="dark"] .info-card,
+[data-theme="dark"] .promo-card {
+  background: rgba(18,22,34,0.90) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.35) !important;
+}
+[data-theme="dark"] .section-note {
+  background: rgba(18,22,34,0.90) !important;
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent) !important;
+}
+[data-theme="dark"] #why-us > div > div,
+[data-theme="dark"] section#info > div > div {
+  background: rgba(18,22,34,0.90) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.35) !important;
+}
+
+/* ── WITH BG IMAGE: glass-dark, always white text ── */
+/* has-bg-img sets data-theme="dark" initially, but user can toggle to light.
+   When has-bg-img + light, still use dark glass so text is readable over image */
+.has-bg-img .item-card,
+.has-bg-img .section-card,
+.has-bg-img .info-card,
+.has-bg-img .promo-card {
+  background: rgba(10,13,24,0.87) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.45) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+.has-bg-img .section-note {
+  background: rgba(10,13,24,0.85) !important;
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent) !important;
+}
+.has-bg-img #why-us > div > div,
+.has-bg-img section#info > div > div {
+  background: rgba(10,13,24,0.87) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.45) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+/* ── SERVICES section cards — fix gradient bg ── */
+/* Light: override dark gradient → clean white card */
+body:not([data-theme="dark"]) #services .section-card {
+  background: #ffffff !important;
+  border-top-width: 3px !important;
+  border-color: rgba(0,0,0,0.09) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
+}
+body:not([data-theme="dark"]) #services .section-card:nth-child(1) { border-top-color: var(--primary) !important; }
+body:not([data-theme="dark"]) #services .section-card:nth-child(2) { border-top-color: #22c55e !important; }
+body:not([data-theme="dark"]) #services .section-card:nth-child(3) { border-top-color: var(--accent) !important; }
+/* Dark: dark panel with subtle gradient tint */
+[data-theme="dark"] #services .section-card {
+  background: rgba(18,22,34,0.90) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+/* Has bg: glass dark */
+.has-bg-img #services .section-card {
+  background: rgba(10,13,24,0.87) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+/* ══ TEXT COLORS — light / dark / bg-img ══ */
+
+/* INLINE style="color:var(--text/text-m/text-dim)" — resolved per theme */
+body:not([data-theme="dark"]) [style*="color:var(--text)"]     { color: #0f1117 !important; }
+body:not([data-theme="dark"]) [style*="color:var(--text-m)"]   { color: rgba(15,17,23,0.65) !important; }
+body:not([data-theme="dark"]) [style*="color:var(--text-dim)"] { color: rgba(15,17,23,0.42) !important; }
+[data-theme="dark"]  [style*="color:var(--text)"]              { color: #f0f2f7 !important; }
+[data-theme="dark"]  [style*="color:var(--text-m)"]            { color: rgba(240,242,247,0.72) !important; }
+[data-theme="dark"]  [style*="color:var(--text-dim)"]          { color: rgba(240,242,247,0.40) !important; }
+/* has-bg-img forces white regardless of toggle */
+.has-bg-img [style*="color:var(--text)"]                       { color: #ffffff !important; }
+.has-bg-img [style*="color:var(--text-m)"]                     { color: rgba(240,242,247,0.80) !important; }
+.has-bg-img [style*="color:var(--text-dim)"]                   { color: rgba(240,242,247,0.50) !important; }
+
+/* NAMED classes */
+/* Section titles */
+body:not([data-theme="dark"]) .section-title { color: #0f1117 !important; }
+[data-theme="dark"]  .section-title           { color: #ffffff !important; }
+.has-bg-img          .section-title           { color: #ffffff !important; text-shadow: 0 1px 10px rgba(0,0,0,.6); }
+
+/* Section labels */
+body:not([data-theme="dark"]) .section-label  { color: color-mix(in srgb, var(--primary) 85%, #000) !important; }
+[data-theme="dark"]  .section-label, .has-bg-img .section-label { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
+
+/* Section paragraph text */
+body:not([data-theme="dark"]) section > p     { color: rgba(15,17,23,0.65) !important; }
+[data-theme="dark"]  section > p              { color: rgba(240,242,247,0.78) !important; }
+.has-bg-img section > p                       { color: rgba(240,242,247,0.85) !important; }
+
+/* Hero */
+body:not([data-theme="dark"]) .hero-title     { color: #0f1117 !important; }
+[data-theme="dark"]  .hero-title              { color: #ffffff !important; text-shadow: 0 2px 20px rgba(0,0,0,.7); }
+.has-bg-img          .hero-title              { color: #ffffff !important; text-shadow: 0 2px 24px rgba(0,0,0,.8); }
+/* Hero subtitle — always readable over any bg */
+body:not([data-theme="dark"]) .hero-sub       { color: rgba(15,17,23,0.72) !important; text-shadow: 0 1px 8px rgba(255,255,255,.8); }
+[data-theme="dark"]  .hero-sub                { color: rgba(240,242,247,0.85) !important; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+.has-bg-img          .hero-sub                { color: rgba(240,242,247,0.90) !important; text-shadow: 0 1px 12px rgba(0,0,0,.75); }
+/* Hero stats */
+body:not([data-theme="dark"]) .hero-stat-val  { color: #0f1117 !important; }
+[data-theme="dark"]  .hero-stat-val, .has-bg-img .hero-stat-val { color: #ffffff !important; }
+body:not([data-theme="dark"]) .hero-stat-label { color: rgba(15,17,23,0.45) !important; }
+[data-theme="dark"]  .hero-stat-label, .has-bg-img .hero-stat-label { color: rgba(240,242,247,0.50) !important; }
+
+/* Item cards */
+body:not([data-theme="dark"]) .item-name     { color: #0f1117 !important; }
+body:not([data-theme="dark"]) .item-price    { color: #0f1117 !important; }
+body:not([data-theme="dark"]) .item-cond     { color: rgba(15,17,23,0.55) !important; }
+body:not([data-theme="dark"]) .item-price-label { color: rgba(15,17,23,0.55) !important; }
+body:not([data-theme="dark"]) .item-cat-badge { color: rgba(15,17,23,0.7) !important; background: rgba(255,255,255,.95) !important; }
+[data-theme="dark"]  .item-name, .has-bg-img .item-name   { color: #ffffff !important; }
+[data-theme="dark"]  .item-price, .has-bg-img .item-price  { color: #ffffff !important; }
+[data-theme="dark"]  .item-cond                { color: rgba(240,242,247,0.55) !important; }
+.has-bg-img          .item-cond                { color: rgba(240,242,247,0.60) !important; }
+[data-theme="dark"]  .item-price-label         { color: rgba(240,242,247,0.45) !important; }
+[data-theme="dark"]  .item-cat-badge           { color: rgba(240,242,247,0.8) !important; }
+.has-bg-img          .item-stock               { color: color-mix(in srgb, var(--accent) 90%, #fff) !important; }
+
+/* Info cards (Visit Us) */
+body:not([data-theme="dark"]) .info-card-title { color: rgba(15,17,23,0.50) !important; }
+body:not([data-theme="dark"]) .info-card-val   { color: #0f1117 !important; }
+[data-theme="dark"]  .info-card-title, .has-bg-img .info-card-title { color: rgba(240,242,247,0.55) !important; }
+[data-theme="dark"]  .info-card-val, .has-bg-img .info-card-val { color: #ffffff !important; }
+
+/* Promo cards */
+body:not([data-theme="dark"]) .promo-title     { color: #0f1117 !important; }
+[data-theme="dark"]  .promo-title, .has-bg-img .promo-title { color: #ffffff !important; }
+[data-theme="dark"]  .promo-sale-price         { color: #fcd34d !important; }
+body:not([data-theme="dark"]) .promo-sale-price { color: #b45309 !important; }
+
+/* Sale prices */
+body:not([data-theme="dark"]) .sale-price, body:not([data-theme="dark"]) .sale-price-label { color: #b45309 !important; }
+[data-theme="dark"]  .sale-price, [data-theme="dark"] .sale-price-label { color: #fcd34d !important; }
+
+/* Featured cards — always white (dark scrim underneath) */
+.featured-card-name  { color: #fff !important; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+.featured-card-price { color: #fff !important; }
+.featured-card-cat   { color: color-mix(in srgb, var(--accent) 90%, #fff) !important; }
+
+/* Category pills */
+body:not([data-theme="dark"]) .cat-pill { color: rgba(15,17,23,0.70) !important; background: rgba(0,0,0,0.06) !important; border-color: rgba(0,0,0,0.10) !important; }
+[data-theme="dark"]  .cat-pill, .has-bg-img .cat-pill { color: rgba(240,242,247,0.75) !important; background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.14) !important; }
+
+/* Nav */
+body:not([data-theme="dark"]) .nav-name       { color: #0f1117 !important; }
+[data-theme="dark"]  .nav-name, .has-bg-img .nav-name { color: #ffffff !important; }
+body:not([data-theme="dark"]) .nav-link       { color: rgba(15,17,23,0.65) !important; }
+[data-theme="dark"]  .nav-link, .has-bg-img .nav-link { color: rgba(255,255,255,0.65) !important; }
+[data-theme="dark"]  nav, .has-bg-img nav     { background: rgba(8,9,12,0.80) !important; }
+[data-theme="dark"]  .nav-link:hover, .has-bg-img .nav-link:hover { color: #fff !important; background: rgba(255,255,255,.09); }
+
+/* Dark mode toggle button */
+[data-theme="dark"]  .dm-toggle, .has-bg-img .dm-toggle { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.15); color: rgba(255,255,255,.72); }
+[data-theme="dark"]  .dm-toggle:hover, .has-bg-img .dm-toggle:hover { background: rgba(255,255,255,.18); color: #fff; }
+
+/* Footer */
+body:not([data-theme="dark"]) .footer-name    { color: rgba(15,17,23,0.75) !important; }
+body:not([data-theme="dark"]) .footer-meta    { color: rgba(15,17,23,0.40) !important; }
+[data-theme="dark"]  .footer-name, .has-bg-img .footer-name { color: rgba(240,242,247,0.75) !important; }
+[data-theme="dark"]  .footer-meta, .has-bg-img .footer-meta { color: rgba(240,242,247,0.35) !important; }
+
+/* Download App CTA — always dark regardless of theme */
+#mobile-app > div {
+  background: linear-gradient(135deg, #0d1120 0%, #0f172a 50%, #0d1120 100%) !important;
+}
+
+
+
+
+
 
 /* ── NAV ── */
 nav {
@@ -695,18 +894,6 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
   border: 1px solid var(--border);
   border-radius: 20px; padding: 24px;
 }
-[data-theme="light"] .info-card {
-  background: rgba(255,255,255,0.82);
-  border-color: rgba(0,0,0,0.09);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-[data-theme="dark"] .info-card {
-  background: rgba(10,12,18,0.72);
-  border-color: rgba(255,255,255,0.10);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
 .info-card-icon {
   width: 44px; height: 44px; border-radius: 12px;
   background: color-mix(in srgb, var(--primary) 15%, transparent);
@@ -720,66 +907,6 @@ section { position: relative; z-index: 10; padding: 60px clamp(16px,5vw,64px); }
 }
 .info-card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px; }
 .info-card-val { font-size: 1rem; font-weight: 600; color: var(--info-val-color); line-height: 1.5; }
-/* ── FORCE READABLE TEXT IN ALL THEMES ── */
-/* Section headers */
-[data-theme="dark"]  .section-title    { color: #ffffff !important; }
-[data-theme="light"] .section-title    { color: #0f1117 !important; }
-[data-theme="dark"]  .section-label    { color: color-mix(in srgb, var(--primary) 90%, #fff) !important; }
-[data-theme="light"] .section-label    { color: color-mix(in srgb, var(--primary) 70%, #000) !important; }
-/* Info cards */
-[data-theme="dark"]  .info-card-title  { color: rgba(240,242,247,0.55) !important; }
-[data-theme="light"] .info-card-title  { color: rgba(15,17,23,0.50) !important; }
-[data-theme="dark"]  .info-card-val    { color: #ffffff !important; }
-[data-theme="light"] .info-card-val    { color: #0f1117 !important; }
-/* Item cards */
-[data-theme="dark"]  .item-name        { color: #ffffff !important; }
-[data-theme="light"] .item-name        { color: #0f1117 !important; }
-[data-theme="dark"]  .item-price       { color: #ffffff !important; }
-[data-theme="light"] .item-price       { color: #0f1117 !important; }
-[data-theme="dark"]  .item-cond        { color: rgba(240,242,247,0.5) !important; }
-[data-theme="light"] .item-cond        { color: rgba(15,17,23,0.55) !important; }
-[data-theme="dark"]  .item-price-label { color: rgba(240,242,247,0.45) !important; }
-[data-theme="light"] .item-price-label { color: rgba(15,17,23,0.55) !important; }
-[data-theme="light"] .item-cat-badge   { color: rgba(15,17,23,0.7) !important; background: rgba(255,255,255,.9) !important; }
-[data-theme="dark"]  .item-cat-badge   { color: rgba(240,242,247,0.8) !important; }
-/* Hero */
-[data-theme="dark"]  .hero-title       { color: #ffffff !important; text-shadow: 0 2px 20px rgba(0,0,0,.6); }
-[data-theme="light"] .hero-title       { color: #0f1117 !important; }
-.has-bg-img          .hero-title       { color: #ffffff !important; text-shadow: 0 2px 20px rgba(0,0,0,.65); }
-[data-theme="dark"]  .hero-sub         { color: rgba(240,242,247,0.82) !important; text-shadow: 0 1px 8px rgba(0,0,0,.5); }
-[data-theme="light"] .hero-sub         { color: rgba(15,17,23,0.65) !important; }
-.has-bg-img          .hero-sub         { color: rgba(255,255,255,.9) !important; text-shadow: 0 1px 8px rgba(0,0,0,.5); }
-[data-theme="dark"]  .hero-stat-val    { color: #ffffff !important; }
-[data-theme="light"] .hero-stat-val    { color: #0f1117 !important; }
-.has-bg-img          .hero-stat-val    { color: #ffffff !important; }
-[data-theme="dark"]  .hero-stat-label  { color: rgba(240,242,247,0.45) !important; }
-[data-theme="light"] .hero-stat-label  { color: rgba(15,17,23,0.45) !important; }
-.has-bg-img          .hero-stat-label  { color: rgba(255,255,255,.55) !important; }
-/* Category pills */
-[data-theme="dark"]  .cat-pill         { color: rgba(240,242,247,0.75) !important; }
-[data-theme="light"] .cat-pill         { color: rgba(15,17,23,0.7) !important; }
-/* Nav */
-[data-theme="dark"]  .nav-name         { color: #ffffff !important; }
-[data-theme="light"] .nav-name         { color: #0f1117 !important; }
-.has-bg-img          .nav-name         { color: #ffffff !important; }
-/* Featured cards — always white text (dark overlay behind) */
-.featured-card-name  { color: #ffffff !important; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
-.featured-card-price { color: #ffffff !important; }
-.featured-card-cat   { color: color-mix(in srgb, var(--accent) 90%, #fff) !important; }
-/* Footer */
-[data-theme="dark"]  .footer-name      { color: rgba(240,242,247,0.75) !important; }
-[data-theme="light"] .footer-name      { color: rgba(15,17,23,0.75) !important; }
-[data-theme="dark"]  .footer-meta      { color: rgba(240,242,247,0.35) !important; }
-[data-theme="light"] .footer-meta      { color: rgba(15,17,23,0.4) !important; }
-/* Promo cards — titles and body text readable in both modes */
-[data-theme="dark"]  .promo-title      { color: #ffffff !important; }
-[data-theme="light"] .promo-title      { color: #0f1117 !important; }
-[data-theme="light"] .promo-card       { background: rgba(255,255,255,0.88) !important; border-color: rgba(0,0,0,0.10) !important; }
-/* Promo body text */
-[data-theme="light"] #promos [style*="color:var(--text-m)"] { color: rgba(15,17,23,0.7) !important; }
-[data-theme="light"] #promos [style*="color:var(--text-dim)"] { color: rgba(15,17,23,0.5) !important; }
-/* Promo sale price — amber in light, gold in dark */
-[data-theme="dark"] .promo-sale-price { color: #fcd34d !important; }
 
 /* ── QR CODE CARD ── */
 .qr-card { text-align: center; }
@@ -1620,7 +1747,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;">
 
     <!-- Step 1 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--primary) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">diamond</span>
       </div>
@@ -1630,7 +1757,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 2 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--accent) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">fact_check</span>
       </div>
@@ -1640,7 +1767,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 3 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">payments</span>
       </div>
@@ -1650,7 +1777,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Step 4 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">redeem</span>
       </div>
@@ -1662,7 +1789,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   </div>
 
   <!-- Important note -->
-  <div style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
+  <div class="section-note" style="margin-top:24px;background:color-mix(in srgb,var(--primary) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px;">
     <span class="material-symbols-outlined" style="font-size:24px;color:var(--primary);flex-shrink:0;margin-top:2px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">info</span>
     <div style="font-size:.98rem;color:var(--text-m);line-height:1.75;">
       <strong style="color:var(--text);">Reminder:</strong> Please bring a valid government-issued ID — SSS, GSIS, Passport, Driver's License, or Voter's ID. Your pawned items are kept safely in our secured storage for the full duration of your loan.
@@ -1684,7 +1811,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:20px;">
 
     <!-- Pawn a Loan -->
-    <div style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,transparent),color-mix(in srgb,var(--primary) 5%,transparent));border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">💍</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Pawn a Loan</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Use your valuables as collateral and get instant cash. We accept a wide range of items.</div>
@@ -1699,7 +1826,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     </div>
 
     <!-- Redeem Your Item -->
-    <div style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(34,197,94,.04));border:1.5px solid rgba(34,197,94,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🔓</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Redeem Your Item</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Reclaim your pawned item by settling your loan plus interest before the ticket expires.</div>
@@ -1715,7 +1842,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 
     <!-- Buy Pre-Owned Items -->
     <?php if($total_items > 0): ?>
-    <div style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));border:1.5px solid rgba(245,158,11,.28);border-radius:22px;padding:32px 28px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2.8rem;margin-bottom:14px;">🛍️</div>
       <div style="font-size:1.25rem;font-weight:800;color:var(--text);margin-bottom:10px;">Buy Pre-Owned Items</div>
       <div style="font-size:1rem;color:var(--text-m);line-height:1.75;margin-bottom:18px;">Browse our selection of quality second-hand items available for purchase at affordable prices.</div>
@@ -1753,7 +1880,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     ];
     foreach($why_items as [$icon, $title, $desc]):
     ?>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px 22px;display:flex;gap:16px;align-items:flex-start;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+    <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px 22px;display:flex;gap:16px;align-items:flex-start;transition:transform .2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
       <div style="font-size:2rem;flex-shrink:0;line-height:1;"><?= $icon ?></div>
       <div>
         <div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3;"><?= $title ?></div>
