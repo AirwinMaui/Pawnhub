@@ -1052,28 +1052,41 @@ tr:hover td{background:<?= $td_hover ?>;}
     <?php endif;?>
     <?php endif;?>
     <!-- Branch Info Banner -->
-    <div style="background:linear-gradient(135deg,rgba(30,58,138,.6),rgba(37,99,235,.3));border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:16px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <?php
+      // Adaptive text colors based on sidebar/theme brightness
+      $bc_text_main   = $is_light_mode ? '#1c1e21'            : '#ffffff';
+      $bc_text_sub    = $is_light_mode ? 'rgba(0,0,0,.55)'    : 'rgba(255,255,255,.55)';
+      $bc_text_muted  = $is_light_mode ? 'rgba(0,0,0,.38)'    : 'rgba(255,255,255,.35)';
+      $bc_text_label  = $is_light_mode ? 'rgba(0,0,0,.42)'    : 'rgba(255,255,255,.4)';
+      $bc_bg          = $is_light_mode
+        ? 'linear-gradient(135deg,color-mix(in srgb,var(--t-primary,#2563eb) 12%,#f0f4ff),color-mix(in srgb,var(--t-secondary,#1e3a8a) 8%,#e8eeff))'
+        : 'linear-gradient(135deg,color-mix(in srgb,var(--t-primary,#2563eb) 35%,rgba(0,0,0,.45)),color-mix(in srgb,var(--t-secondary,#1e3a8a) 25%,rgba(0,0,0,.3)))';
+      $bc_border      = $is_light_mode
+        ? 'color-mix(in srgb,var(--t-primary,#2563eb) 20%,rgba(0,0,0,.06))'
+        : 'color-mix(in srgb,var(--t-primary,#2563eb) 30%,rgba(255,255,255,.08))';
+    ?>
+    <div style="background:<?=$bc_bg?>;border:1px solid <?=$bc_border?>;border-radius:14px;padding:16px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
-        <div style="font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:4px;">Your Branch</div>
-        <div style="font-size:1.05rem;font-weight:800;color:#fff;"><?=htmlspecialchars($business_name)?></div>
-        <div style="font-size:.76rem;color:rgba(255,255,255,.45);margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Admin</div>
-        <div style="font-size:.72rem;color:rgba(255,255,255,.3);margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
+        <div style="font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:<?=$bc_text_label?>;margin-bottom:4px;">Your Branch</div>
+        <div style="font-size:1.05rem;font-weight:800;color:<?=$bc_text_main?>;"><?=htmlspecialchars($business_name)?></div>
+        <div style="font-size:.76rem;color:<?=$bc_text_sub?>;margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Admin</div>
+        <div style="font-size:.72rem;color:<?=$bc_text_muted?>;margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
         <?php if(!empty($tenant['phone'])):?>
-        <div style="font-size:.74rem;color:rgba(255,255,255,.55);margin-top:5px;display:flex;align-items:center;gap:5px;">
+        <div style="font-size:.74rem;color:<?=$bc_text_sub?>;margin-top:5px;display:flex;align-items:center;gap:5px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
           <?=htmlspecialchars($tenant['phone'])?>
         </div>
         <?php endif;?>
         <?php if(!empty($tenant['address'])):?>
-        <div style="font-size:.74rem;color:rgba(255,255,255,.55);margin-top:3px;display:flex;align-items:center;gap:5px;">
+        <div style="font-size:.74rem;color:<?=$bc_text_sub?>;margin-top:3px;display:flex;align-items:center;gap:5px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
           <?=htmlspecialchars($tenant['address'])?>
         </div>
         <?php endif;?>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:.63rem;color:rgba(255,255,255,.35);margin-bottom:3px;">Team Members</div>
-        <div style="font-size:1.5rem;font-weight:800;color:#fff;"><?=count($my_users)?></div>
+        <div style="font-size:.63rem;color:<?=$bc_text_label?>;margin-bottom:3px;">Team Members</div>
+        <div style="font-size:1.5rem;font-weight:800;color:<?=$bc_text_main?>;"><?=count($my_users)?></div>
       </div>
     </div>
 
