@@ -790,7 +790,7 @@ $bgImg = $rawBgMgr ?: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      <div class="sb-subtitle">Manager Portal</div>
+      
     </div>
   </div>
 
@@ -1112,7 +1112,7 @@ $notif_count = count($notifs);
           <div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);">
             <div style="width:28px;height:28px;border-radius:50%;background:<?=$m['role']==='cashier'?'rgba(139,92,246,.4)':'rgba(59,130,246,.4)'?>;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($m['fullname'],0,1))?></div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:.8rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?=htmlspecialchars($m['fullname'])?></div>
+              <div style="font-size:.8rem;font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?=htmlspecialchars($m["fullname"])?></div>
               <div style="font-size:.68rem;color:rgba(255,255,255,.3);"><?=ucfirst($m['role'])?></div>
             </div>
             <span class="badge <?=$m['is_suspended']?'b-red':'b-green'?>"><?=$m['is_suspended']?'Susp':'Active'?></span>
@@ -1137,7 +1137,7 @@ $notif_count = count($notifs);
           $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
         <tr>
           <td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td>
-          <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td>
+          <td style="font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($t["customer_name"])?></td>
           <td><?=htmlspecialchars($t['item_category'])?></td>
           <td>₱<?=number_format($t['loan_amount'],2)?></td>
           <td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td>
@@ -1158,7 +1158,7 @@ $notif_count = count($notifs);
         $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
       <tr>
         <td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td>
-        <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td>
+        <td style="font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($t["customer_name"])?></td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($t['contact_number'])?></td>
         <td><?=htmlspecialchars($t['item_category'])?></td>
         <td>₱<?=number_format($t['loan_amount'],2)?></td>
@@ -1208,7 +1208,7 @@ $notif_count = count($notifs);
             <?php else: ?>
               <div style="width:30px;height:30px;border-radius:50%;background:var(--t-primary,#059669);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($c['full_name'],0,1))?></div>
             <?php endif; ?>
-            <span style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></span>
+            <span style="font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($c["full_name"])?></span>
           </div>
         </td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
@@ -1344,7 +1344,7 @@ $notif_count = count($notifs);
       <?php foreach($void_reqs as $v):?>
       <tr>
         <td><span class="ticket-tag"><?=htmlspecialchars($v['ticket_no'])?></span></td>
-        <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($v['req_name'])?></td>
+        <td style="font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($v["req_name"])?> </td>
         <td style="max-width:180px;font-size:.78rem;"><?=htmlspecialchars($v['reason'])?></td>
         <td><span class="badge <?=$v['status']==='approved'?'b-green':($v['status']==='pending'?'b-yellow':'b-red')?>"><?=ucfirst($v['status'])?></span></td>
         <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y h:i A',strtotime($v['requested_at']))?></td>
@@ -1514,7 +1514,7 @@ $notif_count = count($notifs);
             <?php endif; ?>
           </td>
           <td>
-            <div style="font-weight:600;color:#fff;font-size:.83rem;"><?=htmlspecialchars($item['item_name']??$item['ticket_no']??'—')?></div>
+            <div style="font-weight:600;color:<?=$is_lm2?"#1c1e21":"#fff"?>;font-size:.83rem;"><?=htmlspecialchars($item['item_name']??$item['ticket_no']??'—')?></div>
             <div style="font-size:.7rem;color:rgba(255,255,255,.3);font-family:monospace;"><?=htmlspecialchars($item['ticket_no']??'')?></div>
           </td>
           <td>

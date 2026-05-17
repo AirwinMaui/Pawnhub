@@ -610,7 +610,7 @@ $staffBg = $rawBgStaff ?: 'https://images.unsplash.com/photo-1611532736597-de2d4
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      <div class="sb-subtitle">Staff Portal</div>
+      
     </div>
   </div>
 
@@ -785,9 +785,9 @@ $notif_count = count($notifs);
             <div class="qa-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">person_add</span></div>Register Customer
           </a>
         </div>
-        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.15);border-radius:12px;padding:14px;">
+        <div style="background:<?=$is_lm3?"rgba(245,158,11,.08)":"rgba(245,158,11,.08)"?>;border:1px solid rgba(245,158,11,.15);border-radius:12px;padding:14px;">
           <div style="font-size:.74rem;font-weight:700;color:#fcd34d;margin-bottom:5px;">📋 Branch Note</div>
-          <p style="font-size:.73rem;color:rgba(255,255,255,.4);line-height:1.6;">You are assigned to <strong style="color:rgba(255,255,255,.7);"><?=htmlspecialchars($tenant['business_name'])?></strong>. All your tickets and customers are saved under this branch.</p>
+          <p style="font-size:.73rem;color:<?=$is_lm3?"rgba(0,0,0,.5)":"rgba(255,255,255,.4)"?>;line-height:1.6;">You are assigned to <strong style="color:<?=$is_lm3?"#1c1e21":"rgba(255,255,255,.7)"?>;"><?=htmlspecialchars($tenant['business_name'])?></strong>. All your tickets and customers are saved under this branch.</p>
         </div>
       </div>
       <div class="card">
@@ -799,7 +799,7 @@ $notif_count = count($notifs);
         <?php else: ?>
         <div style="overflow-x:auto;"><table><thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th>Loan</th><th>Maturity</th></tr></thead><tbody>
         <?php foreach(array_slice($my_active,0,6) as $t): ?>
-        <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()?'#fca5a5':'rgba(255,255,255,.35)'?>;"><?=$t['maturity_date']?></td></tr>
+        <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:<?=$is_lm3?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($t["customer_name"])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()?'#fca5a5':'rgba(255,255,255,.35)'?>;"><?=$t['maturity_date']?></td></tr>
         <?php endforeach;?></tbody></table></div>
         <?php endif;?>
       </div>
@@ -835,7 +835,7 @@ $notif_count = count($notifs);
                     data-id="<?=$c['id']?>"
                     onclick="selectCustomer(this)"
                     style="padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);">
-                    <div style="font-size:.83rem;font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></div>
+                    <div style="font-size:.83rem;font-weight:600;color:<?=$is_lm3?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($c["full_name"])?></div>
                     <div style="font-size:.72rem;color:rgba(255,255,255,.4);font-family:monospace;"><?=htmlspecialchars($c['contact_number']??'')?></div>
                   </div>
                   <?php endforeach; ?>
@@ -905,7 +905,7 @@ $notif_count = count($notifs);
       <?php if(empty($all_tickets)): ?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No tickets yet.</p></div>
       <?php else: ?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Action</th></tr></thead><tbody>
       <?php foreach($all_tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
-      <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td><td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($t['contact_number'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-weight:700;color:#fff;">₱<?=number_format($t['total_redeem'],2)?></td><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':'rgba(255,255,255,.35)'?>;"><?=$t['maturity_date']?></td><td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td>
+      <td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':($is_lm3?'#6b7280':'rgba(255,255,255,.35)')?>"><?=$t['maturity_date']?></td>
       <td><?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?><button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">Void Req</button><?php else:?>—<?php endif;?></td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
@@ -917,7 +917,7 @@ $notif_count = count($notifs);
       <?php else:?><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>ID Type</th><th>ID Photo</th><th>Registered</th></tr></thead><tbody>
       <?php foreach($customers as $c):?>
       <tr>
-        <td style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></td>
+        <td style="font-weight:600;color:<?=$is_lm3?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($c["full_name"])?></td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
         <td style="font-size:.75rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($c['email']??'—')?></td>
         <td><?=htmlspecialchars($c['valid_id_type']??'—')?></td>
@@ -995,7 +995,7 @@ $notif_count = count($notifs);
 
             <!-- Mobile App Credentials -->
             <div class="fgroup" style="grid-column:1/-1;margin-top:8px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);">
-              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.3);margin-bottom:10px;">📱 Mobile App Login <span style="font-weight:400;opacity:.6;">(Optional)</span></div>
+              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:<?=$is_lm3?"#6b7280":"rgba(255,255,255,.3)"?>;margin-bottom:10px;">📱 Mobile App Login <span style="font-weight:400;opacity:.6;">(Optional)</span></div>
             </div>
 
             <div class="fgroup">
@@ -1071,7 +1071,7 @@ $notif_count = count($notifs);
               <span style="font-size:.72rem;font-weight:700;letter-spacing:.06em;background:rgba(255,255,255,.07);padding:2px 9px;border-radius:6px;color:rgba(255,255,255,.5);font-family:monospace;"><?=htmlspecialchars($mr['request_no']??'—')?></span>
               <span style="font-size:.7rem;font-weight:700;color:<?=$sg['color']?>;background:<?=$sg['bg']?>;border:1px solid <?=$sg['border']?>;padding:2px 8px;border-radius:100px;"><?=ucfirst(str_replace('_',' ',$mr['status']))?></span>
             </div>
-            <div style="font-size:.95rem;font-weight:700;color:#fff;"><?=htmlspecialchars($mr['mc_name'] ?? $mr['customer_name'] ?? 'Customer')?></div>
+            <div style="font-size:.95rem;font-weight:700;color:<?=$is_lm3?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($mr["mc_name"] ?? $mr['customer_name'] ?? 'Customer')?></div>
             <div style="font-size:.75rem;color:rgba(255,255,255,.4);margin-top:2px;">
               <?=htmlspecialchars($mr['mc_contact'] ?? $mr['contact_number'] ?? '')?><?php if(!empty($mr['mc_email'])): ?> · <?=htmlspecialchars($mr['mc_email'])?><?php endif; ?>
             </div>

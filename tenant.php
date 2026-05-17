@@ -770,7 +770,7 @@ tr:hover td{background:<?= $td_hover ?>;}
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      <div class="sb-subtitle">Admin Terminal</div>
+      
     </div>
   </div>
   <div class="sb-user">
@@ -1151,7 +1151,7 @@ tr:hover td{background:<?= $td_hover ?>;}
         </div>
         <?php else:?><div style="overflow-x:auto;"><table><thead><tr><th>Ticket</th><th>Customer</th><th>Item</th><th>Loan</th><th>Status</th><th>Date</th></tr></thead><tbody>
         <?php foreach(array_slice($tickets,0,8) as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-purple'];?>
-        <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td><td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($t['created_at']))?></td></tr>
+        <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:<?=$is_light_mode?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($t["customer_name"])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td><td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($t['created_at']))?></td></tr>
         <?php endforeach;?></tbody></table></div><?php endif;?>
       </div>
 
@@ -1214,8 +1214,8 @@ tr:hover td{background:<?= $td_hover ?>;}
       <?php if(empty($tickets)):?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No pawn tickets.</p></div>
       <?php else:?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Expiry</th><th>Status</th></tr></thead><tbody>
       <?php foreach($tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-purple'];?>
-      <tr><td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td><td style="font-weight:600;color:#fff;"><?=htmlspecialchars($t['customer_name'])?></td><td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($t['contact_number'])?></td><td><?=htmlspecialchars($t['item_category'])?></td><td>₱<?=number_format($t['loan_amount'],2)?></td><td style="font-weight:700;color:#fff;">₱<?=number_format($t['total_redeem'],2)?></td><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':'rgba(255,255,255,.35)'?>;"><?=$t['maturity_date']?></td><td style="font-size:.73rem;color:rgba(255,255,255,.3);"><?=$t['expiry_date']?></td><td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=$t['status']?></span></td></tr>
-      <?php endforeach;?></tbody></table><?php endif;?>
+
+      <?php endforeach;?></tbody></table><?php endif;?><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':($is_light_mode?'#6b7280':'rgba(255,255,255,.35)')?>"><?=$t['maturity_date']?></td>
     </div>
 
   <?php elseif($active_page==='customers'): ?>
@@ -1255,7 +1255,7 @@ tr:hover td{background:<?= $td_hover ?>;}
             <?php else: ?>
               <div style="width:30px;height:30px;border-radius:50%;background:var(--t-primary,#2563eb);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;"><?=strtoupper(substr($c['full_name'],0,1))?></div>
             <?php endif; ?>
-            <span style="font-weight:600;color:#fff;"><?=htmlspecialchars($c['full_name'])?></span>
+            <span style="font-weight:600;color:<?=$is_light_mode?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($c["full_name"])?></span>
           </div>
         </td>
         <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($c['contact_number'])?></td>
@@ -1388,7 +1388,7 @@ tr:hover td{background:<?= $td_hover ?>;}
       <?php if(empty($inventory)):?><div class="empty-state"><span class="material-symbols-outlined">inventory_2</span><p>No inventory items.</p></div>
       <?php else:?><table><thead><tr><th>Ticket</th><th>Item</th><th>Category</th><th>Appraisal</th><th>Loan</th><th>Status</th><th>Received</th></tr></thead><tbody>
       <?php foreach($inventory as $i): $sc=['pawned'=>'b-blue','redeemed'=>'b-green','voided'=>'b-red','auctioned'=>'b-purple','sold'=>'b-yellow'];?>
-      <tr><td><span class="ticket-tag"><?=htmlspecialchars($i['ticket_no'])?></span></td><td style="color:#fff;"><?=htmlspecialchars($i['item_name']??'—')?></td><td><?=htmlspecialchars($i['item_category']??'—')?></td><td>₱<?=number_format($i['appraisal_value']??0,2)?></td><td>₱<?=number_format($i['loan_amount']??0,2)?></td><td><span class="badge <?=$sc[$i['status']]??'b-gray'?>"><?=ucfirst($i['status'])?></span></td><td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($i['received_at']))?></td></tr>
+      <tr><td><span class="ticket-tag"><?=htmlspecialchars($i['ticket_no'])?></span></td><td style="color:<?=$is_light_mode?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($i["item_name"]??'—')?></td><td><?=htmlspecialchars($i['item_category']??'—')?></td><td>₱<?=number_format($i['appraisal_value']??0,2)?></td><td>₱<?=number_format($i['loan_amount']??0,2)?></td><td><span class="badge <?=$sc[$i['status']]??'b-gray'?>"><?=ucfirst($i['status'])?></span></td><td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($i['received_at']))?></td></tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 

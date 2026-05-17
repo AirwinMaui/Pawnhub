@@ -385,7 +385,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      <div class="sb-subtitle">Cashier Station</div>
+      
     </div>
   </div>
 
@@ -497,10 +497,10 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
         <a href="?page=process" style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:linear-gradient(135deg,#059669,#047857);color:#fff;border-radius:11px;text-decoration:none;font-size:.84rem;font-weight:600;transition:all .2s;">
           <span class="material-symbols-outlined" style="font-size:18px;">credit_card</span>Process Payment
         </a>
-        <a href="?page=tickets" style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.08);border-radius:11px;text-decoration:none;font-size:.84rem;font-weight:600;transition:all .2s;">
+        <a href="?page=tickets" style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:<?=$is_lm4?"#f0f2f5":"rgba(255,255,255,.05)"?>;color:<?=$is_lm4?"#1c1e21":"rgba(255,255,255,.7)"?>;border:1px solid <?=$is_lm4?"#e4e6eb":"rgba(255,255,255,.08)"?>;border-radius:11px;text-decoration:none;font-size:.84rem;font-weight:600;transition:all .2s;">
           <span class="material-symbols-outlined" style="color:#93c5fd;font-size:18px;">receipt_long</span>View Active Tickets
         </a>
-        <a href="?page=history" style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.08);border-radius:11px;text-decoration:none;font-size:.84rem;font-weight:600;transition:all .2s;">
+        <a href="?page=history" style="display:flex;align-items:center;gap:11px;padding:13px 15px;background:<?=$is_lm4?"#f0f2f5":"rgba(255,255,255,.05)"?>;color:<?=$is_lm4?"#1c1e21":"rgba(255,255,255,.7)"?>;border:1px solid <?=$is_lm4?"#e4e6eb":"rgba(255,255,255,.08)"?>;border-radius:11px;text-decoration:none;font-size:.84rem;font-weight:600;transition:all .2s;">
           <span class="material-symbols-outlined" style="color:#6ee7b7;font-size:18px;">history</span>Transaction History
         </a>
       </div>
@@ -569,12 +569,12 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
 
       <div class="card" style="background:rgba(255,255,255,.02);">
         <div class="card-title">Receipt Preview</div>
-        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;font-size:.79rem;">
-          <div style="text-align:center;margin-bottom:12px;">
+        <div style="background:<?=$is_lm4?"#f8fafc":"rgba(255,255,255,.04)"?>;border:1px solid <?=$is_lm4?"#e4e6eb":"rgba(255,255,255,.08)"?>;border-radius:12px;padding:16px;font-size:.79rem;">
+          <div style="text-align:center;margin-bottom:12px;color:<?=$is_lm4?"#1c1e21":"#fff"?>;">
             <div style="font-weight:800;font-size:.94rem;color:#fff;"><?=htmlspecialchars($sys_name)?></div>
-            <div style="font-size:.71rem;color:rgba(255,255,255,.4);"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
-            <div style="font-size:.71rem;color:rgba(255,255,255,.3);">Tenant #<?=$tid?></div>
-            <div style="font-size:.71rem;color:rgba(255,255,255,.3);"><?=date('M d, Y h:i A')?></div>
+            <div style="font-size:.71rem;color:<?=$is_lm4?"#8a8d91":"rgba(255,255,255,.4)"?>;"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
+            <div style="font-size:.71rem;color:<?=$is_lm4?"#9ca3af":"rgba(255,255,255,.3)"?>;">Tenant #<?=$tid?></div>
+            <div style="font-size:.71rem;color:<?=$is_lm4?"#9ca3af":"rgba(255,255,255,.3)"?>;"><?=date('M d, Y h:i A')?></div>
           </div>
           <hr style="border:none;border-top:1px dashed rgba(255,255,255,.08);margin:10px 0;">
           <div class="receipt-row"><span>Ticket</span><span id="r_ticket">—</span></div>
@@ -594,7 +594,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.3);">Cashier: <?=htmlspecialchars($u['name'])?></div>
           <div style="text-align:center;font-size:.7rem;color:rgba(255,255,255,.25);margin-top:2px;">Thank you for choosing <?=htmlspecialchars($sys_name)?>!</div>
         </div>
-        <button onclick="window.print()" style="width:100%;margin-top:10px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
+        <button onclick="window.print()" style="width:100%;margin-top:10px;background:<?=$is_lm4?"#f0f2f5":"rgba(255,255,255,.05)"?>;color:<?=$is_lm4?"#65676b":"rgba(255,255,255,.6)"?>;border:1px solid <?=$is_lm4?"#e4e6eb":"rgba(255,255,255,.1)"?>;border-radius:10px;padding:10px;font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;">🖨️ Print Receipt</button>
       </div>
     </div>
 
@@ -653,7 +653,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
       <?php foreach($inventory_list as $i): $sc=['pawned'=>'b-blue','redeemed'=>'b-green','voided'=>'b-red','auctioned'=>'b-gray']; ?>
       <tr>
         <td><span class="ticket-tag"><?=htmlspecialchars($i['ticket_no'])?></span></td>
-        <td style="color:#fff;"><?=htmlspecialchars($i['item_name']??'—')?></td>
+        <td style="color:<?=$is_lm4?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($i["item_name"]??'—')?></td>
         <td><?=htmlspecialchars($i['item_category']??'—')?></td>
         <td>₱<?=number_format($i['appraisal_value']??0,2)?></td>
         <td style="color:var(--t-primary,#60a5fa);font-weight:600;">₱<?=number_format($i['loan_amount']??0,2)?></td>
