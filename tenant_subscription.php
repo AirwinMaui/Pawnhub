@@ -517,17 +517,17 @@ body{background:<?=$sub_body_bg?>;font-family:'Plus Jakarta Sans',sans-serif;col
 .btn-paymongo:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(37,99,235,.4);}
 .btn-primary{background:var(--t-primary,#2563eb);color:#fff;}
 .btn-primary:hover{transform:translateY(-1px);}
-.amount-display{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:11px 14px;font-size:1.05rem;font-weight:800;color:var(--t-primary,#2563eb);margin-bottom:14px;}
+.amount-display{background:<?=$is_lmS?'#f8fafc':'rgba(255,255,255,.06)'?>;border:1px solid <?=$is_lmS?'#e4e6eb':'rgba(255,255,255,.1)'?>;border-radius:9px;padding:11px 14px;font-size:1.05rem;font-weight:800;color:var(--t-primary,#2563eb);margin-bottom:14px;}
 .pending-box{background:color-mix(in srgb,var(--t-primary,#2563eb) 6%,transparent);border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 18%,transparent);border-radius:12px;padding:18px;}
 .paymongo-badge{display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--t-primary,#2563eb) 10%,transparent);border:1px solid color-mix(in srgb,var(--t-primary,#2563eb) 20%,transparent);border-radius:8px;padding:4px 10px;font-size:.72rem;font-weight:700;color:var(--t-primary,#93c5fd);}
 .history-table{width:100%;border-collapse:collapse;font-size:.8rem;}
-.history-table th{text-align:left;padding:7px 11px;color:rgba(255,255,255,.35);font-size:.67rem;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid rgba(255,255,255,.08);}
-.history-table td{padding:9px 11px;border-bottom:1px solid rgba(255,255,255,.05);color:rgba(255,255,255,.8);vertical-align:middle;}
+.history-table th{text-align:left;padding:7px 11px;color:<?=$is_lmS?'rgba(0,0,0,.4)':'rgba(255,255,255,.35)'?>;font-size:.67rem;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid <?=$is_lmS?'#e4e6eb':'rgba(255,255,255,.08)'?>;}
+.history-table td{padding:9px 11px;border-bottom:1px solid <?=$is_lmS?'#f0f2f5':'rgba(255,255,255,.05)'?>;color:<?=$is_lmS?'#1c1e21':'rgba(255,255,255,.8)'?>;vertical-align:middle;}
 .history-table tr:last-child td{border-bottom:none;}
-.expiry-bar-wrap{background:rgba(255,255,255,.1);border-radius:100px;height:6px;margin-top:10px;overflow:hidden;}
+.expiry-bar-wrap{background:<?=$is_lmS?'rgba(0,0,0,.08)':'rgba(255,255,255,.1)'?>;border-radius:100px;height:6px;margin-top:10px;overflow:hidden;}
 .expiry-bar{height:100%;border-radius:100px;}
-.divider{display:flex;align-items:center;gap:12px;color:rgba(255,255,255,.25);font-size:.75rem;font-weight:600;margin:18px 0;}
-.divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08);}
+.divider{display:flex;align-items:center;gap:12px;color:<?=$is_lmS?'rgba(0,0,0,.25)':'rgba(255,255,255,.25)'?>;font-size:.75rem;font-weight:600;margin:18px 0;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:<?=$is_lmS?'rgba(0,0,0,.08)':'rgba(255,255,255,.08)'?>;}
 @media(max-width:768px){
   .sidebar{transform:translateX(-100%);transition:transform .3s ease;box-shadow:none;}
   .sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.15);}
@@ -708,27 +708,27 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <div class="card">
       <div class="card-label">Pending Renewal Request</div>
       <div class="pending-box">
-        <p style="color:#93c5fd;font-size:.86rem;font-weight:600;margin-bottom:12px;">
+        <p style="color:<?=$is_lmS?'#1d4ed8':'#93c5fd'?>;font-size:.86rem;font-weight:600;margin-bottom:12px;">
           📋 Your renewal request has been submitted and is under review.
         </p>
-        <p style="color:rgba(255,255,255,.5);font-size:.8rem;margin-bottom:14px;">
+        <p style="color:<?=$is_lmS?'rgba(0,0,0,.5)':'rgba(255,255,255,.5)'?>;font-size:.8rem;margin-bottom:14px;">
           Our admin will verify your payment and activate your subscription within 24 hours.
           You'll receive an email once approved.
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.8rem;">
-          <div><span style="color:rgba(255,255,255,.4);">Plan:</span> <strong><?= htmlspecialchars($pending_renewal['plan']) ?></strong></div>
-          <div><span style="color:rgba(255,255,255,.4);">Billing:</span> <strong><?= ucfirst($pending_renewal['billing_cycle']) ?></strong></div>
+          <div><span style="color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">Plan:</span> <strong><?= htmlspecialchars($pending_renewal['plan']) ?></strong></div>
+          <div><span style="color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">Billing:</span> <strong><?= ucfirst($pending_renewal['billing_cycle']) ?></strong></div>
           <div>
-            <span style="color:rgba(255,255,255,.4);">Payment:</span>
+            <span style="color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">Payment:</span>
             <strong><?= htmlspecialchars($pending_renewal['payment_method']) ?></strong>
             <?php if (str_starts_with($pending_renewal['payment_method'], 'PayMongo')): ?>
             <span class="paymongo-badge" style="margin-left:6px;">⚡ PayMongo</span>
             <?php endif; ?>
           </div>
-          <div><span style="color:rgba(255,255,255,.4);">Ref #:</span> <strong><?= htmlspecialchars($pending_renewal['payment_reference'] ?: '—') ?></strong></div>
-          <div><span style="color:rgba(255,255,255,.4);">Submitted:</span> <strong><?= date('M d, Y h:i A', strtotime($pending_renewal['requested_at'])) ?></strong></div>
+          <div><span style="color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">Ref #:</span> <strong><?= htmlspecialchars($pending_renewal['payment_reference'] ?: '—') ?></strong></div>
+          <div><span style="color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">Submitted:</span> <strong><?= date('M d, Y h:i A', strtotime($pending_renewal['requested_at'])) ?></strong></div>
           <?php if ($pending_renewal['amount'] > 0): ?>
-          <div><span style="color:rgba(255,255,255,.4);">Amount:</span> <strong>₱<?= number_format($pending_renewal['amount'], 2) ?></strong></div>
+          <div><span style="color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">Amount:</span> <strong>₱<?= number_format($pending_renewal['amount'], 2) ?></strong></div>
           <?php endif; ?>
         </div>
       </div>
@@ -766,9 +766,9 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         ✅ <strong>Secure payment powered by PayMongo.</strong> Pay instantly via GCash, Maya, Credit/Debit Card, or Online Banking.
         Your renewal request will be recorded automatically after payment.
       </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
-        <p style="font-size:.76rem;color:rgba(255,255,255,.4);line-height:1.8;margin:0;">
-          🔒 <strong style="color:rgba(255,255,255,.6);">Accepted:</strong> GCash, Maya (PayMaya), Credit Card, Debit Card, Online Banking (BPI &amp; more)<br>
+      <div style="background:<?=$is_lmS?'#f8fafc':'rgba(255,255,255,.03)'?>;border:1px solid <?=$is_lmS?'#e4e6eb':'rgba(255,255,255,.07)'?>;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+        <p style="font-size:.76rem;color:<?=$is_lmS?'rgba(0,0,0,.5)':'rgba(255,255,255,.4)'?>;line-height:1.8;margin:0;">
+          🔒 <strong style="color:<?=$is_lmS?'rgba(0,0,0,.7)':'rgba(255,255,255,.6)'?>;">Accepted:</strong> GCash, Maya (PayMaya), Credit Card, Debit Card, Online Banking (BPI &amp; more)<br>
           After payment, our admin will approve your renewal within 24 hours.
         </p>
       </div>
@@ -786,8 +786,8 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 
     <!-- ── Upgrade Plan ───────────────────────────────────────── -->
     <?php if (!empty($upgrade_targets) && !$pending_renewal): ?>
-    <div class="card" style="border-color:rgba(139,92,246,.25);background:rgba(139,92,246,.05);">
-      <div class="card-label" style="color:rgba(196,181,253,.8);">
+    <div class="card" style="border-color:<?=$is_lmS?'rgba(139,92,246,.3)':'rgba(139,92,246,.25)'?>;background:<?=$is_lmS?'rgba(139,92,246,.04)':'rgba(139,92,246,.05)'?>;">
+      <div class="card-label" style="color:<?=$is_lmS?'#6d28d9':'rgba(196,181,253,.8)'?>;">
         <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">rocket_launch</span>
         Upgrade Your Plan
       </div>
@@ -812,20 +812,20 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
         foreach ($upgrade_targets as $target):
           $pd = $plan_details[$target];
         ?>
-        <div style="background:rgba(255,255,255,.04);border:1.5px solid color-mix(in srgb,<?= $pd['color'] ?> 35%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
+        <div style="background:<?=$is_lmS?'rgba(0,0,0,.02)':'rgba(255,255,255,.04)'?>;border:1.5px solid color-mix(in srgb,<?= $pd['color'] ?> 35%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
           <div style="position:absolute;top:-20px;right:-20px;opacity:.06;">
             <span class="material-symbols-outlined" style="font-size:100px;color:<?= $pd['color'] ?>"><?= $pd['icon'] ?></span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <span class="material-symbols-outlined" style="font-size:18px;color:<?= $pd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $pd['icon'] ?></span>
-            <span style="font-size:.9rem;font-weight:800;color:#fff;"><?= $target ?></span>
+            <span style="font-size:.9rem;font-weight:800;color:<?=$is_lmS?'#1c1e21':'#fff'?>;"><?= $target ?></span>
           </div>
           <div style="margin-bottom:12px;">
-            <span style="font-size:1.4rem;font-weight:800;color:#fff;">₱<?= number_format($pd['price_monthly']) ?></span>
-            <span style="font-size:.72rem;color:rgba(255,255,255,.4);">/month</span>
+            <span style="font-size:1.4rem;font-weight:800;color:<?=$is_lmS?'#1c1e21':'#fff'?>;">₱<?= number_format($pd['price_monthly']) ?></span>
+            <span style="font-size:.72rem;color:<?=$is_lmS?'rgba(0,0,0,.4)':'rgba(255,255,255,.4)'?>;">/month</span>
           </div>
           <?php foreach ($pd['perks'] as $perk): ?>
-          <div style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:rgba(255,255,255,.6);margin-bottom:5px;">
+          <div style="display:flex;align-items:center;gap:7px;font-size:.78rem;color:<?=$is_lmS?'rgba(0,0,0,.6)':'rgba(255,255,255,.6)'?>;margin-bottom:5px;">
             <span class="material-symbols-outlined" style="font-size:14px;color:<?= $pd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">check_circle</span>
             <?= htmlspecialchars($perk) ?>
           </div>
@@ -870,17 +870,17 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       </div>
 
       <!-- Amount Due Preview -->
-      <div id="upgrade-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+      <div id="upgrade-amount-box" style="display:none;background:<?=$is_lmS?'#f8fafc':'rgba(255,255,255,.04)'?>;border:1px solid <?=$is_lmS?'#e4e6eb':'rgba(255,255,255,.1)'?>;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:<?=$is_lmS?'rgba(0,0,0,.4)':'rgba(255,255,255,.35)'?>;margin-bottom:8px;">Payment Summary</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
-          <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
-          <div style="color:#fff;font-weight:700;text-align:right;" id="upg-new-price">—</div>
+          <div style="color:<?=$is_lmS?'rgba(0,0,0,.5)':'rgba(255,255,255,.45)'?>;">New Plan Price:</div>
+          <div style="color:<?=$is_lmS?'#1c1e21':'#fff'?>;font-weight:700;text-align:right;" id="upg-new-price">—</div>
           <?php if ($proration_preview > 0): ?>
-          <div style="color:rgba(255,255,255,.45);">Proration Credit:</div>
+          <div style="color:<?=$is_lmS?'rgba(0,0,0,.5)':'rgba(255,255,255,.45)'?>;">Proration Credit:</div>
           <div style="color:#6ee7b7;font-weight:700;text-align:right;" id="upg-credit">— ₱<?= number_format($proration_preview, 2) ?></div>
           <?php endif; ?>
-          <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
-          <div style="font-size:1.05rem;font-weight:800;color:#a78bfa;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="upg-total">—</div>
+          <div style="color:<?=$is_lmS?'rgba(0,0,0,.7)':'rgba(255,255,255,.7)'?>;font-weight:700;border-top:1px solid <?=$is_lmS?'rgba(0,0,0,.08)':'rgba(255,255,255,.08)'?>;padding-top:6px;margin-top:2px;">Amount Due:</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#a78bfa;text-align:right;border-top:1px solid <?=$is_lmS?'rgba(0,0,0,.08)':'rgba(255,255,255,.08)'?>;padding-top:6px;margin-top:2px;" id="upg-total">—</div>
         </div>
       </div>
 
@@ -902,15 +902,15 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <?php elseif ($plan === 'Enterprise'): ?>
     <div class="card" style="text-align:center;padding:28px;">
       <span class="material-symbols-outlined" style="font-size:40px;color:#a78bfa;display:block;margin-bottom:10px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">diamond</span>
-      <div style="font-size:.9rem;font-weight:700;color:#fff;margin-bottom:4px;">You're on the Enterprise Plan</div>
-      <div style="font-size:.78rem;color:rgba(255,255,255,.4);">You already have access to all features. No upgrades available.</div>
+      <div style="font-size:.9rem;font-weight:700;color:<?=$is_lmS?'#1c1e21':'#fff'?>;margin-bottom:4px;">You're on the Enterprise Plan</div>
+      <div style="font-size:.78rem;color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;">You already have access to all features. No upgrades available.</div>
     </div>
     <?php endif; ?>
 
     <!-- ── Downgrade Plan ──────────────────────────────────────── -->
     <?php if (!empty($downgrade_targets) && !$pending_renewal): ?>
-    <div class="card" style="border-color:rgba(100,116,139,.25);background:rgba(100,116,139,.05);">
-      <div class="card-label" style="color:rgba(148,163,184,.8);">
+    <div class="card" style="border-color:<?=$is_lmS?'rgba(100,116,139,.3)':'rgba(100,116,139,.25)'?>;background:<?=$is_lmS?'rgba(100,116,139,.04)':'rgba(100,116,139,.05)'?>;">
+      <div class="card-label" style="color:<?=$is_lmS?'#475569':'rgba(148,163,184,.8)'?>;">
         <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">arrow_downward</span>
         Downgrade Plan
       </div>
@@ -919,17 +919,17 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <!-- State 1: Too early (>7 days left) — locked -->
       <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:22px;text-align:center;">
         <span class="material-symbols-outlined" style="font-size:36px;color:#fcd34d;display:block;margin-bottom:10px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">lock_clock</span>
-        <div style="font-size:.95rem;font-weight:800;color:#fcd34d;margin-bottom:8px;">Downgrade Available Soon</div>
-        <div style="font-size:.82rem;color:rgba(255,255,255,.6);line-height:1.8;margin-bottom:14px;">
-          You can schedule a downgrade within the last <strong style="color:#fff;">7 days</strong> of your subscription.<br>
-          Your <strong style="color:#fff;"><?= htmlspecialchars($plan) ?></strong> plan is still active for <strong style="color:#fcd34d;"><?= $days_left ?> more day(s)</strong>.<br>
+        <div style="font-size:.95rem;font-weight:800;color:#d97706;margin-bottom:8px;">Downgrade Available Soon</div>
+        <div style="font-size:.82rem;color:<?=$is_lmS?'rgba(0,0,0,.6)':'rgba(255,255,255,.6)'?>;line-height:1.8;margin-bottom:14px;">
+          You can schedule a downgrade within the last <strong style="color:<?=$is_lmS?'#1c1e21':'#fff'?>;">7 days</strong> of your subscription.<br>
+          Your <strong style="color:<?=$is_lmS?'#1c1e21':'#fff'?>;"><?= htmlspecialchars($plan) ?></strong> plan is still active for <strong style="color:#d97706;"><?= $days_left ?> more day(s)</strong>.<br>
           Come back when you have 7 or fewer days remaining.
         </div>
         <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:10px 20px;">
           <span class="material-symbols-outlined" style="font-size:18px;color:#fcd34d;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">calendar_month</span>
           <div style="text-align:left;">
-            <div style="font-size:.7rem;color:rgba(255,255,255,.4);font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Downgrade Available From</div>
-            <div style="font-size:.9rem;font-weight:800;color:#fff;"><?= date('F d, Y', strtotime($sub_end . ' -7 days')) ?></div>
+            <div style="font-size:.7rem;color:<?=$is_lmS?'rgba(0,0,0,.5)':'rgba(255,255,255,.4)'?>;font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Downgrade Available From</div>
+            <div style="font-size:.9rem;font-weight:800;color:<?=$is_lmS?'#92400e':'#fff'?>;"><?= date('F d, Y', strtotime($sub_end . ' -7 days')) ?></div>
           </div>
         </div>
       </div>
@@ -980,13 +980,13 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
           $dpd = $downgrade_plan_details[$dtarget] ?? null;
           if (!$dpd) continue;
         ?>
-        <div style="background:rgba(255,255,255,.03);border:1.5px solid color-mix(in srgb,<?= $dpd['color'] ?> 25%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
+        <div style="background:<?=$is_lmS?'rgba(0,0,0,.02)':'rgba(255,255,255,.03)'?>;border:1.5px solid color-mix(in srgb,<?= $dpd['color'] ?> 25%,transparent);border-radius:14px;padding:18px;position:relative;overflow:hidden;">
           <div style="position:absolute;top:-20px;right:-20px;opacity:.05;">
             <span class="material-symbols-outlined" style="font-size:100px;color:<?= $dpd['color'] ?>"><?= $dpd['icon'] ?></span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
             <span class="material-symbols-outlined" style="font-size:18px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;"><?= $dpd['icon'] ?></span>
-            <span style="font-size:.9rem;font-weight:800;color:#fff;"><?= $dtarget ?></span>
+            <span style="font-size:.9rem;font-weight:800;color:<?=$is_lmS?'#1c1e21':'#fff'?>;"><?= $dtarget ?></span>
             <?php if ($dpd['price_monthly'] === 0): ?>
             <span style="font-size:.65rem;font-weight:700;background:rgba(100,116,139,.2);color:#94a3b8;padding:2px 8px;border-radius:100px;">Free</span>
             <?php else: ?>
@@ -994,18 +994,18 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
             <?php endif; ?>
           </div>
           <div style="margin-bottom:8px;">
-            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.3);margin-bottom:4px;">Keeps</div>
+            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:<?=$is_lmS?'rgba(0,0,0,.35)':'rgba(255,255,255,.3)'?>;margin-bottom:4px;">Keeps</div>
             <?php foreach ($dpd['perks'] as $perk): ?>
-            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.55);margin-bottom:3px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:<?=$is_lmS?'rgba(0,0,0,.6)':'rgba(255,255,255,.55)'?>;margin-bottom:3px;">
               <span class="material-symbols-outlined" style="font-size:13px;color:<?= $dpd['color'] ?>;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">check_circle</span>
               <?= htmlspecialchars($perk) ?>
             </div>
             <?php endforeach; ?>
           </div>
           <div>
-            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(239,68,68,.4);margin-bottom:4px;">Loses</div>
+            <div style="font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:<?=$is_lmS?'rgba(239,68,68,.5)':'rgba(239,68,68,.4)'?>;margin-bottom:4px;">Loses</div>
             <?php foreach ($dpd['loses'] as $lose): ?>
-            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:rgba(255,255,255,.3);margin-bottom:3px;text-decoration:line-through;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:.76rem;color:<?=$is_lmS?'rgba(0,0,0,.35)':'rgba(255,255,255,.3)'?>;margin-bottom:3px;text-decoration:line-through;">
               <span class="material-symbols-outlined" style="font-size:13px;color:rgba(239,68,68,.4);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;flex-shrink:0;">cancel</span>
               <?= htmlspecialchars($lose) ?>
             </div>
@@ -1039,15 +1039,15 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       </div>
 
       <!-- Amount due preview -->
-      <div id="dg-amount-box" style="display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.35);margin-bottom:8px;">Payment Summary</div>
+      <div id="dg-amount-box" style="display:none;background:<?=$is_lmS?'#f8fafc':'rgba(255,255,255,.04)'?>;border:1px solid <?=$is_lmS?'#e4e6eb':'rgba(255,255,255,.08)'?>;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:<?=$is_lmS?'rgba(0,0,0,.4)':'rgba(255,255,255,.35)'?>;margin-bottom:8px;">Payment Summary</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem;">
-          <div style="color:rgba(255,255,255,.45);">New Plan Price:</div>
-          <div style="color:#fff;font-weight:700;text-align:right;" id="dg-new-price">—</div>
-          <div style="color:rgba(255,255,255,.7);font-weight:700;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;">Amount Due:</div>
-          <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px;" id="dg-total">—</div>
+          <div style="color:<?=$is_lmS?'rgba(0,0,0,.5)':'rgba(255,255,255,.45)'?>;">New Plan Price:</div>
+          <div style="color:<?=$is_lmS?'#1c1e21':'#fff'?>;font-weight:700;text-align:right;" id="dg-new-price">—</div>
+          <div style="color:<?=$is_lmS?'rgba(0,0,0,.7)':'rgba(255,255,255,.7)'?>;font-weight:700;border-top:1px solid <?=$is_lmS?'rgba(0,0,0,.08)':'rgba(255,255,255,.08)'?>;padding-top:6px;margin-top:2px;">Amount Due:</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#94a3b8;text-align:right;border-top:1px solid <?=$is_lmS?'rgba(0,0,0,.08)':'rgba(255,255,255,.08)'?>;padding-top:6px;margin-top:2px;" id="dg-total">—</div>
         </div>
-        <div style="font-size:.72rem;color:rgba(255,255,255,.25);margin-top:8px;line-height:1.5;">
+        <div style="font-size:.72rem;color:<?=$is_lmS?'rgba(0,0,0,.4)':'rgba(255,255,255,.25)'?>;margin-top:8px;line-height:1.5;">
           <?php if ($dg_is_scheduled && $dg_sub_end_fmt): ?>
           📅 Scheduled: This activates the new plan <strong>after</strong> your current subscription ends on <?= $dg_sub_end_fmt ?>.
           <?php endif; ?>
@@ -1089,7 +1089,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
           <input type="hidden" name="billing_cycle"  id="dg_free_cycle" value="monthly"/>
           <input type="hidden" name="payment_method" value="N/A (Free Plan)"/>
           <div class="form-group">
-            <label class="flabel">Notes <span style="color:rgba(255,255,255,.25);font-weight:400;">(optional)</span></label>
+            <label class="flabel">Notes <span style="color:<?=$is_lmS?'rgba(0,0,0,.3)':'rgba(255,255,255,.25)'?>;font-weight:400;">(optional)</span></label>
             <textarea name="notes" class="finput" rows="2" style="height:auto;resize:vertical;" placeholder="Any notes for the admin..."></textarea>
           </div>
           <button type="submit" class="btn" style="background:rgba(100,116,139,.4);border:1px solid rgba(100,116,139,.5);color:#cbd5e1;width:100%;justify-content:center;font-size:.92rem;padding:14px;"
@@ -1121,7 +1121,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
               $is_dg    = !$is_upg && str_contains($r['notes'] ?? '', 'PLAN DOWNGRADE');
             ?>
             <tr>
-              <td style="font-size:.76rem;color:rgba(255,255,255,.4);"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
+              <td style="font-size:.76rem;color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.4)'?>;"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
               <td>
                 <?php if ($is_upg): ?>
                 <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(139,92,246,.2);color:#c4b5fd;">Upgrade</span>
@@ -1134,7 +1134,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
               <td>
                 <?= htmlspecialchars($r['plan']) ?>
                 <?php if ($is_upg && !empty($r['upgrade_from'])): ?>
-                <span style="font-size:.65rem;color:rgba(255,255,255,.3);"> (from <?= htmlspecialchars($r['upgrade_from']) ?>)</span>
+                <span style="font-size:.65rem;color:<?=$is_lmS?'rgba(0,0,0,.35)':'rgba(255,255,255,.3)'?>;"> (from <?= htmlspecialchars($r['upgrade_from']) ?>)</span>
                 <?php endif; ?>
               </td>
               <td><?= ucfirst($r['billing_cycle']) ?></td>
@@ -1149,7 +1149,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
                 <?php endif; ?>
               </td>
               <td><span class="badge" style="color:<?= $rc_color ?>;background:<?= $rc_bg ?>;"><?= ucfirst($r['status']) ?></span></td>
-              <td style="font-size:.76rem;color:rgba(255,255,255,.5);"><?= $r['new_subscription_end'] ? date('M d, Y', strtotime($r['new_subscription_end'])) : '—' ?></td>
+              <td style="font-size:.76rem;color:<?=$is_lmS?'rgba(0,0,0,.45)':'rgba(255,255,255,.5)'?>;"><?= $r['new_subscription_end'] ? date('M d, Y', strtotime($r['new_subscription_end'])) : '—' ?></td>
             </tr>
             <?php endforeach; ?>
           </tbody>
