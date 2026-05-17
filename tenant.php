@@ -652,6 +652,12 @@ tr:hover td{background:rgba(255,255,255,.04);}
 .finput{width:100%;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:9px 13px;font-family:inherit;font-size:.84rem;color:#f0f2f5;outline:none;background:rgba(255,255,255,.06);transition:border .2s;}
 .finput:focus{border-color:var(--t-primary,#2563eb);box-shadow:0 0 0 3px color-mix(in srgb,var(--t-primary,#2563eb) 15%,transparent);background:rgba(255,255,255,.09);}
 .finput::placeholder{color:rgba(255,255,255,.25);}
+/* Light-bg card inputs (branding/settings cards with white/gray bg) */
+.finput-light{color:#1c1e21;background:#ffffff;border-color:#d1d5db;}
+.finput-light:focus{border-color:var(--t-primary,#2563eb);box-shadow:0 0 0 3px color-mix(in srgb,var(--t-primary,#2563eb) 15%,transparent);background:#ffffff;}
+.finput-light::placeholder{color:#9ca3af;}
+.finput-light option{background:#ffffff;color:#1c1e21;}
+.flabel-light{color:#374151 !important;}
 
 /* ── THEME SETTINGS ── */
 .theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
@@ -1429,14 +1435,14 @@ tr:hover td{background:rgba(255,255,255,.04);}
 
               <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
               <div style="font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
-              <div style="font-size:.72rem;color:#9ca3af;margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
+              <div style="font-size:.72rem;color:#6b7280;margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
               <div style="margin-bottom:10px;">
-                <label class="flabel">Main Heading (line 1)</label>
-                <input type="text" name="hero_title" class="finput" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
+                <label class="flabel flabel-light">Main Heading (line 1)</label>
+                <input type="text" name="hero_title" class="finput finput-light" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
               </div>
               <div>
-                <label class="flabel">Accent Word (line 2 — shown in color)</label>
-                <input type="text" name="hero_subtitle" class="finput" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
+                <label class="flabel flabel-light">Accent Word (line 2 — shown in color)</label>
+                <input type="text" name="hero_subtitle" class="finput finput-light" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
               </div>
             </div>
             <div>
@@ -1930,13 +1936,14 @@ function updatePreview() {
     // Update text colors in sidebar
     const isDarkSb = dark;
     sidebar.querySelectorAll('.sb-name,.sb-uname').forEach(el => el.style.color = isDarkSb ? '#fff' : '#1c1e21');
-    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = 'rgba(0,0,0,.5)');
-    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => el.style.color = '#000000');
+    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = isDarkSb ? 'rgba(255,255,255,.38)' : 'rgba(0,0,0,.5)');
+    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => { el.style.color = isDarkSb ? 'rgba(255,255,255,.5)' : '#000000'; });
     sidebar.querySelectorAll('.sb-item.active').forEach(el => {
-      el.style.color = '#000000';
-      el.style.background = 'rgba(0,0,0,.12)';
+      el.style.color = isDarkSb ? '#ffffff' : '#000000';
+      el.style.background = isDarkSb ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.12)';
       el.style.fontWeight = '700';
     });
+    sidebar.querySelectorAll('.sb-logout').forEach(el => { el.style.color = isDarkSb ? 'rgba(255,255,255,.38)' : '#000000'; });
   }
 }
 
