@@ -451,17 +451,13 @@ body:not([data-theme="dark"]) .sale-price, body:not([data-theme="dark"]) .sale-p
 body:not([data-theme="dark"]) .cat-pill { color: rgba(15,17,23,0.70) !important; background: rgba(0,0,0,0.06) !important; border-color: rgba(0,0,0,0.10) !important; }
 [data-theme="dark"]  .cat-pill, .has-bg-img .cat-pill { color: rgba(240,242,247,0.75) !important; background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.14) !important; }
 
-/* Nav */
-body:not([data-theme="dark"]) .nav-name       { color: #0f1117 !important; }
-[data-theme="dark"]  .nav-name, .has-bg-img .nav-name { color: #ffffff !important; }
-body:not([data-theme="dark"]) .nav-link       { color: rgba(15,17,23,0.65) !important; }
-[data-theme="dark"]  .nav-link, .has-bg-img .nav-link { color: rgba(255,255,255,0.65) !important; }
-[data-theme="dark"]  nav, .has-bg-img nav     { background: rgba(8,9,12,0.80) !important; }
-[data-theme="dark"]  .nav-link:hover, .has-bg-img .nav-link:hover { color: #fff !important; background: rgba(255,255,255,.09); }
-
-/* Dark mode toggle button */
-[data-theme="dark"]  .dm-toggle, .has-bg-img .dm-toggle { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.15); color: rgba(255,255,255,.72); }
-[data-theme="dark"]  .dm-toggle:hover, .has-bg-img .dm-toggle:hover { background: rgba(255,255,255,.18); color: #fff; }
+/* Nav — always dark background, always white text */
+nav { background: rgba(8,9,12,0.82) !important; backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important; }
+.nav-name { color: #ffffff !important; }
+.nav-link  { color: rgba(255,255,255,0.68) !important; }
+.nav-link:hover { color: #fff !important; background: rgba(255,255,255,.09) !important; }
+.dm-toggle { background: rgba(255,255,255,.10) !important; border-color: rgba(255,255,255,.15) !important; color: rgba(255,255,255,.75) !important; }
+.dm-toggle:hover { background: rgba(255,255,255,.18) !important; color: #fff !important; }
 
 /* Footer */
 body:not([data-theme="dark"]) .footer-name    { color: rgba(15,17,23,0.75) !important; }
