@@ -135,6 +135,32 @@ function renderThemeCSS(array $theme): string {
     .sb-status { background: rgba(16,185,129,.2) !important; color: #6ee7b7 !important; }";
     }
 
+    // ── Light/dark mode detection based on sidebar color ─────────
+    $isLightMode = !$isDarkSidebar; // light sidebar = light page
+
+    $cardBg       = $isLightMode
+        ? '#ffffff'
+        : "color-mix(in srgb, {$p} 8%, rgba(255,255,255,.06))";
+    $cardBorder   = $isLightMode
+        ? '#e4e6eb'
+        : "color-mix(in srgb, {$p} 25%, rgba(255,255,255,.1))";
+    $bodyBg       = $isLightMode ? '#f1f5f9' : $pageBg;
+    $bodyText     = $isLightMode ? '#1c1e21' : '#f0f2f5';
+    $bodyTextMid  = $isLightMode ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.5)';
+    $bgOverlay    = $isLightMode
+        ? 'linear-gradient(135deg,rgba(241,245,249,.97) 0%,rgba(226,232,240,.92) 60%,rgba(196,213,235,.3) 100%)'
+        : 'linear-gradient(135deg,rgba(15,23,42,.95) 0%,rgba(15,23,42,.75) 60%,rgba(30,58,138,.15) 100%)';
+    $bgImgOpacity = $isLightMode ? '.06' : '.18';
+    $tdColor      = $isLightMode ? '#1c1e21' : 'rgba(255,255,255,.8)';
+    $thColor      = $isLightMode ? 'rgba(0,0,0,.4)' : 'rgba(255,255,255,.35)';
+    $thBorder     = $isLightMode ? '#e4e6eb' : 'rgba(255,255,255,.08)';
+    $tdBorder     = $isLightMode ? '#f0f2f5' : 'rgba(255,255,255,.05)';
+    $trHover      = $isLightMode ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.04)';
+    $cardTitleColor = $isLightMode ? '#6b7280' : 'rgba(255,255,255,.35)';
+    $statValue    = $isLightMode ? '#1c1e21' : '#ffffff';
+    $statLabel    = $isLightMode ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.45)';
+    $emptyColor   = $isLightMode ? '#9ca3af' : '#8a8d91';
+
     return "
     <style id='tenant-theme'>
     :root {
@@ -256,11 +282,36 @@ function renderThemeCSS(array $theme): string {
         background: linear-gradient(135deg, var(--t-secondary), var(--t-primary)) !important;
     }
 
-    /* ── Cards & stat cards — dark glass tinted by primary ── */
+    /* ── Cards & stat cards — light or dark based on sidebar color ── */
     .card, .stat-card, .glass-card {
-        background: color-mix(in srgb, var(--t-primary) 8%, rgba(255,255,255,.06)) !important;
-        border-color: color-mix(in srgb, var(--t-primary) 25%, rgba(255,255,255,.1)) !important;
+        background: {$cardBg} !important;
+        border-color: {$cardBorder} !important;
     }
+
+    /* ── Page body background ── */
+    body { background: {$bodyBg} !important; color: {$bodyText} !important; }
+
+    /* ── BG overlay — lighter wash in light mode ── */
+    .bg-overlay { background: {$bgOverlay} !important; }
+    .bg-scene img { opacity: {$bgImgOpacity} !important; }
+
+    /* ── Table text — readable on light/dark bg ── */
+    td { color: {$tdColor} !important; }
+    th { color: {$thColor} !important; border-bottom-color: {$thBorder} !important; }
+    td { border-bottom-color: {$tdBorder} !important; }
+    tr:hover td { background: {$trHover} !important; }
+
+    /* ── Page header text ── */
+    .page-hdr h2 { color: {$bodyText} !important; }
+    .page-hdr p { color: {$bodyTextMid} !important; }
+    .card-title { color: {$cardTitleColor} !important; }
+
+    /* ── Stat values ── */
+    .stat-value { color: {$statValue} !important; }
+    .stat-label { color: {$statLabel} !important; }
+
+    /* ── Empty state ── */
+    .empty-state { color: {$emptyColor} !important; }
 
     {$sidebarCSS}
     </style>";
