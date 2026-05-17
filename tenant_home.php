@@ -1965,17 +1965,58 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
 <?php endif; ?>
 <section style="padding-top: 0;">
   <div class="cta-banner">
-    <h2 class="cta-banner-title">Ready to Pawn or Redeem?</h2>
-    <p class="cta-banner-sub">
-      Visit us in-branch or sign in to manage your transactions.
-    </p>
-    <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;position:relative;z-index:1;">
-      <a href="<?= htmlspecialchars($login_url) ?>" class="btn-hero-primary" style="display:inline-flex;">
-        <span class="material-symbols-outlined">login</span>Sign In
-      </a>
-      <a href="<?= htmlspecialchars($register_url) ?>" class="btn-hero-secondary" style="display:inline-flex;color:rgba(255,255,255,.8);background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);">
-        <span class="material-symbols-outlined">person_add</span>Join Our Team
-      </a>
+    <!-- Decorative blobs -->
+    <div style="position:absolute;top:-60px;left:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%);pointer-events:none;"></div>
+    <div style="position:absolute;bottom:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.06),transparent 70%);pointer-events:none;"></div>
+
+    <div style="position:relative;z-index:1;">
+      <!-- Badge -->
+      <div style="display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.7);background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);padding:5px 14px;border-radius:100px;margin-bottom:18px;">
+        <span class="material-symbols-outlined" style="font-size:12px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">storefront</span>
+        <?= htmlspecialchars($biz_name) ?>
+      </div>
+
+      <h2 class="cta-banner-title">Ready to Pawn or Redeem?</h2>
+      <p class="cta-banner-sub" style="max-width:520px;margin-left:auto;margin-right:auto;">
+        Get instant cash for your valuables, redeem your pawned items, or browse our pre-owned shop — all in one place.
+      </p>
+
+      <!-- 3 CTA buttons -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
+        <!-- Primary: Pawn / Browse Items -->
+        <a href="#shop" style="display:inline-flex;align-items:center;gap:9px;background:rgba(255,255,255,1);color:var(--primary);text-decoration:none;padding:13px 24px;border-radius:14px;font-weight:800;font-size:.95rem;box-shadow:0 4px 20px rgba(0,0,0,.2);transition:all .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 28px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow='0 4px 20px rgba(0,0,0,.2)'">
+          <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">shopping_bag</span>
+          Browse Items
+        </a>
+        <!-- Secondary: Sign In to manage transactions -->
+        <a href="<?= htmlspecialchars($login_url) ?>" style="display:inline-flex;align-items:center;gap:9px;background:rgba(255,255,255,.15);color:#fff;text-decoration:none;padding:13px 24px;border-radius:14px;font-weight:700;font-size:.95rem;border:1.5px solid rgba(255,255,255,.30);transition:all .2s;" onmouseover="this.style.background='rgba(255,255,255,.22)';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(255,255,255,.15)';this.style.transform=''">
+          <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">login</span>
+          Sign In
+        </a>
+        <!-- Tertiary: Visit Us -->
+        <a href="#info" style="display:inline-flex;align-items:center;gap:9px;background:transparent;color:rgba(255,255,255,.75);text-decoration:none;padding:13px 22px;border-radius:14px;font-weight:700;font-size:.95rem;border:1.5px solid rgba(255,255,255,.18);transition:all .2s;" onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#fff';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,.75)';this.style.transform=''">
+          <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
+          Visit Our Branch
+        </a>
+      </div>
+
+      <!-- Branch info hint -->
+      <?php if($biz_addr || $biz_phone): ?>
+      <div style="margin-top:22px;display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;">
+        <?php if($biz_addr): ?>
+        <span style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:rgba(255,255,255,.55);">
+          <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
+          <?= htmlspecialchars($biz_addr) ?>
+        </span>
+        <?php endif; ?>
+        <?php if($biz_phone): ?>
+        <span style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:rgba(255,255,255,.55);">
+          <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">phone</span>
+          <?= htmlspecialchars($biz_phone) ?>
+        </span>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
     </div>
   </div>
 </section>
