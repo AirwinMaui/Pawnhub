@@ -1405,11 +1405,11 @@ tr:hover td{background:<?= $td_hover ?>;}
         $avatar_bg  = match($usr['role']) { 'manager'=>'rgba(16,185,129,.4)', 'cashier'=>'rgba(139,92,246,.4)', default=>'rgba(59,130,246,.4)' };
       ?>
       <tr>
-        <td><div style="display:flex;align-items:center;gap:9px;"><div style="width:28px;height:28px;border-radius:50%;background:<?=$avatar_bg?>;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;"><?=strtoupper(substr($usr['fullname'],0,1))?></div><span style="font-weight:600;color:#fff;"><?=htmlspecialchars($usr['fullname'])?></span></div></td>
+        <td><div style="display:flex;align-items:center;gap:9px;"><div style="width:28px;height:28px;border-radius:50%;background:<?=$avatar_bg?>;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;"><?=strtoupper(substr($usr['fullname'],0,1))?></div><span style="font-weight:600;color:<?=$td_color?>;"><?=htmlspecialchars($usr['fullname'])?></span></div></td>
         <td style="font-family:monospace;font-size:.76rem;color:var(--t-primary,#60a5fa);"><?=htmlspecialchars($usr['username'])?></td>
         <td><span class="badge <?=$role_badge?>"><?=ucfirst($usr['role'])?></span></td>
         <td><span class="badge <?=$usr['is_suspended']?'b-red':'b-green'?>"><span class="b-dot"></span><?=$usr['is_suspended']?'Suspended':'Active'?></span></td>
-        <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y',strtotime($usr['created_at']))?></td>
+        <td style="font-size:.72rem;color:<?=$is_light_mode?'#6b7280':'rgba(255,255,255,.35)'?>;"><?=date('M d, Y',strtotime($usr['created_at']))?></td>
         <td><form method="POST" style="display:inline;"><input type="hidden" name="action" value="toggle_user"><input type="hidden" name="user_id" value="<?=$usr['id']?>"><input type="hidden" name="is_suspended" value="<?=$usr['is_suspended']?>"><button type="submit" class="btn-sm <?=$usr['is_suspended']?'btn-success':'btn-danger'?>" style="font-size:.7rem;" onclick="return confirm('<?=$usr['is_suspended']?'Unsuspend':'Suspend'?> this user?')"><?=$usr['is_suspended']?'Unsuspend':'Suspend'?></button></form></td>
       </tr>
       <?php endforeach;?></tbody></table><?php endif;?>
@@ -1427,12 +1427,12 @@ tr:hover td{background:<?= $td_hover ?>;}
         $rbadge = $role_colors[$a['actor_role']??''] ?? 'background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);';
       ?>
       <tr>
-        <td style="font-size:.72rem;color:rgba(255,255,255,.35);white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($a['created_at']))?></td>
-        <td style="font-weight:600;color:#fff;font-size:.78rem;"><?=htmlspecialchars(ucfirst($a['actor_username']??''))?></td>
+        <td style="font-size:.72rem;color:<?=$is_light_mode?'#6b7280':'rgba(255,255,255,.35)'?>;white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($a['created_at']))?></td>
+        <td style="font-weight:600;color:<?=$td_color?>;font-size:.78rem;"><?=htmlspecialchars(ucfirst($a['actor_username']??''))?></td>
         <td><span style="font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:100px;text-transform:uppercase;letter-spacing:.05em;<?=$rbadge?>"><?=$a['actor_role']??''?></span></td>
         <td style="font-family:monospace;font-size:.72rem;color:#fcd34d;"><?=htmlspecialchars($a['action']??'')?></td>
         <td><span class="ticket-tag" style="font-size:.72rem;"><?=htmlspecialchars($a['entity_id']??'—')?></span></td>
-        <td style="font-size:.75rem;color:rgba(255,255,255,.45);max-width:320px;"><?=htmlspecialchars($a['message']??'')?></td>
+        <td style="font-size:.75rem;color:<?=$is_light_mode?'#6b7280':'rgba(255,255,255,.45)'?>;max-width:320px;"><?=htmlspecialchars($a['message']??'')?></td>
       </tr>
       <?php endforeach;?></tbody></table>
       <?php endif;?>
