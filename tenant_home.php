@@ -290,8 +290,8 @@ body:not([data-theme="dark"]) .section-note {
   border-color: color-mix(in srgb, var(--primary) 30%, transparent) !important;
 }
 /* All inline surface-bg divs in content sections — light mode */
-body:not([data-theme="dark"]) #why-us > div > div,
-body:not([data-theme="dark"]) section#info > div > div {
+body:not([data-theme="dark"]) #why-us .section-card,
+body:not([data-theme="dark"]) section#info .info-card {
   background: #ffffff !important;
   border-color: rgba(0,0,0,0.09) !important;
   box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
@@ -312,8 +312,8 @@ body:not([data-theme="dark"]) section#info > div > div {
   background: rgba(18,22,34,0.90) !important;
   border-color: color-mix(in srgb, var(--primary) 40%, transparent) !important;
 }
-[data-theme="dark"] #why-us > div > div,
-[data-theme="dark"] section#info > div > div {
+[data-theme="dark"] #why-us .section-card,
+[data-theme="dark"] section#info .info-card {
   background: rgba(18,22,34,0.90) !important;
   border-color: rgba(255,255,255,0.10) !important;
   box-shadow: 0 2px 20px rgba(0,0,0,0.35) !important;
@@ -336,8 +336,8 @@ body:not([data-theme="dark"]) section#info > div > div {
   background: rgba(10,13,24,0.85) !important;
   border-color: color-mix(in srgb, var(--primary) 45%, transparent) !important;
 }
-.has-bg-img #why-us > div > div,
-.has-bg-img section#info > div > div {
+.has-bg-img #why-us .section-card,
+.has-bg-img section#info .info-card {
   background: rgba(10,13,24,0.87) !important;
   border-color: rgba(255,255,255,0.14) !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.45) !important;
@@ -1903,7 +1903,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:20px;">
 
     <?php if($biz_addr): ?>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;display:flex;flex-direction:column;gap:14px;">
+    <div class="info-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;display:flex;flex-direction:column;gap:14px;">
       <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--primary) 15%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 30%,transparent);display:flex;align-items:center;justify-content:center;">
         <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
       </div>
@@ -1920,7 +1920,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <?php endif; ?>
 
     <?php if($biz_phone): ?>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;display:flex;flex-direction:column;gap:14px;">
+    <div class="info-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;display:flex;flex-direction:column;gap:14px;">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(34,197,94,.12);border:1.5px solid rgba(34,197,94,.28);display:flex;align-items:center;justify-content:center;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">phone</span>
       </div>
@@ -1937,7 +1937,7 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
     <?php endif; ?>
 
     <!-- Branch Hours -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;">
+    <div class="info-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 26px;">
       <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.12);border:1.5px solid rgba(245,158,11,.28);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
         <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">schedule</span>
       </div>
