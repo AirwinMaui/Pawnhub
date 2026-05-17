@@ -687,7 +687,7 @@ body{font-family:'Inter',sans-serif;background:<?=$pg_bg2?>;color:<?=$pg_text2?>
 .content{padding:22px 26px;flex:1;}
 
 .card{background:<?=$card_bg2?>;border:1px solid <?=$card_bdr2?>;border-radius:16px;padding:18px 20px;<?=$is_lm2?'box-shadow:0 1px 4px rgba(0,0,0,.06);':''?>}
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px;}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:20px;}
 .stat-card{background:<?=$card_bg2?>;border:1px solid <?=$card_bdr2?>;border-radius:14px;padding:16px 18px;<?=$is_lm2?'box-shadow:0 1px 4px rgba(0,0,0,.06);':''?>}
 .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
 .stat-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
@@ -1080,12 +1080,13 @@ $notif_count = count($notifs);
         <div class="stat-top"><div class="stat-icon" style="background:rgba(139,92,246,.15);"><span class="material-symbols-outlined" style="color:#c4b5fd;">badge</span></div></div>
         <div class="stat-value"><?=count($my_team)?></div><div class="stat-label">Staff &amp; Cashiers</div>
       </div>
-      <div class="stat-card" style="grid-column:span 2;">
+      <div class="stat-card">
         <div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">storefront</span></div></div>
-        <div style="display:flex;gap:24px;">
-          <div><div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div></div>
-          <div><div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured</div></div>
-        </div>
+        <div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(245,158,11,.15);"><span class="material-symbols-outlined" style="color:#fcd34d;">star</span></div></div>
+        <div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured Items</div>
       </div>
     </div>
 

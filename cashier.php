@@ -64,32 +64,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if (!$tk) {
             $error_msg = 'Ticket not found.';
         } else {
-            $loan_amount    = floatval($tk['loan_amount']);
-            $interest_rate  = floatval($tk['interest_rate']);
+            $loan_amount     = floatval($tk['loan_amount']);
+            $interest_rate   = floatval($tk['interest_rate']);
             $interest_amount = floatval($tk['interest_amount']);
-            $total_redeem   = floatval($tk['total_redeem']);
-            $claim_term     = $tk['claim_term'] ?? '1-15';
+            $total_redeem    = floatval($tk['total_redeem']);
+            $claim_term      = $tk['claim_term'] ?? '1-15';
 
             // Amount due depends on action:
             // Release = full total_redeem (loan + interest)
             // Renew   = interest only
             $amount_due = ($pay_action === 'release') ? $total_redeem : $interest_amount;
-            $change     = max(0, $cash_recv - $amount_due);
 
-            if ($ticket_no && $amount_due > 0 && $cash_recv >= $amount_due) {
+            // Running partial total already paid on this ticket
+            $already_paid  = floatval($tk['partial_paid'] ?? 0);
+            $total_paid    = $already_paid + $cash_recv;
+            $remaining_bal = max(0, $amount_due - $total_paid);
+            $fully_paid    = ($total_paid >= $amount_due);
+            $change        = $fully_paid ? max(0, $total_paid - $amount_due) : 0;
+            $is_partial    = !$fully_paid && $cash_recv > 0;
+
+            if ($ticket_no && $amount_due > 0 && $cash_recv > 0) {
+
+                // Record this cash entry (partial or full)
+                $pay_type = $is_partial ? 'partial' : $pay_action;
                 $pdo->prepare("INSERT INTO payment_transactions (tenant_id,ticket_no,action,or_no,amount_due,cash_received,change_amount,staff_user_id,staff_username,staff_role) VALUES (?,?,?,?,?,?,?,?,?,'cashier')")
-                    ->execute([$tid,$ticket_no,$pay_action,$or_no,$amount_due,$cash_recv,$change,$u['id'],$u['username']]);
+                    ->execute([$tid,$ticket_no,$pay_type,$or_no,$amount_due,$cash_recv,$change,$u['id'],$u['username']]);
 
-                if ($pay_action === 'release') {
-                    // Full redemption — mark as Released
-                    $pdo->prepare("UPDATE pawn_transactions SET status='Released' WHERE ticket_no=? AND tenant_id=?")
+                if ($is_partial) {
+                    // ── Partial payment — accumulate, keep ticket Stored ──
+                    $pdo->prepare("UPDATE pawn_transactions SET partial_paid=COALESCE(partial_paid,0)+? WHERE ticket_no=? AND tenant_id=?")
+                        ->execute([$cash_recv,$ticket_no,$tid]);
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PARTIAL','pawn_transaction',?,?,?,NOW())")
+                        ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Partial payment ₱".number_format($cash_recv,2)." — remaining ₱".number_format($remaining_bal,2),$_SERVER['REMOTE_ADDR']??'::1']);
+                    $success_msg = "Partial payment of ₱".number_format($cash_recv,2)." recorded for ticket $ticket_no. Remaining balance: ₱".number_format($remaining_bal,2).".";
+                    $active_page = 'tickets';
+                } elseif ($pay_action === 'release') {
+                    // ── Full redemption — mark as Released ──
+                    $pdo->prepare("UPDATE pawn_transactions SET status='Released', partial_paid=NULL WHERE ticket_no=? AND tenant_id=?")
                         ->execute([$ticket_no,$tid]);
                     $pdo->prepare("UPDATE item_inventory SET status='redeemed' WHERE ticket_no=? AND tenant_id=?")
                         ->execute([$ticket_no,$tid]);
                     $new_status = 'Released';
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?,NOW())")
+                        ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
+                    require_once __DIR__ . '/session_helper.php';
+                    write_pawn_update($pdo, $tid, $ticket_no, 'REDEEMED',
+                        "Your item has been released/redeemed. Ticket #$ticket_no is now closed. Thank you!");
+                    $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
+                    $active_page = 'tickets';
                 } else {
-                    // Renewal — interest paid, reset maturity date, recalculate total_redeem
-                    // Determine days based on claim_term
+                    // ── Renewal — interest paid, reset maturity date, recalculate total_redeem ──
                     $days_map = ['1-15'=>15,'16-30'=>30,'2m'=>60,'3m'=>90,'4m'=>120];
                     $days = $days_map[$claim_term] ?? 30;
                     $new_maturity = date('Y-m-d', strtotime("+{$days} days"));
@@ -99,6 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                     $pdo->prepare("UPDATE pawn_transactions SET
                         status='Stored',
+                        partial_paid=NULL,
                         maturity_date=?,
                         expiry_date=?,
                         interest_amount=?,
@@ -106,32 +131,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         renewal_count = COALESCE(renewal_count,0) + 1
                         WHERE ticket_no=? AND tenant_id=?")
                         ->execute([$new_maturity,$new_expiry,$new_interest,$new_total,$ticket_no,$tid]);
-                    // Item stays pawned
                     $pdo->prepare("UPDATE item_inventory SET status='pawned' WHERE ticket_no=? AND tenant_id=?")
                         ->execute([$ticket_no,$tid]);
                     $new_status = 'Renewed';
-                }
-
-                $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?,NOW())")
-                    ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
-
-                // ── Notify mobile app ─────────────────────────────
-                require_once __DIR__ . '/session_helper.php';
-                if ($pay_action === 'release') {
-                    write_pawn_update($pdo, $tid, $ticket_no, 'REDEEMED',
-                        "Your item has been released/redeemed. Ticket #$ticket_no is now closed. Thank you!");
-                } else {
+                    $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PROCESS','pawn_transaction',?,?,?,NOW())")
+                        ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Payment: $new_status — ₱".number_format($amount_due,2),$_SERVER['REMOTE_ADDR']??'::1']);
+                    require_once __DIR__ . '/session_helper.php';
                     write_pawn_update($pdo, $tid, $ticket_no, 'RENEWED',
                         "Your pawn ticket #$ticket_no has been renewed. New maturity date: $new_maturity.");
+                    $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
+                    $active_page = 'tickets';
                 }
-                $success_msg = "Payment processed! Ticket $ticket_no marked as $new_status.";
-                $active_page = 'tickets';
             } else {
-                if ($cash_recv < $amount_due) {
-                    $error_msg = 'Cash received is less than amount due.';
-                } else {
-                    $error_msg = 'Please fill all payment fields.';
-                }
+                $error_msg = 'Please fill all payment fields correctly.';
             }
         }
     }
@@ -538,8 +550,13 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
                 data-interest="<?=$t['interest_amount']?>"
                 data-total="<?=$t['total_redeem']?>"
                 data-maturity="<?=$t['maturity_date']?>"
-                data-claim-term="<?=htmlspecialchars($t['claim_term']??'1-15')?>">
-                <?=$t['ticket_no']?> — <?=htmlspecialchars($t['customer_name'])?> (Redeem: ₱<?=number_format($t['total_redeem'],2)?> / Renew: ₱<?=number_format($t['interest_amount'],2)?>)
+                data-claim-term="<?=htmlspecialchars($t['claim_term']??'1-15')?>"
+                data-partial-paid="<?=floatval($t['partial_paid']??0)?>">
+                <?php
+                  $pp = floatval($t['partial_paid'] ?? 0);
+                  $pp_label = $pp > 0 ? ' | Partial paid: ₱'.number_format($pp,2) : '';
+                  echo htmlspecialchars($t['ticket_no']).' — '.htmlspecialchars($t['customer_name']).' (Redeem: ₱'.number_format($t['total_redeem'],2).' / Renew: ₱'.number_format($t['interest_amount'],2).$pp_label.')';
+                ?>
               </option>
               <?php endforeach; ?>
             </select>
@@ -557,12 +574,18 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:.84rem;color:#6ee7b7;font-weight:700;letter-spacing:.04em;" id="or_preview">OR-<?=date('Ymd')?>-<?=str_pad((int)$pdo->query("SELECT COUNT(*) FROM payment_transactions WHERE tenant_id=$tid AND DATE(created_at)=CURDATE()")->fetchColumn()+1,5,'0',STR_PAD_LEFT)?></div>
           </div>
           <div class="fgroup"><label class="flabel">Amount Due (₱) <span style="font-size:.7rem;color:rgba(110,231,183,.7);font-weight:500;">● Auto-computed</span></label><input type="number" name="amount_due" id="p_due" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" readonly style="opacity:.8;cursor:not-allowed;"></div>
-          <div class="fgroup"><label class="flabel">Cash Received (₱) *</label><input type="number" name="cash_received" id="p_cash" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" required></div>
+          <div class="fgroup">
+            <label class="flabel">Cash Received (₱) * <span style="font-size:.7rem;color:rgba(251,191,36,.8);font-weight:500;">● Partial payment allowed</span></label>
+            <input type="number" name="cash_received" id="p_cash" class="finput" placeholder="0.00 (can be less than amount due)" step="0.01" oninput="calcChange()" required>
+          </div>
+          <div id="partial_notice" style="display:none;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:10px 14px;font-size:.79rem;color:#fcd34d;margin-bottom:10px;">
+            ⚠️ <strong>Partial Payment</strong> — ticket stays active. Remaining balance: <span id="p_remaining" style="font-weight:800;">₱0.00</span>
+          </div>
           <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;font-size:.8rem;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
             <span style="color:rgba(110,231,183,.7);">Change:</span>
             <span id="p_change" style="font-weight:800;font-size:.96rem;color:#6ee7b7;">₱0.00</span>
           </div>
-          <button type="submit" class="btn-pay">✓ Process Payment</button>
+          <button type="submit" class="btn-pay" id="btn_pay_submit">✓ Process Payment</button>
         </form>
         <?php endif; ?>
       </div>
@@ -674,15 +697,17 @@ function fillPayment(sel) {
   const o = sel.options[sel.selectedIndex];
   if (!o.value) return;
   // Store data on a global so updateAmountDue can access it
+  const partialPaid = parseFloat(o.dataset.partialPaid) || 0;
   window._ticket = {
-    loan:     parseFloat(o.dataset.loan)     || 0,
-    interest: parseFloat(o.dataset.interest) || 0,
-    total:    parseFloat(o.dataset.total)    || 0,
-    customer: o.dataset.customer || '—',
-    item:     o.dataset.item     || '—',
-    maturity: o.dataset.maturity || '—',
-    claimTerm: o.dataset.claimTerm || '1-15',
-    ticketNo: o.value
+    loan:        parseFloat(o.dataset.loan)     || 0,
+    interest:    parseFloat(o.dataset.interest) || 0,
+    total:       parseFloat(o.dataset.total)    || 0,
+    partialPaid: partialPaid,
+    customer:    o.dataset.customer || '—',
+    item:        o.dataset.item     || '—',
+    maturity:    o.dataset.maturity || '—',
+    claimTerm:   o.dataset.claimTerm || '1-15',
+    ticketNo:    o.value
   };
   document.getElementById('r_ticket').textContent   = window._ticket.ticketNo;
   document.getElementById('r_customer').textContent = window._ticket.customer;
@@ -708,18 +733,22 @@ function updateAmountDue() {
 
   // Show info box
   const info = document.getElementById('action_info');
+  const alreadyPaid = window._ticket.partialPaid || 0;
+  const effectiveDue = due - alreadyPaid;
+  const partialTag = alreadyPaid > 0 ? ' <span style="background:rgba(251,191,36,.2);color:#fcd34d;padding:1px 7px;border-radius:6px;font-size:.75rem;margin-left:4px;">₱'+alreadyPaid.toFixed(2)+' already paid</span>' : '';
   if (isRenew) {
     info.style.display = 'block';
     info.style.background = 'rgba(245,158,11,.08)';
     info.style.border = '1px solid rgba(245,158,11,.2)';
     info.style.color = '#fcd34d';
-    info.innerHTML = '🔄 <strong>Renew:</strong> Customer pays <strong>₱' + window._ticket.interest.toFixed(2) + ' interest only</strong>. Loan of ₱' + window._ticket.loan.toFixed(2) + ' continues. Maturity date will be extended.';
+    info.innerHTML = '🔄 <strong>Renew:</strong> Customer pays <strong>₱' + window._ticket.interest.toFixed(2) + ' interest only</strong>. Loan of ₱' + window._ticket.loan.toFixed(2) + ' continues. Maturity date will be extended.' + partialTag;
   } else {
     info.style.display = 'block';
     info.style.background = 'rgba(16,185,129,.08)';
     info.style.border = '1px solid rgba(16,185,129,.2)';
     info.style.color = '#6ee7b7';
-    info.innerHTML = '✅ <strong>Full Release:</strong> Customer pays <strong>₱' + window._ticket.total.toFixed(2) + ' total</strong> (₱' + window._ticket.loan.toFixed(2) + ' loan + ₱' + window._ticket.interest.toFixed(2) + ' interest). Item will be returned.';
+    const balanceNote = alreadyPaid > 0 ? ' Remaining balance: <strong>₱' + effectiveDue.toFixed(2) + '</strong>.' : '';
+    info.innerHTML = '✅ <strong>Full Release:</strong> Customer pays <strong>₱' + window._ticket.total.toFixed(2) + ' total</strong> (₱' + window._ticket.loan.toFixed(2) + ' loan + ₱' + window._ticket.interest.toFixed(2) + ' interest). Item will be returned.' + partialTag + balanceNote;
   }
   calcChange();
 }
@@ -727,10 +756,28 @@ function updateAmountDue() {
 function calcChange() {
   const due  = parseFloat(document.getElementById('p_due')?.value)  || 0;
   const cash = parseFloat(document.getElementById('p_cash')?.value) || 0;
-  const ch   = Math.max(0, cash - due);
-  document.getElementById('p_change').textContent  = '₱' + ch.toFixed(2);
-  document.getElementById('r_cash').textContent    = '₱' + cash.toFixed(2);
-  document.getElementById('r_change2').textContent = '₱' + ch.toFixed(2);
+  const partialNotice = document.getElementById('partial_notice');
+  const remainingEl   = document.getElementById('p_remaining');
+  const btnPay        = document.getElementById('btn_pay_submit');
+
+  if (cash > 0 && cash < due) {
+    // Partial payment mode
+    const remaining = due - cash;
+    document.getElementById('p_change').textContent  = '₱0.00';
+    document.getElementById('r_cash').textContent    = '₱' + cash.toFixed(2);
+    document.getElementById('r_change2').textContent = '₱0.00';
+    if (partialNotice) { partialNotice.style.display = 'block'; }
+    if (remainingEl)   { remainingEl.textContent = '₱' + remaining.toFixed(2); }
+    if (btnPay) { btnPay.textContent = '⚠️ Record Partial Payment'; btnPay.style.background = 'linear-gradient(135deg,#d97706,#b45309)'; }
+  } else {
+    // Full or overpayment
+    const ch = Math.max(0, cash - due);
+    document.getElementById('p_change').textContent  = '₱' + ch.toFixed(2);
+    document.getElementById('r_cash').textContent    = '₱' + cash.toFixed(2);
+    document.getElementById('r_change2').textContent = '₱' + ch.toFixed(2);
+    if (partialNotice) { partialNotice.style.display = 'none'; }
+    if (btnPay) { btnPay.textContent = '✓ Process Payment'; btnPay.style.background = ''; }
+  }
 }
 </script>
 <!-- Mobile overlay for sidebar -->
