@@ -687,7 +687,7 @@ body{font-family:'Inter',sans-serif;background:<?=$pg_bg2?>;color:<?=$pg_text2?>
 .content{padding:22px 26px;flex:1;}
 
 .card{background:<?=$card_bg2?>;border:1px solid <?=$card_bdr2?>;border-radius:16px;padding:18px 20px;<?=$is_lm2?'box-shadow:0 1px 4px rgba(0,0,0,.06);':''?>}
-.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:20px;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px;}
 .stat-card{background:<?=$card_bg2?>;border:1px solid <?=$card_bdr2?>;border-radius:14px;padding:16px 18px;<?=$is_lm2?'box-shadow:0 1px 4px rgba(0,0,0,.06);':''?>}
 .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
 .stat-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
@@ -1037,28 +1037,40 @@ $notif_count = count($notifs);
     </div>
 
     <!-- Branch banner -->
-    <div style="background:linear-gradient(135deg,var(--t-secondary,#064e3b),var(--t-primary,#059669));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
+    <?php
+      $bc_text_main2  = $is_lm2 ? '#1c1e21'           : '#ffffff';
+      $bc_text_sub2   = $is_lm2 ? 'rgba(0,0,0,.55)'   : 'rgba(255,255,255,.55)';
+      $bc_text_muted2 = $is_lm2 ? 'rgba(0,0,0,.38)'   : 'rgba(255,255,255,.35)';
+      $bc_text_label2 = $is_lm2 ? 'rgba(0,0,0,.42)'   : 'rgba(255,255,255,.4)';
+      $bc_bg2         = $is_lm2
+        ? 'linear-gradient(135deg,color-mix(in srgb,var(--t-primary,#2563eb) 12%,#f0f4ff),color-mix(in srgb,var(--t-secondary,#1e3a8a) 8%,#e8eeff))'
+        : 'linear-gradient(135deg,color-mix(in srgb,var(--t-primary,#2563eb) 35%,rgba(0,0,0,.45)),color-mix(in srgb,var(--t-secondary,#1e3a8a) 25%,rgba(0,0,0,.3)))';
+      $bc_border2     = $is_lm2
+        ? 'color-mix(in srgb,var(--t-primary,#2563eb) 20%,rgba(0,0,0,.06))'
+        : 'color-mix(in srgb,var(--t-primary,#2563eb) 30%,rgba(255,255,255,.08))';
+    ?>
+    <div style="background:<?=$bc_bg2?>;border:1px solid <?=$bc_border2?>;border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
-        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.5));margin-bottom:4px;">Your Branch</div>
-        <div style="font-size:1.05rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=htmlspecialchars($tenant['business_name']??'—')?></div>
-        <div style="font-size:.76rem;color:var(--t-on-primary-mid,rgba(255,255,255,.5));margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Manager</div>
-        <div style="font-size:.72rem;color:var(--t-on-primary-dim,rgba(255,255,255,.35));margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:<?=$bc_text_label2?>;margin-bottom:4px;">Your Branch</div>
+        <div style="font-size:1.05rem;font-weight:800;color:<?=$bc_text_main2?>;"><?=htmlspecialchars($tenant['business_name']??'—')?></div>
+        <div style="font-size:.76rem;color:<?=$bc_text_sub2?>;margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Manager</div>
+        <div style="font-size:.72rem;color:<?=$bc_text_muted2?>;margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
         <?php if(!empty($tenant['phone'])):?>
-        <div style="font-size:.74rem;color:var(--t-on-primary-mid,rgba(255,255,255,.6));margin-top:5px;display:flex;align-items:center;gap:5px;">
+        <div style="font-size:.74rem;color:<?=$bc_text_sub2?>;margin-top:5px;display:flex;align-items:center;gap:5px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">call</span>
           <?=htmlspecialchars($tenant['phone'])?>
         </div>
         <?php endif;?>
         <?php if(!empty($tenant['address'])):?>
-        <div style="font-size:.74rem;color:var(--t-on-primary-mid,rgba(255,255,255,.6));margin-top:3px;display:flex;align-items:center;gap:5px;">
+        <div style="font-size:.74rem;color:<?=$bc_text_sub2?>;margin-top:3px;display:flex;align-items:center;gap:5px;">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">location_on</span>
           <?=htmlspecialchars($tenant['address'])?>
         </div>
         <?php endif;?>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:.65rem;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:3px;">Team Members</div>
-        <div style="font-size:1.5rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=count($my_team)?></div>
+        <div style="font-size:.65rem;color:<?=$bc_text_label2?>;margin-bottom:3px;">Team Members</div>
+        <div style="font-size:1.5rem;font-weight:800;color:<?=$bc_text_main2?>;"><?=count($my_team)?></div>
       </div>
     </div>
 
@@ -1080,13 +1092,12 @@ $notif_count = count($notifs);
         <div class="stat-top"><div class="stat-icon" style="background:rgba(139,92,246,.15);"><span class="material-symbols-outlined" style="color:#c4b5fd;">badge</span></div></div>
         <div class="stat-value"><?=count($my_team)?></div><div class="stat-label">Staff &amp; Cashiers</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" style="grid-column:span 2;">
         <div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">storefront</span></div></div>
-        <div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-top"><div class="stat-icon" style="background:rgba(245,158,11,.15);"><span class="material-symbols-outlined" style="color:#fcd34d;">star</span></div></div>
-        <div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured Items</div>
+        <div style="display:flex;gap:24px;">
+          <div><div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div></div>
+          <div><div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured</div></div>
+        </div>
       </div>
     </div>
 
