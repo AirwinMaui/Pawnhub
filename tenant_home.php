@@ -1791,6 +1791,98 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
       <strong style="color:var(--text);">Reminder:</strong> Please bring a valid government-issued ID — SSS, GSIS, Passport, Driver's License, or Voter's ID. Your pawned items are kept safely in our secured storage for the full duration of your loan.
     </div>
   </div>
+
+  <!-- ── ONLINE / APP STEPS ── -->
+  <div style="margin-top:48px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <div style="height:1px;flex:1;background:var(--border);"></div>
+      <div style="display:inline-flex;align-items:center;gap:8px;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--text-dim);white-space:nowrap;">
+        <span class="material-symbols-outlined" style="font-size:15px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">smartphone</span>
+        Also available online &amp; via app
+      </div>
+      <div style="height:1px;flex:1;background:var(--border);"></div>
+    </div>
+
+    <h3 style="font-family:'DM Serif Display',serif;font-size:clamp(1.4rem,3vw,2rem);color:var(--section-title-color);margin-bottom:8px;line-height:1.2;letter-spacing:-.02em;">
+      How Online Pawning Works
+    </h3>
+    <p style="font-size:1rem;color:var(--text-m);margin-bottom:28px;max-width:600px;line-height:1.75;">
+      Can't make it to the branch? You can manage your pawn transactions anytime — straight from your phone or browser.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;">
+
+      <!-- Online Step 1 -->
+      <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+        <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--primary) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--primary) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
+          <span class="material-symbols-outlined" style="font-size:26px;color:var(--primary);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">app_registration</span>
+        </div>
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--primary);margin-bottom:6px;">Step 1</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Register an Account</div>
+        <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Create your free account online or through our mobile app. Just enter your name, contact number, and a valid ID.</div>
+      </div>
+
+      <!-- Online Step 2 -->
+      <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+        <div style="width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--accent) 18%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 35%,transparent);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
+          <span class="material-symbols-outlined" style="font-size:26px;color:var(--accent);font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">add_a_photo</span>
+        </div>
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px;">Step 2</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Submit Your Item Photos</div>
+        <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Upload clear photos of your item and your valid ID through the app or website. Our team will review your submission.</div>
+      </div>
+
+      <!-- Online Step 3 -->
+      <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+        <div style="width:52px;height:52px;border-radius:16px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
+          <span class="material-symbols-outlined" style="font-size:26px;color:#f59e0b;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">price_check</span>
+        </div>
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#f59e0b;margin-bottom:6px;">Step 3</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Receive Loan Offer</div>
+        <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">We'll send you an appraisal offer via the app. Review the loan amount and interest rate — accept or decline, no pressure.</div>
+      </div>
+
+      <!-- Online Step 4 -->
+      <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+        <div style="width:52px;height:52px;border-radius:16px;background:rgba(139,92,246,.15);border:1.5px solid rgba(139,92,246,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
+          <span class="material-symbols-outlined" style="font-size:26px;color:#8b5cf6;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">local_shipping</span>
+        </div>
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#8b5cf6;margin-bottom:6px;">Step 4</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Drop Off Your Item</div>
+        <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Once accepted, bring your item to our branch to finalize the transaction. Your pawn ticket and cash will be released on the spot.</div>
+      </div>
+
+      <!-- Online Step 5 -->
+      <div class="section-card" style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform=''">
+        <div style="width:52px;height:52px;border-radius:16px;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.35);display:flex;align-items:center;justify-content:center;margin-bottom:18px;">
+          <span class="material-symbols-outlined" style="font-size:26px;color:#22c55e;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">receipt_long</span>
+        </div>
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#22c55e;margin-bottom:6px;">Step 5</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.3;">Track & Redeem Online</div>
+        <div style="font-size:.97rem;color:var(--text-m);line-height:1.75;">Monitor your active pawns, due dates, and payment history in real time through the app. Renew or redeem anytime — no need to call.</div>
+      </div>
+
+    </div>
+
+    <!-- Online CTA note -->
+    <div class="section-note" style="margin-top:24px;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:16px;padding:20px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <span class="material-symbols-outlined" style="font-size:24px;color:var(--accent);flex-shrink:0;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">phone_android</span>
+      <div style="flex:1;min-width:200px;font-size:.98rem;color:var(--text-m);line-height:1.75;">
+        <strong style="color:var(--text);">Download the app or register online</strong> — manage your pawn transactions anytime, anywhere. Get notified before your ticket expires so you never lose your item.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="#mobile-app" style="display:inline-flex;align-items:center;gap:7px;font-size:.9rem;font-weight:700;color:#fff;text-decoration:none;background:var(--accent);padding:11px 18px;border-radius:12px;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 35%,transparent);transition:filter .2s;white-space:nowrap;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''">
+          <span class="material-symbols-outlined" style="font-size:17px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">download</span>
+          Download App
+        </a>
+        <a href="<?= htmlspecialchars($register_url) ?>" style="display:inline-flex;align-items:center;gap:7px;font-size:.9rem;font-weight:700;color:var(--accent);text-decoration:none;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:11px 18px;border-radius:12px;transition:all .2s;white-space:nowrap;" onmouseover="this.style.background='color-mix(in srgb,var(--accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--accent) 12%,transparent)'">
+          <span class="material-symbols-outlined" style="font-size:17px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">person_add</span>
+          Register Free
+        </a>
+      </div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ══════════════════════════════════════════════════════════ -->
