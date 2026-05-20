@@ -790,20 +790,9 @@ $bgImg = $rawBgMgr ?: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      
+      <?php if($tenant):?><div class="sb-subtitle">Tenant #<?=$tid?></div><?php endif;?>
     </div>
   </div>
-
-  <?php if($tenant):?>
-  <div class="sb-role-card">
-    <div class="sb-role-label">My Branch</div>
-    <div class="sb-role-name"><?=htmlspecialchars($tenant['business_name'])?></div>
-    <div class="sb-role-badge">
-      <span class="material-symbols-outlined" style="font-size:11px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">manage_accounts</span>
-      Branch Manager
-    </div>
-  </div>
-  <?php endif;?>
 
   <div class="sb-user">
     <div class="sb-avatar"><?=strtoupper(substr($u['name'],0,1))?></div>
