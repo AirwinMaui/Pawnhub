@@ -593,7 +593,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
                 return str.replace(new RegExp('(' + safe + ')', 'gi'), '<mark style="background:rgba(74,222,128,.2);color:#4ade80;border-radius:2px;padding:0 1px;">$1</mark>');
               }
 
-              html += '<div onclick="selectTicket(' + JSON.stringify(t.ticket_no) + ')" '
+              html += '<div onmousedown="event.preventDefault();selectTicket(' + JSON.stringify(t.ticket_no) + ')" '
                 + 'style="padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);" '
                 + 'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" '
                 + 'onmouseout="this.style.background=\'\'">'
