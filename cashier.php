@@ -452,8 +452,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
       <div class="mob-hamburger" onclick="toggleSidebar()" id="hamburgerBtn">
         <span class="material-symbols-outlined">menu</span>
       </div>
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Cashier Dashboard','process'=>'Process Payment','tickets'=>'Active Tickets','history'=>'My Transactions','inventory'=>'View Inventory'];echo $titles[$active_page]??'Dashboard';?></span>
-      <span class="cashier-chip">Cashier<?php if($tenant): ?> · <?=htmlspecialchars($tenant['business_name'])?><?php endif;?></span>
+
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:100px;">
