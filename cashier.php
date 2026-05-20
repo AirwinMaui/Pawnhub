@@ -452,8 +452,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
       <div class="mob-hamburger" onclick="toggleSidebar()" id="hamburgerBtn">
         <span class="material-symbols-outlined">menu</span>
       </div>
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Cashier Dashboard','process'=>'Process Payment','tickets'=>'Active Tickets','history'=>'My Transactions','inventory'=>'View Inventory'];echo $titles[$active_page]??'Dashboard';?></span>
-      <span class="cashier-chip">Cashier<?php if($tenant): ?> · <?=htmlspecialchars($tenant['business_name'])?><?php endif;?></span>
+      
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:100px;">
@@ -541,7 +540,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           <input type="hidden" name="action" value="process_payment">
           <!-- Searchable ticket selector -->
           <input type="hidden" name="ticket_no" id="ticket_no_hidden" required>
-          <div class="fgroup" style="position:relative;">
+          <div class="fgroup ticket-search-wrap" style="position:relative;">
             <label class="flabel">Select Ticket * <span style="font-size:.7rem;color:#4ade80;font-weight:500;">● Type ticket no. or customer name</span></label>
             <input type="text" id="ticket_search" class="finput" placeholder="Search by ticket no. or customer name..." autocomplete="off"
               oninput="filterTickets(this.value)" onfocus="showTicketDropdown()" style="padding-right:36px;">
@@ -572,61 +571,67 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           ?>
           <script>
           const ALL_TICKETS = <?=json_encode($js_tickets)?>;
-          let ticketDropdownVisible = false;
 
-          function filterTickets(q) {
-            q = q.trim().toLowerCase();
-            const matches = q.length === 0
-              ? ALL_TICKETS
-              : ALL_TICKETS.filter(t =>
-                  t.ticket_no.toLowerCase().includes(q) ||
-                  t.customer.toLowerCase().includes(q)
-                );
+          function filterTickets(val) {
+            var q = val.trim().toLowerCase();
+            var matches = q === '' ? ALL_TICKETS : ALL_TICKETS.filter(function(t) {
+              return t.ticket_no.toLowerCase().indexOf(q) !== -1 ||
+                     t.customer.toLowerCase().indexOf(q) !== -1;
+            });
             renderTicketList(matches, q);
-            showTicketDropdown();
+            document.getElementById('ticket_dropdown').style.display = 'block';
           }
 
           function renderTicketList(tickets, q) {
-            const list = document.getElementById('ticket_list');
+            var list = document.getElementById('ticket_list');
             if (!tickets.length) {
-              list.innerHTML = '<div style="padding:14px 16px;font-size:.8rem;color:rgba(255,255,255,.35);text-align:center;">No tickets found</div>';
+              list.innerHTML = '<div style="padding:14px 16px;font-size:.8rem;color:rgba(255,255,255,.4);text-align:center;">No tickets found</div>';
               return;
             }
-            list.innerHTML = tickets.map(t => {
-              const isPartial = t.partial_paid > 0;
-              const partialTag = isPartial
-                ? '<span style="background:rgba(251,191,36,.15);color:#fcd34d;font-size:.68rem;padding:1px 6px;border-radius:4px;margin-left:5px;">₱'+t.partial_paid.toFixed(2)+' paid</span>'
+            var html = '';
+            for (var i = 0; i < tickets.length; i++) {
+              var t = tickets[i];
+              var partialTag = t.partial_paid > 0
+                ? '<span style="background:rgba(251,191,36,.15);color:#fcd34d;font-size:.68rem;padding:1px 6px;border-radius:4px;margin-left:5px;">&#8369;' + t.partial_paid.toFixed(2) + ' paid</span>'
                 : '';
-              const hl = (str, q) => {
+
+              function hlText(str, q) {
                 if (!q) return str;
-                const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\]/g,'\$&') + ')', 'gi');
-                return str.replace(re, '<mark style="background:rgba(74,222,128,.25);color:#4ade80;border-radius:2px;">$1</mark>');
-              };
-              return '<div class="tkt-opt" onclick="selectTicket(''+t.ticket_no+'')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">'+
-                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
-                  '<span style="font-family:monospace;font-size:.78rem;font-weight:700;color:#4ade80;">'+hl(t.ticket_no,q)+'</span>'+
-                  partialTag+
-                '</div>'+
-                '<div style="font-size:.82rem;font-weight:600;color:<?=$is_lm4?"#1c1e21":"#fff"?>;margin-top:2px;">'+hl(t.customer,q)+'</div>'+
-                '<div style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:1px;">'+t.item+' · Redeem: ₱'+t.total.toFixed(2)+' / Renew: ₱'+t.interest.toFixed(2)+'</div>'+
-              '</div>';
-            }).join('');
+                var safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return str.replace(new RegExp('(' + safe + ')', 'gi'), '<mark style="background:rgba(74,222,128,.2);color:#4ade80;border-radius:2px;padding:0 1px;">$1</mark>');
+              }
+
+              html += '<div onclick="selectTicket(' + JSON.stringify(t.ticket_no) + ')" '
+                + 'style="padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);" '
+                + 'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" '
+                + 'onmouseout="this.style.background=\'\'">'
+                + '<div style="display:flex;align-items:center;gap:8px;">'
+                +   '<span style="font-family:monospace;font-size:.78rem;font-weight:700;color:#4ade80;">' + hlText(t.ticket_no, q) + '</span>'
+                +   partialTag
+                + '</div>'
+                + '<div style="font-size:.83rem;font-weight:600;color:<?=$is_lm4?'#1c1e21':'#fff'?>;margin-top:2px;">' + hlText(t.customer, q) + '</div>'
+                + '<div style="font-size:.72rem;color:rgba(255,255,255,.38);margin-top:1px;">' + t.item + ' &middot; Redeem: &#8369;' + t.total.toFixed(2) + ' / Renew: &#8369;' + t.interest.toFixed(2) + '</div>'
+                + '</div>';
+            }
+            list.innerHTML = html;
           }
 
           function selectTicket(ticket_no) {
-            const t = ALL_TICKETS.find(x => x.ticket_no === ticket_no);
+            var t = null;
+            for (var i = 0; i < ALL_TICKETS.length; i++) {
+              if (ALL_TICKETS[i].ticket_no === ticket_no) { t = ALL_TICKETS[i]; break; }
+            }
             if (!t) return;
             document.getElementById('ticket_no_hidden').value = t.ticket_no;
-            const pp_label = t.partial_paid > 0 ? ' | Partial paid: ₱'+t.partial_paid.toFixed(2) : '';
+            var pp_label = t.partial_paid > 0 ? ' | Partial paid: ₱' + t.partial_paid.toFixed(2) : '';
             document.getElementById('ticket_search').value = t.ticket_no + ' — ' + t.customer + pp_label;
-            hideTicketDropdown();
-            // Fill payment form
-            const partialPaid = t.partial_paid || 0;
+            document.getElementById('ticket_dropdown').style.display = 'none';
+
             window._ticket = {
               loan:        t.loan,
               interest:    t.interest,
               total:       t.total,
-              partialPaid: partialPaid,
+              partialPaid: t.partial_paid || 0,
               customer:    t.customer,
               item:        t.item,
               maturity:    t.maturity,
@@ -639,33 +644,27 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             document.getElementById('r_maturity').textContent = t.maturity;
             document.getElementById('r_loan').textContent     = '₱' + t.loan.toFixed(2);
             document.getElementById('r_interest').textContent = '₱' + t.interest.toFixed(2);
-            const orVal = document.getElementById('or_preview')?.textContent || 'Auto-generated';
+            var orVal = document.getElementById('or_preview') ? document.getElementById('or_preview').textContent : 'Auto-generated';
             document.getElementById('r_or').textContent = orVal;
             updateAmountDue();
           }
 
-          function showTicketDropdown() {
-            const q = document.getElementById('ticket_search').value.trim().toLowerCase();
-            const matches = q.length === 0 ? ALL_TICKETS : ALL_TICKETS.filter(t => t.ticket_no.toLowerCase().includes(q) || t.customer.toLowerCase().includes(q));
-            renderTicketList(matches, q);
-            document.getElementById('ticket_dropdown').style.display = 'block';
-            ticketDropdownVisible = true;
-          }
-
-          function hideTicketDropdown() {
-            document.getElementById('ticket_dropdown').style.display = 'none';
-            ticketDropdownVisible = false;
-          }
+          document.getElementById('ticket_search').addEventListener('focus', function() {
+            filterTickets(this.value);
+          });
 
           document.addEventListener('click', function(e) {
-            const wrap = document.getElementById('ticket_search')?.closest('.fgroup');
-            if (wrap && !wrap.contains(e.target)) hideTicketDropdown();
+            var wrap = document.querySelector('.ticket-search-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+              document.getElementById('ticket_dropdown').style.display = 'none';
+            }
           });
           </script>
           <div class="fgroup"><label class="flabel">Action *</label>
             <select name="pay_action" id="pay_action" class="finput" required onchange="updateAmountDue()">
               <option value="release">Release (Full Redemption)</option>
               <option value="renew">Renew / Extension (Interest Only)</option>
+              <option value="partial">Partial Payment (Pay Partial)</option>
             </select>
           </div>
           <!-- Info box: shows what they need to pay -->
