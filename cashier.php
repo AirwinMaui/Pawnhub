@@ -397,17 +397,9 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      
+      <?php if($tenant): ?><div class="sb-subtitle">Tenant #<?=$tenant['id']?></div><?php endif; ?>
     </div>
   </div>
-
-  <?php if($tenant): ?>
-  <div class="sb-tenant-card">
-    <div class="sb-tenant-label">My Branch</div>
-    <div class="sb-tenant-name"><?=htmlspecialchars($tenant['business_name'])?></div>
-    <div class="sb-tenant-badge">Tenant #<?=$tenant['id']?></div>
-  </div>
-  <?php endif; ?>
 
   <div class="sb-user">
     <div class="sb-avatar"><?=strtoupper(substr($u['name'],0,1))?></div>
@@ -543,7 +535,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           <div class="fgroup ticket-search-wrap" style="position:relative;">
             <label class="flabel">Select Ticket * <span style="font-size:.7rem;color:#4ade80;font-weight:500;">● Type ticket no. or customer name</span></label>
             <input type="text" id="ticket_search" class="finput" placeholder="Search by ticket no. or customer name..." autocomplete="off"
-              oninput="filterTickets(this.value)" onfocus="showTicketDropdown()" style="padding-right:36px;">
+              oninput="filterTickets(this.value)" onfocus="filterTickets(this.value)" style="padding-right:36px;">
             <span class="material-symbols-outlined" style="position:absolute;right:12px;top:38px;font-size:18px;color:rgba(255,255,255,.3);pointer-events:none;">search</span>
             <div id="ticket_dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:<?=$is_lm4?'#fff':'#1a1d26'?>;border:1px solid <?=$is_lm4?'#d1d5db':'rgba(255,255,255,.12)'?>;border-radius:10px;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.25);margin-top:4px;">
               <div id="ticket_list"></div>

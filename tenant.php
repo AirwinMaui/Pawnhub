@@ -770,7 +770,7 @@ tr:hover td{background:<?= $td_hover ?>;}
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      
+      <div class="sb-subtitle">Tenant #<?=$tid?></div>
     </div>
   </div>
   <div class="sb-user">
@@ -1228,10 +1228,18 @@ tr:hover td{background:<?= $td_hover ?>;}
   <?php elseif($active_page==='tickets'): ?>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($tickets)):?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No pawn tickets.</p></div>
-      <?php else:?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Expiry</th><th>Status</th></tr></thead><tbody>
+      <?php else:?><table><thead><tr><th>Ticket No.</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Expiry</th><th>Status</th></tr></thead><tbody>
       <?php foreach($tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-purple'];?>
-
-      <?php endforeach;?></tbody></table><?php endif;?><td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':($is_light_mode?'#6b7280':'rgba(255,255,255,.35)')?>"><?=$t['maturity_date']?></td>
+      <tr>
+        <td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td>
+        <td><?=htmlspecialchars($t['item_category']??'—')?></td>
+        <td>₱<?=number_format($t['loan_amount'],2)?></td>
+        <td>₱<?=number_format($t['total_redeem'],2)?></td>
+        <td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':($is_light_mode?'#6b7280':'rgba(255,255,255,.35)')?>"><?=$t['maturity_date']?></td>
+        <td style="font-size:.73rem;color:<?=$is_light_mode?'#6b7280':'rgba(255,255,255,.35)'?>"><?=$t['expiry_date']??'—'?></td>
+        <td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=htmlspecialchars($t['status'])?></span></td>
+      </tr>
+      <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
   <?php elseif($active_page==='customers'): ?>

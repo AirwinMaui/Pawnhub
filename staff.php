@@ -610,19 +610,9 @@ $staffBg = $rawBgStaff ?: 'https://images.unsplash.com/photo-1611532736597-de2d4
     </div>
     <div>
       <div class="sb-name"><?=htmlspecialchars($business_name)?></div>
-      
+      <?php if($tenant): ?><div class="sb-subtitle">Tenant #<?=$tenant['id']?></div><?php endif; ?>
     </div>
   </div>
-
-  <?php if($tenant): ?>
-  <div class="sb-tenant-card">
-    <div class="sb-tenant-label">My Branch</div>
-    <div class="sb-tenant-name"><?=htmlspecialchars($tenant['business_name'])?></div>
-    <div class="sb-tenant-badge">Tenant #<?=$tenant['id']?></div>
-  </div>
-  <?php else: ?>
-  <div style="margin:10px 10px 0;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:11px 13px;font-size:.76rem;color:#fcd34d;">⚠️ No tenant assigned.</div>
-  <?php endif; ?>
 
   <div class="sb-user">
     <div class="sb-avatar"><?=strtoupper(substr($u['name'],0,1))?></div>
@@ -905,8 +895,17 @@ $notif_count = count($notifs);
       <?php if(empty($all_tickets)): ?><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No tickets yet.</p></div>
       <?php else: ?><table><thead><tr><th>Ticket No.</th><th>Customer</th><th>Contact</th><th>Item</th><th>Loan</th><th>Total Redeem</th><th>Maturity</th><th>Status</th><th>Action</th></tr></thead><tbody>
       <?php foreach($all_tickets as $t): $sc=['Stored'=>'b-blue','Released'=>'b-green','Renewed'=>'b-yellow','Voided'=>'b-red','Auctioned'=>'b-gray'];?>
-      <td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':($is_lm3?'#6b7280':'rgba(255,255,255,.35)')?>"><?=$t['maturity_date']?></td>
-      <td><?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?><button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">Void Req</button><?php else:?>—<?php endif;?></td></tr>
+      <tr>
+        <td><span class="ticket-tag"><?=htmlspecialchars($t['ticket_no'])?></span></td>
+        <td style="font-weight:600;color:<?=$is_lm3?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($t['customer_name'])?></td>
+        <td style="font-family:monospace;font-size:.75rem;"><?=htmlspecialchars($t['contact_number']??'—')?></td>
+        <td><?=htmlspecialchars($t['item_category']??'—')?></td>
+        <td>₱<?=number_format($t['loan_amount'],2)?></td>
+        <td>₱<?=number_format($t['total_redeem'],2)?></td>
+        <td style="font-size:.73rem;color:<?=strtotime($t['maturity_date'])<time()&&$t['status']==='Stored'?'#fca5a5':($is_lm3?'#6b7280':'rgba(255,255,255,.35)')?>"><?=$t['maturity_date']?></td>
+        <td><span class="badge <?=$sc[$t['status']]??'b-gray'?>"><?=htmlspecialchars($t['status'])?></span></td>
+        <td><?php if($t['status']==='Stored' && $t['assigned_staff_id']==$u['id']):?><button onclick="openVoid('<?=htmlspecialchars($t['ticket_no'])?>')" class="btn-xs btn-danger-xs" style="font-size:.7rem;">Void Req</button><?php else:?>—<?php endif;?></td>
+      </tr>
       <?php endforeach;?></tbody></table><?php endif;?>
     </div>
 
