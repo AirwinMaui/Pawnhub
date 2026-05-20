@@ -812,7 +812,7 @@ $notif_count = count($notifs);
                   placeholder="Last, First M." required autocomplete="off"
                   oninput="searchCustomers(this.value)"
                   onblur="setTimeout(()=>document.getElementById('cust_dropdown').style.display='none',200)">
-                <div id="cust_dropdown" style="display:none;position:absolute;z-index:999;background:#0a0d14;border:1px solid rgba(255,255,255,.15);border-radius:10px;margin-top:4px;width:100%;max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.6);">
+                <div id="cust_dropdown" style="display:none;position:absolute;z-index:999;background:<?=$is_lm3?'#ffffff':'#0a0d14'?>;border:1px solid <?=$is_lm3?'#d1d5db':'rgba(255,255,255,.15)'?>;border-radius:10px;margin-top:4px;width:100%;max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.15);">
                   <?php foreach($customers as $c): ?>
                   <div class="cust-opt"
                     data-name="<?=htmlspecialchars($c['full_name'])?>"
@@ -823,10 +823,10 @@ $notif_count = count($notifs);
                     data-id_type="<?=htmlspecialchars($c['valid_id_type']??'')?>"
                     data-id_number="<?=htmlspecialchars($c['valid_id_number']??'')?>"
                     data-id="<?=$c['id']?>"
-                    onclick="selectCustomer(this)"
-                    style="padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);">
+                    onmousedown="event.preventDefault();selectCustomer(this)"
+                    style="padding:10px 14px;cursor:pointer;border-bottom:1px solid <?=$is_lm3?'#f0f2f5':'rgba(255,255,255,.05)'?>;">
                     <div style="font-size:.83rem;font-weight:600;color:<?=$is_lm3?"#1c1e21":"#fff"?>;"><?=htmlspecialchars($c["full_name"])?></div>
-                    <div style="font-size:.72rem;color:rgba(255,255,255,.4);font-family:monospace;"><?=htmlspecialchars($c['contact_number']??'')?></div>
+                    <div style="font-size:.72rem;color:<?=$is_lm3?'#6b7280':'rgba(255,255,255,.4)'?>;font-family:monospace;"><?=htmlspecialchars($c['contact_number']??'')?></div>
                   </div>
                   <?php endforeach; ?>
                 </div>
@@ -1492,7 +1492,11 @@ document.addEventListener('DOMContentLoaded', function () {
       var words = name.split(/[\s,]+/);
       var match = words.some(function (w) { return w.startsWith(q); }) || contact.includes(q);
       o.style.display = match ? 'block' : 'none';
-      if (match) any = true;
+      if (match) {
+        any = true;
+        o.onmouseover = function() { this.style.background = '<?=$is_lm3?"#f0f2f5":"rgba(255,255,255,.08)"?>'; };
+        o.onmouseout  = function() { this.style.background = ''; };
+      }
     });
     dropdown.style.display = any ? 'block' : 'none';
     var sci = document.getElementById('selected_customer_id');
