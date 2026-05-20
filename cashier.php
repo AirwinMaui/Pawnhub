@@ -452,7 +452,8 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
       <div class="mob-hamburger" onclick="toggleSidebar()" id="hamburgerBtn">
         <span class="material-symbols-outlined">menu</span>
       </div>
-
+      <span class="topbar-title"><?php $titles=['dashboard'=>'Cashier Dashboard','process'=>'Process Payment','tickets'=>'Active Tickets','history'=>'My Transactions','inventory'=>'View Inventory'];echo $titles[$active_page]??'Dashboard';?></span>
+      <span class="cashier-chip">Cashier<?php if($tenant): ?> · <?=htmlspecialchars($tenant['business_name'])?><?php endif;?></span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);padding:5px 11px;border-radius:100px;">
@@ -538,28 +539,129 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
         <?php else: ?>
         <form method="POST">
           <input type="hidden" name="action" value="process_payment">
-          <div class="fgroup"><label class="flabel">Select Ticket *</label>
-            <select name="ticket_no" class="finput" required onchange="fillPayment(this)">
-              <option value="">-- Select Active Ticket --</option>
-              <?php foreach($active_tickets as $t): ?>
-              <option value="<?=htmlspecialchars($t['ticket_no'])?>"
-                data-customer="<?=htmlspecialchars($t['customer_name'])?>"
-                data-item="<?=htmlspecialchars($t['item_category'])?> - <?=htmlspecialchars(substr($t['item_description']??'',0,25))?>"
-                data-loan="<?=$t['loan_amount']?>"
-                data-interest="<?=$t['interest_amount']?>"
-                data-total="<?=$t['total_redeem']?>"
-                data-maturity="<?=$t['maturity_date']?>"
-                data-claim-term="<?=htmlspecialchars($t['claim_term']??'1-15')?>"
-                data-partial-paid="<?=floatval($t['partial_paid']??0)?>">
-                <?php
-                  $pp = floatval($t['partial_paid'] ?? 0);
-                  $pp_label = $pp > 0 ? ' | Partial paid: ₱'.number_format($pp,2) : '';
-                  echo htmlspecialchars($t['ticket_no']).' — '.htmlspecialchars($t['customer_name']).' (Redeem: ₱'.number_format($t['total_redeem'],2).' / Renew: ₱'.number_format($t['interest_amount'],2).$pp_label.')';
-                ?>
-              </option>
-              <?php endforeach; ?>
-            </select>
+          <!-- Searchable ticket selector -->
+          <input type="hidden" name="ticket_no" id="ticket_no_hidden" required>
+          <div class="fgroup" style="position:relative;">
+            <label class="flabel">Select Ticket * <span style="font-size:.7rem;color:#4ade80;font-weight:500;">● Type ticket no. or customer name</span></label>
+            <input type="text" id="ticket_search" class="finput" placeholder="Search by ticket no. or customer name..." autocomplete="off"
+              oninput="filterTickets(this.value)" onfocus="showTicketDropdown()" style="padding-right:36px;">
+            <span class="material-symbols-outlined" style="position:absolute;right:12px;top:38px;font-size:18px;color:rgba(255,255,255,.3);pointer-events:none;">search</span>
+            <div id="ticket_dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:<?=$is_lm4?'#fff':'#1a1d26'?>;border:1px solid <?=$is_lm4?'#d1d5db':'rgba(255,255,255,.12)'?>;border-radius:10px;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.25);margin-top:4px;">
+              <div id="ticket_list"></div>
+            </div>
           </div>
+          <?php
+            // Build JS ticket data array
+            $js_tickets = [];
+            foreach($active_tickets as $t) {
+              $pp = floatval($t['partial_paid'] ?? 0);
+              $pp_label = $pp > 0 ? ' | Partial: ₱'.number_format($pp,2) : '';
+              $js_tickets[] = [
+                'ticket_no'    => $t['ticket_no'],
+                'customer'     => $t['customer_name'],
+                'item'         => $t['item_category'].' - '.substr($t['item_description']??'',0,25),
+                'loan'         => floatval($t['loan_amount']),
+                'interest'     => floatval($t['interest_amount']),
+                'total'        => floatval($t['total_redeem']),
+                'maturity'     => $t['maturity_date'],
+                'claim_term'   => $t['claim_term'] ?? '1-15',
+                'partial_paid' => $pp,
+                'label'        => $t['ticket_no'].' — '.$t['customer_name'].' (Redeem: ₱'.number_format($t['total_redeem'],2).' / Renew: ₱'.number_format($t['interest_amount'],2).$pp_label.')',
+              ];
+            }
+          ?>
+          <script>
+          const ALL_TICKETS = <?=json_encode($js_tickets)?>;
+          let ticketDropdownVisible = false;
+
+          function filterTickets(q) {
+            q = q.trim().toLowerCase();
+            const matches = q.length === 0
+              ? ALL_TICKETS
+              : ALL_TICKETS.filter(t =>
+                  t.ticket_no.toLowerCase().includes(q) ||
+                  t.customer.toLowerCase().includes(q)
+                );
+            renderTicketList(matches, q);
+            showTicketDropdown();
+          }
+
+          function renderTicketList(tickets, q) {
+            const list = document.getElementById('ticket_list');
+            if (!tickets.length) {
+              list.innerHTML = '<div style="padding:14px 16px;font-size:.8rem;color:rgba(255,255,255,.35);text-align:center;">No tickets found</div>';
+              return;
+            }
+            list.innerHTML = tickets.map(t => {
+              const isPartial = t.partial_paid > 0;
+              const partialTag = isPartial
+                ? '<span style="background:rgba(251,191,36,.15);color:#fcd34d;font-size:.68rem;padding:1px 6px;border-radius:4px;margin-left:5px;">₱'+t.partial_paid.toFixed(2)+' paid</span>'
+                : '';
+              const hl = (str, q) => {
+                if (!q) return str;
+                const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\]/g,'\$&') + ')', 'gi');
+                return str.replace(re, '<mark style="background:rgba(74,222,128,.25);color:#4ade80;border-radius:2px;">$1</mark>');
+              };
+              return '<div class="tkt-opt" onclick="selectTicket(''+t.ticket_no+'')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">'+
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
+                  '<span style="font-family:monospace;font-size:.78rem;font-weight:700;color:#4ade80;">'+hl(t.ticket_no,q)+'</span>'+
+                  partialTag+
+                '</div>'+
+                '<div style="font-size:.82rem;font-weight:600;color:<?=$is_lm4?"#1c1e21":"#fff"?>;margin-top:2px;">'+hl(t.customer,q)+'</div>'+
+                '<div style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:1px;">'+t.item+' · Redeem: ₱'+t.total.toFixed(2)+' / Renew: ₱'+t.interest.toFixed(2)+'</div>'+
+              '</div>';
+            }).join('');
+          }
+
+          function selectTicket(ticket_no) {
+            const t = ALL_TICKETS.find(x => x.ticket_no === ticket_no);
+            if (!t) return;
+            document.getElementById('ticket_no_hidden').value = t.ticket_no;
+            const pp_label = t.partial_paid > 0 ? ' | Partial paid: ₱'+t.partial_paid.toFixed(2) : '';
+            document.getElementById('ticket_search').value = t.ticket_no + ' — ' + t.customer + pp_label;
+            hideTicketDropdown();
+            // Fill payment form
+            const partialPaid = t.partial_paid || 0;
+            window._ticket = {
+              loan:        t.loan,
+              interest:    t.interest,
+              total:       t.total,
+              partialPaid: partialPaid,
+              customer:    t.customer,
+              item:        t.item,
+              maturity:    t.maturity,
+              claimTerm:   t.claim_term,
+              ticketNo:    t.ticket_no
+            };
+            document.getElementById('r_ticket').textContent   = t.ticket_no;
+            document.getElementById('r_customer').textContent = t.customer;
+            document.getElementById('r_item').textContent     = t.item;
+            document.getElementById('r_maturity').textContent = t.maturity;
+            document.getElementById('r_loan').textContent     = '₱' + t.loan.toFixed(2);
+            document.getElementById('r_interest').textContent = '₱' + t.interest.toFixed(2);
+            const orVal = document.getElementById('or_preview')?.textContent || 'Auto-generated';
+            document.getElementById('r_or').textContent = orVal;
+            updateAmountDue();
+          }
+
+          function showTicketDropdown() {
+            const q = document.getElementById('ticket_search').value.trim().toLowerCase();
+            const matches = q.length === 0 ? ALL_TICKETS : ALL_TICKETS.filter(t => t.ticket_no.toLowerCase().includes(q) || t.customer.toLowerCase().includes(q));
+            renderTicketList(matches, q);
+            document.getElementById('ticket_dropdown').style.display = 'block';
+            ticketDropdownVisible = true;
+          }
+
+          function hideTicketDropdown() {
+            document.getElementById('ticket_dropdown').style.display = 'none';
+            ticketDropdownVisible = false;
+          }
+
+          document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('ticket_search')?.closest('.fgroup');
+            if (wrap && !wrap.contains(e.target)) hideTicketDropdown();
+          });
+          </script>
           <div class="fgroup"><label class="flabel">Action *</label>
             <select name="pay_action" id="pay_action" class="finput" required onchange="updateAmountDue()">
               <option value="release">Release (Full Redemption)</option>
@@ -569,10 +671,10 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           <!-- Info box: shows what they need to pay -->
           <div id="action_info" style="display:none;border-radius:10px;padding:11px 14px;font-size:.8rem;margin-bottom:4px;"></div>
           <div class="fgroup">
-            <label class="flabel">OR Number <span style="font-size:.7rem;color:rgba(110,231,183,.7);font-weight:500;">● Auto-generated</span></label>
+            <label class="flabel">OR Number <span style="font-size:.7rem;color:#4ade80;font-weight:500;">● Auto-generated</span></label>
             <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:10px 14px;font-family:monospace;font-size:.84rem;color:#6ee7b7;font-weight:700;letter-spacing:.04em;" id="or_preview">OR-<?=date('Ymd')?>-<?=str_pad((int)$pdo->query("SELECT COUNT(*) FROM payment_transactions WHERE tenant_id=$tid AND DATE(created_at)=CURDATE()")->fetchColumn()+1,5,'0',STR_PAD_LEFT)?></div>
           </div>
-          <div class="fgroup"><label class="flabel">Amount Due (₱) <span style="font-size:.7rem;color:rgba(110,231,183,.7);font-weight:500;">● Auto-computed</span></label><input type="number" name="amount_due" id="p_due" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" readonly style="opacity:.8;cursor:not-allowed;"></div>
+          <div class="fgroup"><label class="flabel">Amount Due (₱) <span style="font-size:.7rem;color:#4ade80;font-weight:500;">● Auto-computed</span></label><input type="number" name="amount_due" id="p_due" class="finput" placeholder="0.00" step="0.01" oninput="calcChange()" readonly style="opacity:.8;cursor:not-allowed;"></div>
           <div class="fgroup">
             <label class="flabel">Cash Received (₱) * <span style="font-size:.7rem;color:rgba(251,191,36,.8);font-weight:500;">● Partial payment allowed</span></label>
             <input type="number" name="cash_received" id="p_cash" class="finput" placeholder="0.00 (can be less than amount due)" step="0.01" oninput="calcChange()" required>
@@ -581,10 +683,30 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             ⚠️ <strong>Partial Payment</strong> — ticket stays active. Remaining balance: <span id="p_remaining" style="font-weight:800;">₱0.00</span>
           </div>
           <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;font-size:.8rem;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="color:rgba(110,231,183,.7);">Change:</span>
+            <span style="color:#4ade80;">Change:</span>
             <span id="p_change" style="font-weight:800;font-size:.96rem;color:#6ee7b7;">₱0.00</span>
           </div>
-          <button type="submit" class="btn-pay" id="btn_pay_submit">✓ Process Payment</button>
+          <button type="submit" class="btn-pay" id="btn_pay_submit" onclick="return validateTicketSelected(event)">✓ Process Payment</button>
+          <script>
+          function validateTicketSelected(e) {
+            const hidden = document.getElementById('ticket_no_hidden');
+            if (!hidden || !hidden.value) {
+              e.preventDefault();
+              const search = document.getElementById('ticket_search');
+              search.style.borderColor = '#ef4444';
+              search.style.boxShadow = '0 0 0 3px rgba(239,68,68,.15)';
+              search.placeholder = '⚠️ Please select a ticket first';
+              search.focus();
+              setTimeout(() => {
+                search.style.borderColor = '';
+                search.style.boxShadow = '';
+                search.placeholder = 'Search by ticket no. or customer name...';
+              }, 2000);
+              return false;
+            }
+            return true;
+          }
+          </script>
         </form>
         <?php endif; ?>
       </div>
