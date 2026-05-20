@@ -563,6 +563,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
           ?>
           <script>
           const ALL_TICKETS = <?=json_encode($js_tickets)?>;
+          var _dropdownLocked = false;
 
           function filterTickets(val) {
             var q = val.trim().toLowerCase();
@@ -584,28 +585,37 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             for (var i = 0; i < tickets.length; i++) {
               var t = tickets[i];
               var partialTag = t.partial_paid > 0
-                ? '<span style="background:rgba(251,191,36,.15);color:#fcd34d;font-size:.68rem;padding:1px 6px;border-radius:4px;margin-left:5px;">&#8369;' + t.partial_paid.toFixed(2) + ' paid</span>'
+                ? '<span style="background:rgba(251,191,36,.15);color:#fcd34d;font-size:.68rem;padding:1px 6px;border-radius:4px;margin-left:5px;">&#8369;' + parseFloat(t.partial_paid).toFixed(2) + ' paid</span>'
                 : '';
-
-              function hlText(str, q) {
-                if (!q) return str;
-                var safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                return str.replace(new RegExp('(' + safe + ')', 'gi'), '<mark style="background:rgba(74,222,128,.2);color:#4ade80;border-radius:2px;padding:0 1px;">$1</mark>');
-              }
-
-              html += '<div onmousedown="event.preventDefault();selectTicket(' + JSON.stringify(t.ticket_no) + ')" '
-                + 'style="padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);" '
-                + 'onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" '
-                + 'onmouseout="this.style.background=\'\'">'
+              var tnJson = JSON.stringify(t.ticket_no);
+              html += '<div data-ticket=' + tnJson + ' class="ticket-opt" '
+                + 'style="padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);">'
                 + '<div style="display:flex;align-items:center;gap:8px;">'
                 +   '<span style="font-family:monospace;font-size:.78rem;font-weight:700;color:#4ade80;">' + hlText(t.ticket_no, q) + '</span>'
                 +   partialTag
                 + '</div>'
                 + '<div style="font-size:.83rem;font-weight:600;color:<?=$is_lm4?'#1c1e21':'#fff'?>;margin-top:2px;">' + hlText(t.customer, q) + '</div>'
-                + '<div style="font-size:.72rem;color:rgba(255,255,255,.38);margin-top:1px;">' + t.item + ' &middot; Redeem: &#8369;' + t.total.toFixed(2) + ' / Renew: &#8369;' + t.interest.toFixed(2) + '</div>'
+                + '<div style="font-size:.72rem;color:rgba(255,255,255,.38);margin-top:1px;">' + t.item + ' &middot; Redeem: &#8369;' + parseFloat(t.total).toFixed(2) + ' / Renew: &#8369;' + parseFloat(t.interest).toFixed(2) + '</div>'
                 + '</div>';
             }
             list.innerHTML = html;
+
+            // Attach events after rendering
+            list.querySelectorAll('.ticket-opt').forEach(function(el) {
+              el.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                selectTicket(this.getAttribute('data-ticket'));
+              });
+              el.addEventListener('mouseover', function() { this.style.background = 'rgba(255,255,255,.09)'; });
+              el.addEventListener('mouseout',  function() { this.style.background = ''; });
+            });
+          }
+
+          function hlText(str, q) {
+            if (!q) return str;
+            var safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return str.replace(new RegExp('(' + safe + ')', 'gi'), '<mark style="background:rgba(74,222,128,.2);color:#4ade80;border-radius:2px;padding:0 1px;">$1</mark>');
           }
 
           function selectTicket(ticket_no) {
@@ -615,7 +625,7 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             }
             if (!t) return;
             document.getElementById('ticket_no_hidden').value = t.ticket_no;
-            var pp_label = t.partial_paid > 0 ? ' | Partial paid: ₱' + t.partial_paid.toFixed(2) : '';
+            var pp_label = t.partial_paid > 0 ? ' | Partial paid: ₱' + parseFloat(t.partial_paid).toFixed(2) : '';
             document.getElementById('ticket_search').value = t.ticket_no + ' — ' + t.customer + pp_label;
             document.getElementById('ticket_dropdown').style.display = 'none';
 
@@ -634,17 +644,19 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             document.getElementById('r_customer').textContent = t.customer;
             document.getElementById('r_item').textContent     = t.item;
             document.getElementById('r_maturity').textContent = t.maturity;
-            document.getElementById('r_loan').textContent     = '₱' + t.loan.toFixed(2);
-            document.getElementById('r_interest').textContent = '₱' + t.interest.toFixed(2);
+            document.getElementById('r_loan').textContent     = '₱' + parseFloat(t.loan).toFixed(2);
+            document.getElementById('r_interest').textContent = '₱' + parseFloat(t.interest).toFixed(2);
             var orVal = document.getElementById('or_preview') ? document.getElementById('or_preview').textContent : 'Auto-generated';
             document.getElementById('r_or').textContent = orVal;
             updateAmountDue();
           }
 
+          // Show dropdown on focus
           document.getElementById('ticket_search').addEventListener('focus', function() {
             filterTickets(this.value);
           });
 
+          // Hide dropdown only when clicking completely outside the search wrap
           document.addEventListener('click', function(e) {
             var wrap = document.querySelector('.ticket-search-wrap');
             if (wrap && !wrap.contains(e.target)) {
