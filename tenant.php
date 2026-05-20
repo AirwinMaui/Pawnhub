@@ -812,6 +812,10 @@ tr:hover td{background:<?= $td_hover ?>;}
       <span class="material-symbols-outlined">manage_search</span>Audit Logs
     </a>
     <?php endif;?>
+    <div class="sb-section">Reports</div>
+    <a href="?page=reports" class="sb-item <?=$active_page==='reports'?'active':''?>">
+      <span class="material-symbols-outlined">bar_chart_4_bars</span>Payment Reports
+    </a>
     <?php if($features['data_export']):?>
     <div class="sb-section">Export</div>
     <a href="?page=export" class="sb-item <?=$active_page==='export'?'active':''?>">
@@ -834,8 +838,7 @@ tr:hover td{background:<?= $td_hover ?>;}
       <button id="mob-menu-btn" onclick="toggleSidebar()" style="display:none;width:36px;height:36px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;color:#fff;">
         <span class="material-symbols-outlined" style="font-size:20px;">menu</span>
       </button>
-      <span class="topbar-title"><?php $titles=['dashboard'=>'Dashboard','tickets'=>'Pawn Tickets','customers'=>'Customers','inventory'=>'Inventory','users'=>'Team — Managers, Staff & Cashier','audit'=>'Audit Logs','settings'=>'Theme & Branding','export'=>'Export to PDF','applicants'=>'Online Applications'];echo $titles[$active_page]??'Dashboard';?></span>
-      <span class="tenant-chip"><?=htmlspecialchars($business_name)?></span>
+
     </div>
     <div class="topbar-right">
       <?php if($active_page==='users'):?>
@@ -1782,6 +1785,178 @@ tr:hover td{background:<?= $td_hover ?>;}
         <span>© <?=date('Y')?> <?=htmlspecialchars($business_name)?> · Powered by PawnHub</span>
         <span><?=count($exp_rows)?> record<?=count($exp_rows)!==1?'s':''?> · <?=date('F j, Y g:i A')?></span>
       </div>
+    </div>
+
+  <?php elseif($active_page==='reports'): ?>
+    <?php
+      // ── Payment Reports ──────────────────────────────────────────
+      $rpt_from   = $_GET['rpt_from'] ?? date('Y-m-01');
+      $rpt_to     = $_GET['rpt_to']   ?? date('Y-m-d');
+      $rpt_action = $_GET['rpt_action'] ?? 'all';
+
+      try {
+        // Summary stats
+        $s = $pdo->prepare("SELECT
+            COUNT(*) AS total_txn,
+            SUM(cash_received) AS total_cash,
+            SUM(CASE WHEN action='release' THEN cash_received ELSE 0 END) AS total_release,
+            SUM(CASE WHEN action='renew' THEN cash_received ELSE 0 END) AS total_renew,
+            SUM(CASE WHEN action='partial' THEN cash_received ELSE 0 END) AS total_partial,
+            COUNT(DISTINCT ticket_no) AS unique_tickets,
+            COUNT(DISTINCT staff_username) AS staff_count
+          FROM payment_transactions
+          WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ?");
+        $s->execute([$tid, $rpt_from, $rpt_to]);
+        $rpt_stats = $s->fetch();
+
+        // Daily totals for chart
+        $s2 = $pdo->prepare("SELECT DATE(created_at) AS day, SUM(cash_received) AS total, COUNT(*) AS txns FROM payment_transactions WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at) ORDER BY day ASC");
+        $s2->execute([$tid, $rpt_from, $rpt_to]);
+        $rpt_daily = $s2->fetchAll();
+
+        // Transaction list
+        $action_filter = $rpt_action !== 'all' ? " AND action=?" : "";
+        $s3 = $pdo->prepare("SELECT created_at,ticket_no,action,or_no,amount_due,cash_received,change_amount,staff_username,staff_role FROM payment_transactions WHERE tenant_id=?$action_filter AND DATE(created_at) BETWEEN ? AND ? ORDER BY created_at DESC LIMIT 200");
+        $params3 = $rpt_action !== 'all' ? [$tid,$rpt_action,$rpt_from,$rpt_to] : [$tid,$rpt_from,$rpt_to];
+        $s3->execute($params3);
+        $rpt_rows = $s3->fetchAll();
+      } catch(Throwable $e) {
+        $rpt_stats = []; $rpt_daily = []; $rpt_rows = [];
+        $error_msg = 'Reports error: '.$e->getMessage();
+      }
+
+      $rpt_primary   = $theme['primary_color']   ?? '#2563eb';
+      $rpt_secondary = $theme['secondary_color'] ?? '#1e3a8a';
+    ?>
+
+    <!-- Report Filters -->
+    <form method="GET" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+      <input type="hidden" name="page" value="reports">
+      <div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:<?=$pg_text_m?>;margin-bottom:4px;">From</div>
+        <input type="date" name="rpt_from" class="finput" style="width:auto;padding:8px 12px;font-size:.82rem;" value="<?=htmlspecialchars($rpt_from)?>">
+      </div>
+      <div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:<?=$pg_text_m?>;margin-bottom:4px;">To</div>
+        <input type="date" name="rpt_to" class="finput" style="width:auto;padding:8px 12px;font-size:.82rem;" value="<?=htmlspecialchars($rpt_to)?>">
+      </div>
+      <div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:<?=$pg_text_m?>;margin-bottom:4px;">Type</div>
+        <select name="rpt_action" class="finput" style="width:auto;padding:8px 12px;font-size:.82rem;">
+          <option value="all"     <?=$rpt_action==='all'    ?'selected':''?>>All Payments</option>
+          <option value="release" <?=$rpt_action==='release'?'selected':''?>>Full Release</option>
+          <option value="renew"   <?=$rpt_action==='renew'  ?'selected':''?>>Renewals</option>
+          <option value="partial" <?=$rpt_action==='partial'?'selected':''?>>Partial Payments</option>
+        </select>
+      </div>
+      <button type="submit" style="padding:8px 18px;background:linear-gradient(135deg,<?=$rpt_secondary?>,<?=$rpt_primary?>);color:#fff;border:none;border-radius:10px;font-size:.83rem;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px;">filter_list</span>Apply
+      </button>
+      <?php if($features['data_export']):?>
+      <a href="?page=export&exp_type=payments&exp_from=<?=urlencode($rpt_from)?>&exp_to=<?=urlencode($rpt_to)?>" style="padding:8px 18px;background:<?=$is_light_mode?'rgba(0,0,0,.06)':'rgba(255,255,255,.08)'?>;color:<?=$pg_text?>;border:1px solid <?=$is_light_mode?'#d1d5db':'rgba(255,255,255,.12)'?>;border-radius:10px;font-size:.83rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;text-decoration:none;">
+        <span class="material-symbols-outlined" style="font-size:16px;">download</span>Export PDF
+      </a>
+      <?php endif;?>
+    </form>
+
+    <!-- Summary Stats -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.13);"><span class="material-symbols-outlined" style="color:#6ee7b7;">payments</span></div></div>
+        <div class="stat-value">₱<?=number_format(floatval($rpt_stats['total_cash']??0),0)?></div>
+        <div class="stat-label">Total Cash Collected</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(59,130,246,.13);"><span class="material-symbols-outlined" style="color:#93c5fd;">receipt_long</span></div></div>
+        <div class="stat-value"><?=intval($rpt_stats['total_txn']??0)?></div>
+        <div class="stat-label">Total Transactions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(245,158,11,.13);"><span class="material-symbols-outlined" style="color:#fcd34d;">confirmation_number</span></div></div>
+        <div class="stat-value"><?=intval($rpt_stats['unique_tickets']??0)?></div>
+        <div class="stat-label">Tickets Covered</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(168,85,247,.13);"><span class="material-symbols-outlined" style="color:#c084fc;">badge</span></div></div>
+        <div class="stat-value"><?=intval($rpt_stats['staff_count']??0)?></div>
+        <div class="stat-label">Staff Involved</div>
+      </div>
+    </div>
+
+    <!-- Breakdown row -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:20px;">
+      <div class="card" style="padding:16px 18px;">
+        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:<?=$pg_text_m?>;margin-bottom:8px;">Full Releases</div>
+        <div style="font-size:1.3rem;font-weight:800;color:<?=$pg_text?>;">₱<?=number_format(floatval($rpt_stats['total_release']??0),2)?></div>
+        <div style="font-size:.72rem;color:<?=$pg_text_m?>;margin-top:3px;">Items redeemed by customers</div>
+      </div>
+      <div class="card" style="padding:16px 18px;">
+        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:<?=$pg_text_m?>;margin-bottom:8px;">Renewals (Interest)</div>
+        <div style="font-size:1.3rem;font-weight:800;color:<?=$pg_text?>;">₱<?=number_format(floatval($rpt_stats['total_renew']??0),2)?></div>
+        <div style="font-size:.72rem;color:<?=$pg_text_m?>;margin-top:3px;">Interest paid on renewals</div>
+      </div>
+      <div class="card" style="padding:16px 18px;">
+        <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:<?=$pg_text_m?>;margin-bottom:8px;">Partial Payments</div>
+        <div style="font-size:1.3rem;font-weight:800;color:<?=$pg_text?>;">₱<?=number_format(floatval($rpt_stats['total_partial']??0),2)?></div>
+        <div style="font-size:.72rem;color:<?=$pg_text_m?>;margin-top:3px;">Partial payments accumulated</div>
+      </div>
+    </div>
+
+    <!-- Daily totals bar chart -->
+    <?php if(!empty($rpt_daily)):?>
+    <div class="card" style="margin-bottom:20px;padding:18px 20px;">
+      <div class="card-title" style="margin-bottom:14px;">Daily Collection</div>
+      <?php
+        $max_day = max(array_column($rpt_daily,'total')) ?: 1;
+        foreach($rpt_daily as $d):
+          $pct = round((floatval($d['total'])/$max_day)*100);
+      ?>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="width:80px;font-size:.72rem;color:<?=$pg_text_m?>;flex-shrink:0;"><?=date('M d',strtotime($d['day']))?></div>
+        <div style="flex:1;background:<?=$is_light_mode?'rgba(0,0,0,.06)':'rgba(255,255,255,.07)'?>;border-radius:6px;height:22px;overflow:hidden;">
+          <div style="width:<?=$pct?>%;height:100%;background:linear-gradient(90deg,<?=$rpt_secondary?>,<?=$rpt_primary?>);border-radius:6px;transition:width .4s;"></div>
+        </div>
+        <div style="width:110px;text-align:right;font-size:.75rem;font-weight:700;color:<?=$pg_text?>;">₱<?=number_format(floatval($d['total']),0)?></div>
+        <div style="width:50px;text-align:right;font-size:.7rem;color:<?=$pg_text_m?>;"><?=$d['txns']?> txn<?=$d['txns']!=1?'s':''?></div>
+      </div>
+      <?php endforeach;?>
+    </div>
+    <?php endif;?>
+
+    <!-- Transaction Table -->
+    <div class="card" style="overflow-x:auto;">
+      <div class="card-title" style="margin-bottom:14px;">Transaction Records <span style="font-size:.72rem;font-weight:400;color:<?=$pg_text_m?>;">(latest 200)</span></div>
+      <?php if(empty($rpt_rows)):?>
+      <div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>No payment records for the selected period.</p></div>
+      <?php else:?>
+      <table>
+        <thead><tr>
+          <th>Date &amp; Time</th><th>Ticket No.</th><th>Type</th><th>OR No.</th>
+          <th>Amount Due</th><th>Cash Received</th><th>Change</th><th>Staff</th>
+        </tr></thead>
+        <tbody>
+        <?php foreach($rpt_rows as $r):
+          $type_badge = match($r['action']){
+            'release'=>'<span class="badge b-green">Release</span>',
+            'renew'  =>'<span class="badge b-yellow">Renew</span>',
+            'partial'=>'<span class="badge b-blue">Partial</span>',
+            default  =>'<span class="badge b-gray">'.htmlspecialchars(ucfirst($r['action'])).'</span>'
+          };
+        ?>
+        <tr>
+          <td style="font-size:.73rem;color:<?=$pg_text_m?>;white-space:nowrap;"><?=date('M d, Y h:i A',strtotime($r['created_at']))?></td>
+          <td><span class="ticket-tag"><?=htmlspecialchars($r['ticket_no'])?></span></td>
+          <td><?=$type_badge?></td>
+          <td style="font-family:monospace;font-size:.76rem;color:<?=$pg_text?>;"><?=htmlspecialchars($r['or_no']??'—')?></td>
+          <td style="font-weight:600;color:<?=$pg_text?>;">₱<?=number_format(floatval($r['amount_due']),2)?></td>
+          <td style="font-weight:700;color:<?=$is_light_mode?'#059669':'#6ee7b7'?>;">₱<?=number_format(floatval($r['cash_received']),2)?></td>
+          <td style="color:<?=$pg_text_m?>;">₱<?=number_format(floatval($r['change_amount']),2)?></td>
+          <td style="font-size:.76rem;color:<?=$pg_text_m?>;"><?=htmlspecialchars($r['staff_username'])?> <span style="opacity:.5;">(<?=ucfirst($r['staff_role'])?>)</span></td>
+        </tr>
+        <?php endforeach;?>
+        </tbody>
+      </table>
+      <?php endif;?>
     </div>
 
   <?php elseif($active_page==='applicants'): ?>
