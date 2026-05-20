@@ -1080,12 +1080,13 @@ $notif_count = count($notifs);
         <div class="stat-top"><div class="stat-icon" style="background:rgba(139,92,246,.15);"><span class="material-symbols-outlined" style="color:#c4b5fd;">badge</span></div></div>
         <div class="stat-value"><?=count($my_team)?></div><div class="stat-label">Staff &amp; Cashiers</div>
       </div>
-      <div class="stat-card" style="grid-column:span 2;">
+      <div class="stat-card">
         <div class="stat-top"><div class="stat-icon" style="background:rgba(16,185,129,.15);"><span class="material-symbols-outlined" style="color:#6ee7b7;">storefront</span></div></div>
-        <div style="display:flex;gap:24px;">
-          <div><div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div></div>
-          <div><div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured</div></div>
-        </div>
+        <div class="stat-value"><?=$shop_visible_count?></div><div class="stat-label">Items in Shop</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top"><div class="stat-icon" style="background:rgba(245,158,11,.15);"><span class="material-symbols-outlined" style="color:#fcd34d;">star</span></div></div>
+        <div class="stat-value"><?=$shop_featured_count?></div><div class="stat-label">Featured</div>
       </div>
     </div>
 
