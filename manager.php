@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $chk = $pdo->prepare("SELECT id FROM users WHERE email=? AND tenant_id=?");
             $chk->execute([$email, $tid]);
             if ($chk->fetch()) {
-                $error_msg = 'This email already has an account in this branch.';
+                $error_msg = 'This email already has an account in this store.';
             } else {
                 $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role IN ('staff','cashier')")
                     ->execute([$email, $tid]);
@@ -159,6 +159,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     error_log('Invite email failed: ' . $e->getMessage());
                     $error_msg = 'Invitation created but email failed. Error: ' . htmlspecialchars($e->getMessage());
                 }
+                $active_page = 'team';
+            }
+        }
+    }
+
+    // ── Add Staff / Cashier directly (no email invite needed) ──
+    if ($_POST['action'] === 'add_staff_direct') {
+        $d_name     = trim($_POST['d_name']     ?? '');
+        $d_email    = trim($_POST['d_email']    ?? '');
+        $d_username = trim($_POST['d_username'] ?? '');
+        $d_password = trim($_POST['d_password'] ?? '');
+        $d_role     = in_array($_POST['d_role'], ['staff','cashier']) ? $_POST['d_role'] : 'staff';
+
+        if (!$d_name || !$d_email || !$d_username || !$d_password) {
+            $error_msg = 'Please fill in all fields.';
+        } elseif (!filter_var($d_email, FILTER_VALIDATE_EMAIL)) {
+            $error_msg = 'Invalid email address.';
+        } elseif (strlen($d_password) < 8) {
+            $error_msg = 'Password must be at least 8 characters.';
+        } else {
+            $chk = $pdo->prepare("SELECT id FROM users WHERE (email=? OR username=?) AND tenant_id=?");
+            $chk->execute([$d_email, $d_username, $tid]);
+            if ($chk->fetch()) {
+                $error_msg = 'An account with this email or username already exists.';
+            } else {
+                $hashed = password_hash($d_password, PASSWORD_BCRYPT);
+                $pdo->prepare("INSERT INTO users (tenant_id, fullname, username, email, password, role, status, approved_at, created_at) VALUES (?,?,?,?,?,?,'approved',NOW(),NOW())")
+                    ->execute([$tid, $d_name, $d_username, $d_email, $hashed, $d_role]);
+                $new_uid = $pdo->lastInsertId();
+                write_audit($pdo, $u['id'], $u['username'], 'manager', 'STAFF_ADD_DIRECT', 'user', $new_uid, "Manager directly added $d_role account: $d_name ($d_email) — username: $d_username", $tid);
+                // Send welcome email with credentials
+                try {
+                    require_once __DIR__ . '/mailer.php';
+                    $slug_for_login = $tenant['slug'] ?? '';
+                    $login_url = $slug_for_login ? "/{$slug_for_login}?login=1" : 'login.php';
+                    sendMail($d_email, $d_name,
+                        "Your " . ucfirst($d_role) . " Account — {$business_name}",
+                        "<p>Hello <strong>{$d_name}</strong>,</p>
+                         <p>Your <strong>" . ucfirst($d_role) . "</strong> account at <strong>{$business_name}</strong> has been created.</p>
+                         <p><strong>Username:</strong> {$d_username}<br>
+                            <strong>Password:</strong> {$d_password}<br>
+                            <strong>Login:</strong> <a href='{$login_url}'>{$login_url}</a></p>
+                         <p>Please change your password after your first login.</p>"
+                    );
+                } catch (Throwable $e) { error_log('[AddDirect] Email error: '.$e->getMessage()); }
+                $success_msg = ucfirst($d_role) . " account for {$d_name} created successfully!";
                 $active_page = 'team';
             }
         }
@@ -200,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         // ── Notify mobile app ─────────────────────────────────
         write_pawn_update($pdo, $tid, $ticket_no, 'VOIDED',
-            "Your pawn ticket #$ticket_no has been voided/cancelled. Please contact the branch for more information.");
+            "Your pawn ticket #$ticket_no has been voided/cancelled. Please contact us for more information.");
         $success_msg = 'Void approved.';
         $active_page = 'void_requests';
     }
@@ -557,7 +603,7 @@ try {
 } catch (Throwable $e) { $mgr_promos = []; }
 $active_promos_count = count(array_filter($mgr_promos, fn($p)=>(int)$p['is_active']===1));
 
-$business_name = $tenant['business_name'] ?? 'My Branch';
+$business_name = $tenant['business_name'] ?? 'My Store';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -798,7 +844,7 @@ $bgImg = $rawBgMgr ?: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c
     <div class="sb-avatar"><?=strtoupper(substr($u['name'],0,1))?></div>
     <div>
       <div class="sb-uname"><?=htmlspecialchars(explode(' ',$u['name'])[0]??$u['name'])?></div>
-      <div class="sb-urole">Branch Manager</div>
+      <div class="sb-urole">Store Manager</div>
       <div class="sb-status">● ONLINE</div>
     </div>
   </div>
@@ -809,7 +855,7 @@ $bgImg = $rawBgMgr ?: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c
       <span class="material-symbols-outlined">dashboard</span>Dashboard
     </a>
 
-    <div class="sb-section">Branch Records</div>
+    <div class="sb-section">Store Records</div>
     <a href="?page=tickets" class="sb-item <?=$active_page==='tickets'?'active':''?>">
       <span class="material-symbols-outlined">receipt_long</span>Pawn Tickets
     </a>
@@ -918,7 +964,7 @@ try {
     // ── 10. New pawn tickets created today ───────────────────
     $nt = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND DATE(created_at)=CURDATE()");
     $nt->execute([$tid]); $nt_c = (int)$nt->fetchColumn();
-    if ($nt_c > 0) $notifs[] = ['type'=>'info','icon'=>'confirmation_number','title'=>$nt_c.' New Pawn Ticket'.($nt_c>1?'s':'').' Today','sub'=>'New loan'.($nt_c>1?'s':'').' created today in your branch.','link'=>'?page=tickets'];
+    if ($nt_c > 0) $notifs[] = ['type'=>'info','icon'=>'confirmation_number','title'=>$nt_c.' New Pawn Ticket'.($nt_c>1?'s':'').' Today','sub'=>'New loan'.($nt_c>1?'s':'').' created today in your store.','link'=>'?page=tickets'];
 
     // ── 11. Renewals processed today ────────────────────────
     $rn = $pdo->prepare("SELECT COUNT(*) FROM pawn_transactions WHERE tenant_id=? AND status='Renewed' AND DATE(updated_at)=CURDATE()");
@@ -953,7 +999,7 @@ try {
     // ── 17. Online applicants pending (info — admin approves) ─
     $ap = $pdo->prepare("SELECT COUNT(*) FROM tenant_applicants WHERE tenant_id=? AND status='pending'");
     $ap->execute([$tid]); $ap_c = (int)$ap->fetchColumn();
-    if ($ap_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_c.' Pending Walk-in Application'.($ap_c>1?'s':''),'sub'=>'Online application'.($ap_c>1?'s':'').' awaiting branch admin review.','link'=>'?page=tickets'];
+    if ($ap_c > 0) $notifs[] = ['type'=>'info','icon'=>'person_check','title'=>$ap_c.' Pending Walk-in Application'.($ap_c>1?'s':''),'sub'=>'Online application'.($ap_c>1?'s':'').' awaiting store admin review.','link'=>'?page=tickets'];
 
     // ── 18. Shop sales today ─────────────────────────────────
     $so = $pdo->prepare("SELECT COUNT(*) FROM shop_orders WHERE tenant_id=? AND status='paid' AND DATE(created_at)=CURDATE()");
@@ -1017,7 +1063,7 @@ $notif_count = count($notifs);
     <div class="page-hdr">
       <div>
         <h2>Welcome, <?=htmlspecialchars(explode(' ',$u['name'])[0])?>! 🧑‍💼</h2>
-        <p>Branch overview for <?=date('F j, Y')?>.</p>
+        <p>Store overview for <?=date('F j, Y')?>.</p>
       </div>
       <button onclick="document.getElementById('inviteModal').classList.add('open')" class="btn-sm btn-primary">
         <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Staff / Cashier
@@ -1039,9 +1085,9 @@ $notif_count = count($notifs);
     ?>
     <div style="background:<?=$bc_bg2?>;border:1px solid <?=$bc_border2?>;border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
-        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:<?=$bc_text_label2?>;margin-bottom:4px;">Your Branch</div>
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:<?=$bc_text_label2?>;margin-bottom:4px;">Your Store</div>
         <div style="font-size:1.05rem;font-weight:800;color:<?=$bc_text_main2?>;"><?=htmlspecialchars($tenant['business_name']??'—')?></div>
-        <div style="font-size:.76rem;color:<?=$bc_text_sub2?>;margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Branch Manager</div>
+        <div style="font-size:.76rem;color:<?=$bc_text_sub2?>;margin-top:2px;"><?=$tenant['plan']?> Plan &middot; Store Manager</div>
         <div style="font-size:.72rem;color:<?=$bc_text_muted2?>;margin-top:4px;font-family:monospace;">Tenant #<?=str_pad($tid,4,'0',STR_PAD_LEFT)?></div>
         <?php if(!empty($tenant['phone'])):?>
         <div style="font-size:.74rem;color:<?=$bc_text_sub2?>;margin-top:5px;display:flex;align-items:center;gap:5px;">
@@ -1417,12 +1463,26 @@ $notif_count = count($notifs);
     </div>
 
   <?php elseif($active_page==='invite'): ?>
-    <div class="page-hdr"><div><h2>Invite Team Member</h2><p>Send an invitation email to a new staff or cashier.</p></div></div>
-    <div style="max-width:500px;">
-      <div class="card">
+    <div class="page-hdr"><div><h2>Add Team Member</h2><p>Invite via email or create an account directly.</p></div></div>
+    <div style="max-width:540px;">
+
+      <!-- Tab switcher -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button onclick="showTab('tab_invite')" id="tbtn_invite"
+          style="flex:1;padding:9px;border-radius:10px;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid rgba(59,130,246,.6);background:rgba(59,130,246,.15);color:#93c5fd;">
+          📧 Invite via Email
+        </button>
+        <button onclick="showTab('tab_direct')" id="tbtn_direct"
+          style="flex:1;padding:9px;border-radius:10px;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(255,255,255,.45);">
+          ➕ Add Account Directly
+        </button>
+      </div>
+
+      <!-- Tab 1: Invite via Email -->
+      <div id="tab_invite" class="card">
         <form method="POST">
           <input type="hidden" name="action" value="invite_staff">
-          <div class="card-title">New Invitation</div>
+          <div class="card-title">Invite via Email</div>
           <div class="fgroup">
             <label class="flabel">Role *</label>
             <select name="role" class="finput" required>
@@ -1440,20 +1500,72 @@ $notif_count = count($notifs);
             <div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">A secure invitation link will be sent here.</div>
           </div>
           <div style="background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.18);border-radius:10px;padding:11px 13px;font-size:.76rem;color:rgba(110,231,183,.8);margin-bottom:14px;line-height:1.6;">
-            📧 They'll receive a link to set up their credentials. After registering, they'll be directed to the branch login page.
+            📧 They'll receive a link to set up their credentials. After registering, they'll be directed to the store login page.
           </div>
           <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:11px 13px;font-size:.75rem;color:#fcd34d;margin-bottom:14px;">
-            ⚠️ As Manager, you can only invite <strong>Staff</strong> and <strong>Cashier</strong> roles. To add another Manager, contact the Branch Owner (Admin).
+            ⚠️ As Manager, you can only add <strong>Staff</strong> and <strong>Cashier</strong> roles. To add another Manager, contact the Store Owner (Admin).
           </div>
           <button type="submit" class="btn-sm btn-primary" style="width:100%;padding:11px;justify-content:center;font-size:.88rem;">
             <span class="material-symbols-outlined" style="font-size:16px;">send</span>Send Invitation
           </button>
         </form>
       </div>
+
+      <!-- Tab 2: Add Account Directly -->
+      <div id="tab_direct" class="card" style="display:none;">
+        <form method="POST">
+          <input type="hidden" name="action" value="add_staff_direct">
+          <div class="card-title">Add Account Directly</div>
+          <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 13px;font-size:.76rem;color:#93c5fd;margin-bottom:14px;">
+            ℹ️ Creates the account immediately — no email invitation needed. Login credentials will be emailed to the new member.
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Role *</label>
+            <select name="d_role" class="finput" required>
+              <option value="staff">Staff</option>
+              <option value="cashier">Cashier</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Full Name *</label>
+            <input type="text" name="d_name" class="finput" placeholder="Maria Santos" required>
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Email Address *</label>
+            <input type="email" name="d_email" class="finput" placeholder="staff@example.com" required>
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Username *</label>
+            <input type="text" name="d_username" class="finput" placeholder="mariasantos" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, and underscores only" required>
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Password * <span style="font-size:.68rem;color:rgba(255,255,255,.3);">min. 8 characters</span></label>
+            <input type="password" name="d_password" class="finput" placeholder="Set a strong password" minlength="8" required>
+          </div>
+          <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:11px 13px;font-size:.75rem;color:#fcd34d;margin-bottom:14px;">
+            ⚠️ As Manager, you can only add <strong>Staff</strong> and <strong>Cashier</strong> roles. To add another Manager, contact the Store Owner (Admin).
+          </div>
+          <button type="submit" class="btn-sm btn-primary" style="width:100%;padding:11px;justify-content:center;font-size:.88rem;">
+            <span class="material-symbols-outlined" style="font-size:16px;">person_add</span>Create Account
+          </button>
+        </form>
+      </div>
+
     </div>
+    <script>
+    function showTab(id) {
+      ['tab_invite','tab_direct'].forEach(t => {
+        document.getElementById(t).style.display = (t===id) ? '' : 'none';
+      });
+      const activeStyle  = 'border:2px solid rgba(59,130,246,.6);background:rgba(59,130,246,.15);color:#93c5fd;';
+      const inactiveStyle= 'border:2px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(255,255,255,.45);';
+      document.getElementById('tbtn_invite').style.cssText += (id==='tab_invite') ? activeStyle : inactiveStyle;
+      document.getElementById('tbtn_direct').style.cssText += (id==='tab_direct') ? activeStyle : inactiveStyle;
+    }
+    </script>
 
   <?php elseif($active_page==='audit'): ?>
-    <div class="page-hdr"><div><h2>Audit Logs</h2><p>Activity logs for your branch team</p></div></div>
+    <div class="page-hdr"><div><h2>Audit Logs</h2><p>Activity logs for your store team</p></div></div>
     <div class="card" style="overflow-x:auto;">
       <?php if(empty($audit_logs)):?>
         <div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,.3);">
@@ -1762,8 +1874,8 @@ $notif_count = count($notifs);
     <div class="export-doc card" style="padding:0;overflow:hidden;">
       <div style="background:linear-gradient(135deg,<?=$exp_secondary?>,<?=$exp_primary?>);padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div>
-          <div style="font-size:1.1rem;font-weight:800;color:#000;"><?=htmlspecialchars($tenant['business_name']??'Branch')?></div>
-          <div style="font-size:.72rem;color:rgba(0,0,0,.6);margin-top:3px;">PawnHub — Branch Report</div>
+          <div style="font-size:1.1rem;font-weight:800;color:#000;"><?=htmlspecialchars($tenant['business_name']??'Store')?></div>
+          <div style="font-size:.72rem;color:rgba(0,0,0,.6);margin-top:3px;">PawnHub — Store Report</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:1.3rem;font-weight:800;color:#000;"><?=htmlspecialchars($exp_title)?></div>
@@ -1794,7 +1906,7 @@ $notif_count = count($notifs);
         <?php endif;?>
       </div>
       <div style="padding:12px 24px;border-top:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;font-size:.69rem;color:rgba(255,255,255,.25);">
-        <span>© <?=date('Y')?> <?=htmlspecialchars($tenant['business_name']??'Branch')?> · Powered by PawnHub</span>
+        <span>© <?=date('Y')?> <?=htmlspecialchars($tenant['business_name']??'Store')?> · Powered by PawnHub</span>
         <span><?=count($exp_rows)?> records · <?=date('F j, Y g:i A')?></span>
       </div>
     </div>

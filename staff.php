@@ -145,6 +145,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $loan_amount    = floatval($_POST['loan_amount']     ?? 0);
         $interest_rate  = floatval($_POST['interest_rate']   ?? 0.02);
         $claim_term     = trim($_POST['claim_term']      ?? '1-15');
+        $document_expiry= trim($_POST['document_expiry'] ?? '') ?: null;
+        $terms_agreed   = !empty($_POST['terms_agreed']) ? 1 : 0;
 
         $term_days = match($claim_term) {
             '1-15'  => 15, '16-30' => 30,
@@ -158,8 +160,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $ticket_no       = 'TP-' . date('Ymd') . '-' . strtoupper(substr(md5(uniqid()), 0, 6));
 
         if ($customer_name && $item_category && $appraisal > 0 && $loan_amount > 0) {
-            $pdo->prepare("INSERT INTO pawn_transactions (tenant_id,ticket_no,customer_name,contact_number,email,address,birthdate,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,item_category,item_description,item_condition,item_weight,item_karat,serial_number,appraisal_value,loan_amount,interest_rate,claim_term,interest_amount,total_redeem,pawn_date,maturity_date,expiry_date,status,created_by,assigned_staff_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?)")
-                ->execute([$tid,$ticket_no,$customer_name,$contact_number,$email,$address,$birthdate?:null,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$valid_id_type,$valid_id_no,$item_category,$item_desc,$item_condition,$item_weight,$item_karat,$serial_number,$appraisal,$loan_amount,$interest_rate,$claim_term,$interest_amount,$total_redeem,$pawn_date,$maturity_date,$expiry_date,$u['id'],$u['id']]);
+            $pdo->prepare("INSERT INTO pawn_transactions (tenant_id,ticket_no,customer_name,contact_number,email,address,birthdate,gender,nationality,birthplace,source_of_income,nature_of_work,occupation,business_office_school,valid_id_type,valid_id_number,item_category,item_description,item_condition,item_weight,item_karat,serial_number,appraisal_value,loan_amount,interest_rate,claim_term,interest_amount,total_redeem,pawn_date,maturity_date,expiry_date,document_expiry,terms_agreed,status,created_by,assigned_staff_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Stored',?,?)")
+                ->execute([$tid,$ticket_no,$customer_name,$contact_number,$email,$address,$birthdate?:null,$gender,$nationality,$birthplace,$src_income,$nature_work,$occupation,$business,$valid_id_type,$valid_id_no,$item_category,$item_desc,$item_condition,$item_weight,$item_karat,$serial_number,$appraisal,$loan_amount,$interest_rate,$claim_term,$interest_amount,$total_redeem,$pawn_date,$maturity_date,$expiry_date,$document_expiry,$terms_agreed,$u['id'],$u['id']]);
 
             $inv_id = $pdo->lastInsertId();
             $pdo->prepare("INSERT INTO item_inventory (tenant_id,pawn_id,ticket_no,item_name,item_category,serial_no,condition_notes,appraisal_value,loan_amount,item_photo_path,status) VALUES (?,?,?,?,?,?,?,?,?,?,'pawned')")
@@ -367,7 +369,7 @@ try {
     $mobile_req_pending_count = count(array_filter($mobile_requests, fn($r) => in_array($r['status'], ['pending', 'customer_accepted'])));
 } catch (Throwable $e) { $mobile_requests = []; $mobile_req_pending_count = 0; }
 
-$business_name = $tenant['business_name'] ?? 'My Branch';
+$business_name = $tenant['business_name'] ?? 'My Store';
 
 function normalize_photo_path(string $p): string {
     if (!$p) return '';
@@ -732,21 +734,21 @@ $notif_count = count($notifs);
   <?php if(!$tid): ?>
     <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:14px;padding:26px;text-align:center;color:#fcd34d;">
       <div style="font-size:1.1rem;font-weight:700;margin-bottom:8px;">⚠️ No Tenant Assigned</div>
-      <p style="font-size:.85rem;opacity:.7;">Your account has not been assigned to a branch yet. Please contact your Super Admin.</p>
+      <p style="font-size:.85rem;opacity:.7;">Your account has not been assigned to a store yet. Please contact your Admin.</p>
     </div>
   <?php elseif($active_page==='dashboard'): ?>
 
     <div class="page-hdr">
       <div>
         <h2>Welcome back, <?=htmlspecialchars(explode(' ',$u['name'])[0])?>! 👋</h2>
-        <p>Here's your branch activity for today — <?=date('F j, Y')?>.</p>
+        <p>Here's your store activity for today — <?=date('F j, Y')?>.</p>
       </div>
     </div>
 
-    <!-- Branch Banner -->
+    <!-- Store Banner -->
     <div style="background:linear-gradient(135deg,var(--t-secondary,#1e3a8a),var(--t-primary,#2563eb));border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid rgba(0,0,0,.08);">
       <div>
-        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:4px;">Your Branch</div>
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--t-on-primary-dim,rgba(255,255,255,.4));margin-bottom:4px;">Your Store</div>
         <div style="font-size:1.05rem;font-weight:800;color:var(--t-on-primary,#fff);"><?=htmlspecialchars($tenant['business_name'])?></div>
         <div style="font-size:.76rem;color:var(--t-on-primary-mid,rgba(255,255,255,.5));margin-top:2px;"><?=$tenant['plan']?> Plan · <?=$tenant['branches']?> Branch<?=$tenant['branches']>1?'es':''?></div>
       </div>
@@ -884,6 +886,31 @@ $notif_count = count($notifs);
               <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(16,185,129,.2);padding-top:7px;margin-top:5px;"><span style="color:#6ee7b7;font-weight:700;">Total Redeem</span><span id="d_t" style="font-weight:800;color:#6ee7b7;font-size:.92rem;">₱0.00</span></div>
             </div>
           </div>
+
+          <!-- Appraisal Value Disclaimer -->
+          <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:11px 14px;font-size:.76rem;color:#fcd34d;margin-bottom:10px;">
+            ⚠️ <em><strong>Disclaimer:</strong> The appraised value is an initial estimate and may change upon thorough physical inspection. The final loan amount and interest are subject to the pawnshop's assessment and policy.</em>
+          </div>
+
+          <!-- Valid ID / Document Expiry Date -->
+          <div class="fgroup" style="margin-bottom:10px;">
+            <label class="flabel">Valid ID / Document Expiry Date <span style="color:#f87171;font-size:.72rem;">*</span></label>
+            <input type="date" name="document_expiry" id="document_expiry" class="finput"
+              min="<?= date('Y-m-d') ?>"
+              value="<?= htmlspecialchars($_POST['document_expiry'] ?? '') ?>"
+              required>
+            <div style="font-size:.67rem;color:rgba(255,255,255,.3);margin-top:3px;">Expiry date of the customer's submitted valid ID or supporting document</div>
+          </div>
+
+          <!-- Terms & Conditions Checkbox -->
+          <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.79rem;color:rgba(255,255,255,.8);line-height:1.5;">
+              <input type="checkbox" name="terms_agreed" id="terms_agreed" value="1" required
+                style="width:16px;height:16px;margin-top:2px;flex-shrink:0;accent-color:var(--t-primary,#2563eb);">
+              <span>I/We confirm that the customer has read and agreed to the <strong style="color:#93c5fd;">Terms & Conditions</strong> of this pawn transaction, including: (1) the appraised value may change upon inspection; (2) unredeemed items past the expiry date will be subject to forfeiture; (3) interest accrues per term; and (4) penalties apply for late redemption.</span>
+            </label>
+          </div>
+
           <button type="submit" style="width:100%;background:linear-gradient(135deg,var(--t-primary,#2563eb),var(--t-secondary,#1d4ed8));color:#fff;border:none;border-radius:12px;padding:13px;font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(37,99,235,.3);">Issue Pawn Ticket</button>
         </div>
       </div>

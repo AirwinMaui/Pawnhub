@@ -196,11 +196,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($_POST['action'] === 'reject_applicant') {
         $apid = intval($_POST['applicant_id']);
-        $row  = $pdo->prepare("SELECT fullname FROM tenant_applicants WHERE id=? AND tenant_id=? LIMIT 1");
+        $row  = $pdo->prepare("SELECT fullname, email FROM tenant_applicants WHERE id=? AND tenant_id=? LIMIT 1");
         $row->execute([$apid,$tid]); $applicant = $row->fetch();
-        $pdo->prepare("UPDATE tenant_applicants SET status='rejected',decided_at=NOW(),decided_by=? WHERE id=?")
-            ->execute([$u['id'],$apid]);
-        $success_msg = "Application from ".htmlspecialchars($applicant['fullname']??'applicant')." has been rejected.";
+        // DELETE from DB per policy — declined applicants are removed, not just marked rejected
+        $pdo->prepare("DELETE FROM tenant_applicants WHERE id=? AND tenant_id=?")->execute([$apid,$tid]);
+        // Audit log
+        try {
+            $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'APPLICANT_DECLINED','tenant_applicant',?,?,?,NOW())")
+                ->execute([$tid,$u['id'],$u['username'],$u['role'],(string)$apid,"Walk-in applicant declined and removed: ".($applicant['fullname']??'Unknown')." <".($applicant['email']??'').">",$_SERVER['REMOTE_ADDR']??'::1']);
+        } catch (Throwable $e) {}
+        $success_msg = "Application from ".htmlspecialchars($applicant['fullname']??'applicant')." has been declined and removed.";
         $active_page = 'applicants';
     }
 
