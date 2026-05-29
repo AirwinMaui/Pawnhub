@@ -148,12 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($customer_email) {
                         try {
                             require_once __DIR__ . '/mailer.php';
-                            $subj = "Pawn Ticket #{$ticket_no} Forfeited — {$business_name}";
-                            $body = "<p>Dear <strong>{$customer_name}</strong>,</p>
-                                     <p>Your pawn ticket <strong>#{$ticket_no}</strong> at <strong>{$business_name}</strong> has been <strong style='color:#dc2626;'>forfeited</strong>.</p>
-                                     <p>The item is now the property of the pawnshop. If you have questions, please contact us directly.</p>
-                                     <p>Thank you.</p>";
-                            sendMail($customer_email, $customer_name, $subj, $body);
+                            sendPaymentReceipt($customer_email, $customer_name, $business_name, $ticket_no,
+                                'forfeit', $or_no, $loan_amount, $interest_amount, $total_penalty,
+                                0, 0, 0, 0, '');
                         } catch (Throwable $e) { error_log('[Cashier] Forfeit email error: '.$e->getMessage()); }
                     }
                     $success_msg = "Ticket $ticket_no marked as Forfeited. Item transferred to pawnshop.";
@@ -171,13 +168,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($customer_email) {
                         try {
                             require_once __DIR__ . '/mailer.php';
-                            $subj = "Partial Payment Received — Ticket #{$ticket_no}";
-                            $body = "<p>Dear <strong>{$customer_name}</strong>,</p>
-                                     <p>We received a partial payment of <strong>₱".number_format($cash_recv,2)."</strong> for pawn ticket <strong>#{$ticket_no}</strong> at <strong>{$business_name}</strong>.</p>
-                                     <p><strong>Remaining balance: ₱".number_format($remaining_bal,2)."</strong></p>
-                                     <p>OR Number: <strong>{$or_no}</strong></p>
-                                     <p>Thank you for your payment.</p>";
-                            sendMail($customer_email, $customer_name, $subj, $body);
+                            sendPaymentReceipt($customer_email, $customer_name, $business_name, $ticket_no,
+                                'partial', $or_no, $loan_amount, $interest_amount, $total_penalty,
+                                $amount_due, $cash_recv, 0, $remaining_bal, '');
                         } catch (Throwable $e) { error_log('[Cashier] Partial email error: '.$e->getMessage()); }
                     }
                     $success_msg = "Partial payment of ₱".number_format($cash_recv,2)." recorded for ticket $ticket_no. Remaining balance: ₱".number_format($remaining_bal,2).".";
@@ -197,18 +190,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($customer_email) {
                         try {
                             require_once __DIR__ . '/mailer.php';
-                            $penalty_line = $days_late > 0 ? "<p>Penalty ({$days_late} day/s late): <strong>₱".number_format($total_penalty,2)."</strong></p>" : "";
-                            $subj = "Item Released — Ticket #{$ticket_no} | {$business_name}";
-                            $body = "<p>Dear <strong>{$customer_name}</strong>,</p>
-                                     <p>Your pawn item has been successfully <strong style='color:#16a34a;'>released</strong>. Ticket <strong>#{$ticket_no}</strong> is now closed.</p>
-                                     <p>Principal: ₱".number_format($loan_amount,2)."<br>
-                                        Interest: ₱".number_format($interest_amount,2)."<br>
-                                        {$penalty_line}
-                                        <strong>Total Paid: ₱".number_format($amount_due,2)."</strong><br>
-                                        Change: ₱".number_format($change,2)."<br>
-                                        OR Number: <strong>{$or_no}</strong></p>
-                                     <p>Thank you for choosing {$business_name}!</p>";
-                            sendMail($customer_email, $customer_name, $subj, $body);
+                            sendPaymentReceipt($customer_email, $customer_name, $business_name, $ticket_no,
+                                'release', $or_no, $loan_amount, $interest_amount, $total_penalty,
+                                $amount_due, $cash_recv, $change, 0, '');
                         } catch (Throwable $e) { error_log('[Cashier] Release email error: '.$e->getMessage()); }
                     }
                     $success_msg = "Payment processed! Ticket $ticket_no marked as Released.".($days_late>0?" (Penalty: ₱".number_format($total_penalty,2)." for $days_late day/s late)":"");
@@ -245,18 +229,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($customer_email) {
                         try {
                             require_once __DIR__ . '/mailer.php';
-                            $penalty_line = $days_late > 0 ? "<p>Penalty ({$days_late} day/s late): <strong>₱".number_format($total_penalty,2)."</strong></p>" : "";
-                            $subj = "Ticket #{$ticket_no} {$action_label} | {$business_name}";
-                            $body = "<p>Dear <strong>{$customer_name}</strong>,</p>
-                                     <p>Your pawn ticket <strong>#{$ticket_no}</strong> has been <strong>{$action_label}</strong>.</p>
-                                     <p>Interest paid: ₱".number_format($interest_amount,2)."<br>
-                                        {$penalty_line}
-                                        Total paid: <strong>₱".number_format($amount_due,2)."</strong><br>
-                                        OR Number: <strong>{$or_no}</strong><br>
-                                        New maturity date: <strong>{$new_maturity}</strong><br>
-                                        New total to redeem: <strong>₱".number_format($new_total,2)."</strong></p>
-                                     <p>Thank you for choosing {$business_name}!</p>";
-                            sendMail($customer_email, $customer_name, $subj, $body);
+                            $email_action = ($pay_action === 'extend') ? 'extend' : 'renew';
+                            sendPaymentReceipt($customer_email, $customer_name, $business_name, $ticket_no,
+                                $email_action, $or_no, $loan_amount, $interest_amount, $total_penalty,
+                                $amount_due, $cash_recv, 0, 0, $new_maturity);
                         } catch (Throwable $e) { error_log('[Cashier] Renewal email error: '.$e->getMessage()); }
                     }
                     $success_msg = "Payment processed! Ticket $ticket_no $action_label. New maturity: $new_maturity.";
