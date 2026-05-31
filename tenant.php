@@ -352,8 +352,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
 
         if (!$error_msg) {
-            // Save bg_image_url to tenants table
-            $pdo->prepare("UPDATE tenants SET bg_image_url=? WHERE id=?")->execute([$bgurl ?: null, $tid]);
+            // Save bg_image_url to tenants table; also sync system_name → business_name so sidebar reflects it
+            $pdo->prepare("UPDATE tenants SET bg_image_url=?, business_name=? WHERE id=?")->execute([$bgurl ?: null, $sysname, $tid]);
             $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,sidebar_text_color,system_name,logo_text,logo_url,shop_bg_url,hero_title,hero_subtitle)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 ON DUPLICATE KEY UPDATE
@@ -373,6 +373,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             $success_msg = '✅ Theme saved! All pages will now reflect the new design.';
             $theme = getTenantTheme($pdo, $tid);
+            // Re-fetch tenant so business_name reflects the new system_name immediately
+            $tenantRefetch = $pdo->prepare("SELECT * FROM tenants WHERE id=? LIMIT 1");
+            $tenantRefetch->execute([$tid]);
+            $tenant = $tenantRefetch->fetch();
         }
         } // end plan check
         $active_page = 'settings';
@@ -1476,8 +1480,8 @@ tr:hover td{background:<?= $td_hover ?>;}
       <div class="theme-grid">
 
         <div>
-          <div class="card" style="margin-bottom:16px;">
-            <div class="card-hdr"><span class="card-title">🎨 Color Scheme</span></div>
+          <div class="card" style="margin-bottom:16px;background:#ffffff !important;border-color:#e5e7eb !important;">
+            <div class="card-hdr"><span class="card-title" style="color:#374151 !important;">🎨 Color Scheme</span></div>
             <div style="margin-bottom:18px;">
               <div class="flabel" style="margin-bottom:8px;">Quick Presets</div>
               <div class="preset-row">
@@ -1517,21 +1521,21 @@ tr:hover td{background:<?= $td_hover ?>;}
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-hdr"><span class="card-title">🏷️ Branding</span></div>
-            <div style="margin-bottom:12px;"><label class="flabel">System Name (title & browser tab)</label><input type="text" name="system_name" class="finput" placeholder="PawnHub" value="<?=htmlspecialchars($theme['system_name']??'PawnHub')?>"></div>
-            <div style="margin-bottom:12px;"><label class="flabel">Logo Text (shown in sidebar)</label><input type="text" name="logo_text" class="finput" placeholder="e.g. GoldKing" value="<?=htmlspecialchars($theme['logo_text']??'')?>"></div>
+          <div class="card" style="background:#ffffff !important;border-color:#e5e7eb !important;">
+            <div class="card-hdr"><span class="card-title" style="color:#374151 !important;">🏷️ Branding</span></div>
+            <div style="margin-bottom:12px;"><label class="flabel flabel-light">System Name (title &amp; browser tab)</label><input type="text" name="system_name" class="finput finput-light" placeholder="PawnHub" value="<?=htmlspecialchars($theme['system_name']??'PawnHub')?>"></div>
+            <div style="margin-bottom:12px;"><label class="flabel flabel-light">Logo Text (shown in sidebar)</label><input type="text" name="logo_text" class="finput finput-light" placeholder="e.g. GoldKing" value="<?=htmlspecialchars($theme['logo_text']??'')?>"></div>
 
               <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
               <div style="font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
               <div style="font-size:.72rem;color:#9ca3af;margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
               <div style="margin-bottom:10px;">
-                <label class="flabel">Main Heading (line 1)</label>
-                <input type="text" name="hero_title" class="finput" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
+                <label class="flabel flabel-light">Main Heading (line 1)</label>
+                <input type="text" name="hero_title" class="finput finput-light" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
               </div>
               <div>
-                <label class="flabel">Accent Word (line 2 — shown in color)</label>
-                <input type="text" name="hero_subtitle" class="finput" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
+                <label class="flabel flabel-light">Accent Word (line 2 — shown in color)</label>
+                <input type="text" name="hero_subtitle" class="finput finput-light" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
               </div>
             </div>
             <div>
