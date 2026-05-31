@@ -258,6 +258,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $active_page = 'void_requests';
     }
 
+    // ── PAWN EXPIRY NOTICE: Manager manually sends email reminder to customer ──
+    if ($_POST['action'] === 'send_pawn_expiry_notice') {
+        $ticket_no = trim($_POST['ticket_no'] ?? '');
+
+        // Fetch the pawn transaction + customer info for this tenant
+        $stmt = $pdo->prepare("
+            SELECT
+                pt.ticket_no,
+                pt.loan_amount,
+                pt.interest_amount,
+                pt.maturity_date,
+                pt.item_description,
+                (pt.loan_amount + pt.interest_amount) AS amount_due,
+                c.full_name  AS customer_name,
+                c.email      AS customer_email
+            FROM pawn_transactions pt
+            JOIN customers c ON c.id = pt.customer_id AND c.tenant_id = pt.tenant_id
+            WHERE pt.ticket_no = ?
+              AND pt.tenant_id = ?
+              AND pt.status IN ('Active','Overdue','Expired')
+            LIMIT 1
+        ");
+        $stmt->execute([$ticket_no, $tid]);
+        $ticket = $stmt->fetch();
+
+        if (!$ticket) {
+            $error_msg = 'Ticket not found or already settled.';
+        } elseif (empty($ticket['customer_email'])) {
+            $error_msg = 'Customer has no email address on file.';
+        } else {
+            // Calculate days left (positive = days remaining, negative = days overdue)
+            $today       = new DateTime('today');
+            $maturity    = new DateTime($ticket['maturity_date']);
+            $diff        = (int) $today->diff($maturity)->days;
+            $isPast      = $today > $maturity;
+            $daysLeftStr = $isPast
+                ? ($diff === 0 ? 'Today' : "{$diff} day" . ($diff > 1 ? 's' : '') . ' ago')
+                : ($diff === 0 ? 'Today' : "{$diff} day" . ($diff > 1 ? 's' : ''));
+
+            try {
+                require_once __DIR__ . '/mailer.php';
+                $biz = $tenant['business_name'] ?? 'PawnHub';
+                $sent = sendPawnExpiring(
+                    $ticket['customer_email'],
+                    $ticket['customer_name'],
+                    $biz,
+                    $ticket['ticket_no'],
+                    $ticket['item_description'],
+                    (float) $ticket['loan_amount'],
+                    (float) $ticket['interest_amount'],
+                    (float) $ticket['amount_due'],
+                    $ticket['maturity_date'],
+                    $daysLeftStr
+                );
+
+                if ($sent) {
+                    write_audit($pdo, $u['id'], $u['username'], 'manager',
+                        'PAWN_EXPIRY_NOTICE', 'pawn_transaction', $ticket_no,
+                        "Expiry reminder sent to {$ticket['customer_email']} for ticket #{$ticket_no}", $tid);
+                    $success_msg = "Payment reminder sent to {$ticket['customer_name']} ({$ticket['customer_email']}).";
+                } else {
+                    $error_msg = 'Email could not be sent. Please check mailer settings.';
+                }
+            } catch (Throwable $e) {
+                error_log('[PawnExpiryNotice] ' . $e->getMessage());
+                $error_msg = 'Email error: ' . htmlspecialchars($e->getMessage());
+            }
+        }
+        $active_page = $_POST['return_page'] ?? 'pawn_transactions';
+    }
+
     // ── SHOP: Add/Edit Category ───────────────────────────────
     if ($_POST['action'] === 'save_category') {
         $cat_id   = intval($_POST['cat_id'] ?? 0);
