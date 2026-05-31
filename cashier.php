@@ -125,7 +125,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $remaining_bal = max(0, $amount_due - $total_paid);
             $fully_paid    = ($pay_action === 'forfeit') || ($total_paid >= $amount_due);
             $change        = $fully_paid ? max(0, $total_paid - $amount_due) : 0;
-            $is_partial    = ($pay_action === 'partial') && !$fully_paid && $cash_recv > 0;
+
+            // Partial payment — ANY amount paid under pay_action='partial'
+            // NEVER auto-releases the item, even if total_paid >= amount_due.
+            // Cashier must explicitly choose "Full Release" to return the item.
+            $is_partial = ($pay_action === 'partial') && $cash_recv > 0;
 
             if ($ticket_no && ($pay_action === 'forfeit' || $cash_recv > 0)) {
 
@@ -157,13 +161,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $active_page = 'tickets';
 
                 } elseif ($is_partial) {
-                    // ── Partial payment — accumulate, keep ticket Stored ──
-                    $pdo->prepare("UPDATE pawn_transactions SET partial_paid=COALESCE(partial_paid,0)+? WHERE ticket_no=? AND tenant_id=?")
-                        ->execute([$cash_recv,$ticket_no,$tid]);
+                    // ── Partial payment — accumulate, ALWAYS keep ticket Stored ──
+                    // Item is NEVER released from partial payment alone.
+                    // Cashier must explicitly choose "Full Release" to return the item.
+                    $new_partial_total = $already_paid + $cash_recv;
+                    $pdo->prepare("UPDATE pawn_transactions SET partial_paid=COALESCE(partial_paid,0)+?, status='Stored' WHERE ticket_no=? AND tenant_id=?")
+                        ->execute([$cash_recv, $ticket_no, $tid]);
                     $pdo->prepare("INSERT INTO audit_logs (tenant_id,actor_user_id,actor_username,actor_role,action,entity_type,entity_id,message,ip_address,created_at) VALUES (?,?,?,?,'PAYMENT_PARTIAL','pawn_transaction',?,?,?,NOW())")
-                        ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Partial payment ₱".number_format($cash_recv,2)." — remaining ₱".number_format($remaining_bal,2),$_SERVER['REMOTE_ADDR']??'::1']);
-                    write_pawn_update($pdo, $tid, $ticket_no, 'PARTIAL_PAYMENT',
-                        "Partial payment of ₱".number_format($cash_recv,2)." received for ticket #$ticket_no. Remaining balance: ₱".number_format($remaining_bal,2).".");
+                        ->execute([$tid,$u['id'],$u['username'],'cashier',$ticket_no,"Partial payment ₱".number_format($cash_recv,2)." — total partial paid: ₱".number_format($new_partial_total,2)." — remaining: ₱".number_format($remaining_bal,2),$_SERVER['REMOTE_ADDR']??'::1']);
+
+                    // Mobile app notification
+                    if ($remaining_bal <= 0) {
+                        write_pawn_update($pdo, $tid, $ticket_no, 'PARTIAL_PAYMENT',
+                            "Payment of ₱".number_format($cash_recv,2)." received. Your balance is now FULLY COVERED. Please visit the pawnshop to claim your item with your ticket.");
+                    } else {
+                        write_pawn_update($pdo, $tid, $ticket_no, 'PARTIAL_PAYMENT',
+                            "Partial payment of ₱".number_format($cash_recv,2)." received for ticket #$ticket_no. Remaining balance: ₱".number_format($remaining_bal,2).".");
+                    }
+
                     // Email notification
                     if ($customer_email) {
                         try {
@@ -173,7 +188,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 $amount_due, $cash_recv, 0, $remaining_bal, '');
                         } catch (Throwable $e) { error_log('[Cashier] Partial email error: '.$e->getMessage()); }
                     }
-                    $success_msg = "Partial payment of ₱".number_format($cash_recv,2)." recorded for ticket $ticket_no. Remaining balance: ₱".number_format($remaining_bal,2).".";
+
+                    if ($remaining_bal <= 0) {
+                        $success_msg = "✅ Payment of ₱".number_format($cash_recv,2)." recorded. Total balance is now FULLY COVERED. ⚠️ Item is still with the pawnshop — use <strong>Full Release</strong> to return the item to the customer.";
+                    } else {
+                        $success_msg = "Partial payment of ₱".number_format($cash_recv,2)." recorded for ticket $ticket_no. Remaining balance: ₱".number_format($remaining_bal,2).". Item remains in pawnshop custody.";
+                    }
                     $active_page = 'tickets';
 
                 } elseif ($pay_action === 'release') {
@@ -271,7 +291,20 @@ $all_tickets = $pdo->prepare("SELECT * FROM pawn_transactions WHERE tenant_id=? 
 $all_tickets->execute([$tid]);
 $all_tickets = $all_tickets->fetchAll();
 
-$my_payments = $pdo->prepare("SELECT * FROM payment_transactions WHERE tenant_id=? AND staff_user_id=? ORDER BY created_at DESC LIMIT 30");
+$my_payments = $pdo->prepare("
+    SELECT pt.*,
+           tr.loan_amount        AS tr_loan,
+           tr.interest_amount    AS tr_interest,
+           tr.total_redeem       AS tr_total_redeem,
+           tr.partial_paid       AS tr_partial_paid,
+           tr.status             AS tr_status,
+           GREATEST(0, tr.total_redeem - COALESCE(tr.partial_paid, 0)) AS remaining_balance
+    FROM payment_transactions pt
+    LEFT JOIN pawn_transactions tr ON tr.ticket_no = pt.ticket_no AND tr.tenant_id = pt.tenant_id
+    WHERE pt.tenant_id=? AND pt.staff_user_id=?
+    ORDER BY pt.created_at DESC
+    LIMIT 50
+");
 $my_payments->execute([$tid,$u['id']]);
 $my_payments = $my_payments->fetchAll();
 
@@ -814,7 +847,8 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             <input type="number" name="cash_received" id="p_cash" class="finput" placeholder="0.00 (can be less than amount due)" step="0.01" oninput="calcChange()">
           </div>
           <div id="partial_notice" style="display:none;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:10px 14px;font-size:.79rem;color:#fcd34d;margin-bottom:10px;">
-            ⚠️ <strong>Partial Payment</strong> — ticket stays active. Remaining balance: <span id="p_remaining" style="font-weight:800;">₱0.00</span>
+            ⚠️ <strong>Partial Payment</strong> — Remaining balance: <span id="p_remaining" style="font-weight:800;">₱0.00</span>.
+            Item stays in pawnshop custody. Use <strong>Full Release</strong> to return the item.
           </div>
           <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 14px;font-size:.8rem;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
             <span style="color:#4ade80;">Change:</span>
@@ -906,16 +940,58 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
       <?php if(empty($my_payments)): ?>
       <div class="empty-state"><span class="material-symbols-outlined">history</span><p>No transactions processed yet.</p></div>
       <?php else: ?>
-      <table><thead><tr><th>Date</th><th>Ticket</th><th>Action</th><th>Amount Due</th><th>Cash Received</th><th>Change</th><th>OR No.</th></tr></thead><tbody>
-      <?php foreach($my_payments as $p): ?>
+      <table><thead><tr>
+        <th>Date</th>
+        <th>Ticket</th>
+        <th>Action</th>
+        <th>Amount Due</th>
+        <th>Cash Received</th>
+        <th>Change</th>
+        <th>Remaining Balance</th>
+        <th>OR No.</th>
+      </tr></thead><tbody>
+      <?php foreach($my_payments as $p):
+        $action    = $p['action'] ?? 'partial';
+        $remaining = isset($p['remaining_balance']) ? floatval($p['remaining_balance']) : null;
+        $tr_status = $p['tr_status'] ?? '';
+        // Badge color per action
+        $action_badge = match($action) {
+          'release' => 'b-green',
+          'renew'   => 'b-yellow',
+          'extend'  => 'b-blue',
+          'forfeit' => 'b-red',
+          default   => 'b-yellow', // partial
+        };
+      ?>
       <tr>
-        <td style="font-size:.72rem;color:rgba(255,255,255,.35);"><?=date('M d, Y h:i A',strtotime($p['created_at']))?></td>
+        <td style="font-size:.72rem;color:<?=$is_lm4?'rgba(0,0,0,.4)':'rgba(255,255,255,.35)'?>;"><?=date('M d, Y h:i A',strtotime($p['created_at']))?></td>
         <td><span class="ticket-tag"><?=htmlspecialchars($p['ticket_no'])?></span></td>
-        <td><span class="badge <?=$p['action']==='release'?'b-green':'b-yellow'?>"><?=ucfirst($p['action'])?></span></td>
-        <td style="font-weight:700;color:#fff;">₱<?=number_format($p['amount_due'],2)?></td>
+        <td><span class="badge <?=$action_badge?>"><?=ucfirst($action)?></span></td>
+        <td style="font-weight:700;color:<?=$is_lm4?'#1c1e21':'#fff'?>;">₱<?=number_format($p['amount_due'],2)?></td>
         <td>₱<?=number_format($p['cash_received'],2)?></td>
-        <td style="color:#6ee7b7;">₱<?=number_format($p['change_amount'],2)?></td>
-        <td style="font-size:.73rem;color:rgba(255,255,255,.35);"><?=htmlspecialchars($p['or_no']??'—')?></td>
+        <td style="color:#16a34a;font-weight:600;">₱<?=number_format($p['change_amount'],2)?></td>
+        <td>
+          <?php if (in_array($action, ['release','forfeit'])): ?>
+            <span style="color:<?=$is_lm4?'#15803d':'#6ee7b7'?>;font-weight:700;font-size:.78rem;">
+              <?= $action === 'forfeit' ? '— Forfeited' : '✅ Released' ?>
+            </span>
+          <?php elseif ($remaining !== null): ?>
+            <?php if ($remaining <= 0): ?>
+              <span style="color:<?=$is_lm4?'#15803d':'#6ee7b7'?>;font-weight:700;">
+                ✅ ₱0.00 <span style="font-size:.7rem;opacity:.7;">(Fully paid — pending release)</span>
+              </span>
+            <?php elseif ($remaining <= ($p['amount_due'] * 0.25)): ?>
+              <span style="color:<?=$is_lm4?'#d97706':'#fcd34d'?>;font-weight:700;">₱<?=number_format($remaining,2)?></span>
+              <span style="font-size:.68rem;opacity:.6;"> left</span>
+            <?php else: ?>
+              <span style="color:<?=$is_lm4?'#dc2626':'#fca5a5'?>;font-weight:700;">₱<?=number_format($remaining,2)?></span>
+              <span style="font-size:.68rem;opacity:.6;"> remaining</span>
+            <?php endif; ?>
+          <?php else: ?>
+            <span style="color:<?=$is_lm4?'rgba(0,0,0,.3)':'rgba(255,255,255,.3)'?>;">—</span>
+          <?php endif; ?>
+        </td>
+        <td style="font-size:.73rem;color:<?=$is_lm4?'rgba(0,0,0,.4)':'rgba(255,255,255,.35)'?>;"><?=htmlspecialchars($p['or_no']??'—')?></td>
       </tr>
       <?php endforeach; ?></tbody></table>
       <?php endif; ?>
@@ -1080,7 +1156,7 @@ function updateAmountDue() {
     extend:  {bg:'rgba(96,165,250,.08)',border:'rgba(96,165,250,.2)',color:'#93c5fd',
       html:`⏳ <strong>Extend (Interest Only):</strong> Customer pays interest <strong>₱${interest.toFixed(2)}</strong> only. No penalty applied. Maturity date extended.${partialTag}`},
     partial: {bg:'rgba(167,139,250,.08)',border:'rgba(167,139,250,.2)',color:'#c4b5fd',
-      html:`💰 <strong>Partial Payment:</strong> Total due ₱${due.toFixed(2)}. Enter any amount to partially pay. Remaining balance will be tracked.${partialTag}`},
+      html:`💰 <strong>Partial Payment:</strong> Total due ₱${due.toFixed(2)}. Enter any amount. <strong style='color:#f87171;'>Item stays in pawnshop custody</strong> until Full Release is processed — even if balance is fully covered.${partialTag}`},
     forfeit: {bg:'rgba(239,68,68,.08)',border:'rgba(239,68,68,.2)',color:'#fca5a5',
       html:`🚫 <strong>Forfeit:</strong> Item becomes property of the pawnshop. No cash received. Ticket will be closed as Forfeited. This action cannot be undone.`},
   };
