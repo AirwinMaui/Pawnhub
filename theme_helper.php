@@ -29,18 +29,19 @@ function getTenantTheme(PDO $pdo, int $tenant_id): array {
     } catch (Exception $e) {}
 
     return [
-        'primary_color'   => '#2563eb',
-        'secondary_color' => '#1e3a8a',
-        'accent_color'    => '#10b981',
-        'sidebar_color'   => '#ffffff',
-        'logo_text'       => null,
-        'logo_url'        => null,
-        'bg_image_url'    => null,
-        'shop_bg_url'     => null,
-        'hero_title'      => 'Your Trusted',
-        'hero_subtitle'   => 'Pawnshop',
-        'system_name'     => 'PawnHub',
-        'font_style'      => 'Plus Jakarta Sans',
+        'primary_color'       => '#2563eb',
+        'secondary_color'     => '#1e3a8a',
+        'accent_color'        => '#10b981',
+        'sidebar_color'       => '#ffffff',
+        'sidebar_text_color'  => '',
+        'logo_text'           => null,
+        'logo_url'            => null,
+        'bg_image_url'        => null,
+        'shop_bg_url'         => null,
+        'hero_title'          => 'Your Trusted',
+        'hero_subtitle'       => 'Pawnshop',
+        'system_name'         => 'PawnHub',
+        'font_style'          => 'Plus Jakarta Sans',
     ];
 }
 /**
@@ -56,10 +57,13 @@ function getTenantBgImage(array $theme, string $default = ''): string {
 
 function renderThemeCSS(array $theme): string {
     // Strip any leading # then re-add to normalize; htmlspecialchars is safe for hex colors
-    $p   = htmlspecialchars($theme['primary_color']   ?? '#2563eb');
-    $s   = htmlspecialchars($theme['secondary_color'] ?? '#1e3a8a');
-    $a   = htmlspecialchars($theme['accent_color']    ?? '#10b981');
-    $sb  = htmlspecialchars($theme['sidebar_color']   ?? '#ffffff');
+    $p   = htmlspecialchars($theme['primary_color']       ?? '#2563eb');
+    $s   = htmlspecialchars($theme['secondary_color']     ?? '#1e3a8a');
+    $a   = htmlspecialchars($theme['accent_color']        ?? '#10b981');
+    $sb  = htmlspecialchars($theme['sidebar_color']       ?? '#ffffff');
+    // sidebar_text_color: if set by tenant, overrides auto-detected text color
+    $sbt_raw = trim($theme['sidebar_text_color'] ?? '');
+    $sbt = preg_match('/^#[0-9a-fA-F]{6}$/', $sbt_raw) ? htmlspecialchars($sbt_raw) : '';
 
     $pDark = adjustColor($p, -20);
     $aDark = adjustColor($a, -20);
@@ -100,10 +104,20 @@ function renderThemeCSS(array $theme): string {
     $sidebarGradEnd = $isDarkSidebar ? $s : $sb;
 
     $sidebarCSS = '';
+    // Determine effective sidebar text color:
+    // 1. Tenant-chosen sidebar_text_color wins if valid hex
+    // 2. Otherwise auto: dark sidebar → white, light sidebar → dark
+    $autoSbText  = $isDarkSidebar ? '#ffffff' : '#1c1e21';
+    $sbText      = $sbt ?: $autoSbText;
+    // Derive muted variants from the chosen text color
+    $sbTextMid   = $sbt ? $sbt . 'aa' : ($isDarkSidebar ? 'rgba(255,255,255,.5)'  : 'rgba(0,0,0,.45)');
+    $sbTextDim   = $sbt ? $sbt . '66' : ($isDarkSidebar ? 'rgba(255,255,255,.38)' : 'rgba(0,0,0,.30)');
+    $sbTextHov   = $sbText;
+
     if ($isDarkSidebar) {
         // Active sidebar item should also be readable: use white text not primary
         // color, because primary may be yellow and unreadable on a dark sidebar.
-        $sbActiveText = '#ffffff';
+        $sbActiveText = $sbText;
         $sbActiveBg   = 'rgba(255,255,255,.15)';
 
         $sidebarCSS = "
@@ -113,16 +127,16 @@ function renderThemeCSS(array $theme): string {
         border-right-color: rgba(255,255,255,.06) !important;
     }
     .sb-brand, .sb-user, .sb-footer { border-color: rgba(255,255,255,.08) !important; }
-    .sb-name, .sb-uname, .sb-role-name, .sb-tenant-name { color: #fff !important; }
+    .sb-name, .sb-uname, .sb-role-name, .sb-tenant-name { color: {$sbText} !important; }
     .sb-subtitle, .sb-urole, .sb-role-label, .sb-tenant-label,
-    .sb-section { color: rgba(255,255,255,.38) !important; }
-    .sb-item { color: rgba(255,255,255,.5) !important; }
-    .sb-item:hover { background: rgba(255,255,255,.08) !important; color: #fff !important; }
+    .sb-section { color: {$sbTextDim} !important; }
+    .sb-item { color: {$sbTextMid} !important; }
+    .sb-item:hover { background: rgba(255,255,255,.08) !important; color: {$sbTextHov} !important; }
     .sb-item.active {
         background: {$sbActiveBg} !important;
         color: {$sbActiveText} !important;
     }
-    .sb-logout { color: rgba(255,255,255,.38) !important; }
+    .sb-logout { color: {$sbTextDim} !important; }
     .sb-logout:hover { color: #f87171 !important; background: rgba(239,68,68,.12) !important; }
     .sb-role-card, .sb-tenant-card {
         background: rgba(255,255,255,.06) !important;
@@ -130,9 +144,22 @@ function renderThemeCSS(array $theme): string {
     }
     .sb-role-badge, .sb-tenant-badge {
         background: rgba(255,255,255,.12) !important;
-        color: rgba(255,255,255,.8) !important;
+        color: {$sbText} !important;
     }
     .sb-status { background: rgba(16,185,129,.2) !important; color: #6ee7b7 !important; }";
+    }
+
+    // ── Light sidebar: apply custom text color if set ─────────
+    if (!$isDarkSidebar && $sbt) {
+        $sidebarCSS .= "
+    /* ── Light sidebar custom text color override ── */
+    .sb-name, .sb-uname, .sb-role-name, .sb-tenant-name { color: {$sbt} !important; }
+    .sb-subtitle, .sb-urole, .sb-role-label, .sb-tenant-label,
+    .sb-section { color: {$sbt}99 !important; }
+    .sb-item { color: {$sbt}bb !important; }
+    .sb-item:hover { color: {$sbt} !important; }
+    .sb-item.active { color: {$sbt} !important; }
+    .sb-logout { color: {$sbt}99 !important; }";
     }
 
     // ── Light/dark mode detection based on sidebar color ─────────
@@ -170,6 +197,7 @@ function renderThemeCSS(array $theme): string {
         --t-accent:         {$a};
         --t-accent-d:       {$aDark};
         --t-sidebar:        {$sb};
+        --t-sidebar-text:   {$sbText};
         --t-page-bg:        {$pageBg};
         --t-on-primary:     {$onPrimary};
         --t-on-primary-mid: {$onPrimaryMid};
