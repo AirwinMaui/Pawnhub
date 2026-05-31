@@ -255,8 +255,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $secondary = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['secondary_color']??'') ? $_POST['secondary_color'] : '#1e3a8a';
         $accent    = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['accent_color']??'')    ? $_POST['accent_color']    : '#10b981';
         $sidebar   = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['sidebar_color']??'')   ? $_POST['sidebar_color']   : '#0f172a';
-        // sidebar_text_color: empty string means "auto" (checkbox checked)
-        $sbtext    = preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['sidebar_text_color']??'') ? $_POST['sidebar_text_color'] : '';
         $sysname    = trim($_POST['system_name']    ?? 'PawnHub') ?: 'PawnHub';
         $logotext   = trim($_POST['logo_text']      ?? '');
         $herotitle  = trim($_POST['hero_title']     ?? '') ?: 'Your Trusted';
@@ -354,14 +352,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if (!$error_msg) {
             // Save bg_image_url to tenants table
             $pdo->prepare("UPDATE tenants SET bg_image_url=? WHERE id=?")->execute([$bgurl ?: null, $tid]);
-            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,sidebar_text_color,system_name,logo_text,logo_url,shop_bg_url,hero_title,hero_subtitle)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            $pdo->prepare("INSERT INTO tenant_settings (tenant_id,primary_color,secondary_color,accent_color,sidebar_color,system_name,logo_text,logo_url,shop_bg_url,hero_title,hero_subtitle)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 ON DUPLICATE KEY UPDATE
                 primary_color=VALUES(primary_color),
                 secondary_color=VALUES(secondary_color),
                 accent_color=VALUES(accent_color),
                 sidebar_color=VALUES(sidebar_color),
-                sidebar_text_color=VALUES(sidebar_text_color),
                 system_name=VALUES(system_name),
                 logo_text=VALUES(logo_text),
                 logo_url=VALUES(logo_url),
@@ -369,7 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 hero_title=VALUES(hero_title),
                 hero_subtitle=VALUES(hero_subtitle),
                 updated_at=NOW()")
-                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sbtext,$sysname,$logotext,$logourl,$shopbgurl ?: null,$herotitle,$herosubtitle]);
+                ->execute([$tid,$primary,$secondary,$accent,$sidebar,$sysname,$logotext,$logourl,$shopbgurl ?: null,$herotitle,$herosubtitle]);
 
             $success_msg = '✅ Theme saved! All pages will now reflect the new design.';
             $theme = getTenantTheme($pdo, $tid);
@@ -1471,7 +1468,7 @@ tr:hover td{background:<?= $td_hover ?>;}
     </div>
 
   <?php elseif($active_page==='settings'): ?>
-    <form method="POST" enctype="multipart/form-data" onsubmit="handleThemeSubmit()">
+    <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="save_theme">
       <div class="theme-grid">
 
@@ -1481,14 +1478,14 @@ tr:hover td{background:<?= $td_hover ?>;}
             <div style="margin-bottom:18px;">
               <div class="flabel" style="margin-bottom:8px;">Quick Presets</div>
               <div class="preset-row">
-                <div class="preset" style="background:#2563eb;" onclick="applyPreset('#2563eb','#1e3a8a','#10b981','#0f172a','')" title="Blue Dark"></div>
-                <div class="preset" style="background:#7c3aed;" onclick="applyPreset('#7c3aed','#4c1d95','#f59e0b','#1a0533','')" title="Purple Dark"></div>
-                <div class="preset" style="background:#059669;" onclick="applyPreset('#059669','#064e3b','#3b82f6','#022c22','')" title="Green Dark"></div>
-                <div class="preset" style="background:#dc2626;" onclick="applyPreset('#dc2626','#7f1d1d','#f59e0b','#1c0a0a','')" title="Red Dark"></div>
-                <div class="preset" style="background:#d97706;" onclick="applyPreset('#d97706','#78350f','#2563eb','#1c1207','')" title="Amber Dark"></div>
-                <div class="preset" style="background:#0891b2;" onclick="applyPreset('#0891b2','#164e63','#10b981','#061a20','')" title="Cyan Dark"></div>
-                <div class="preset" style="background:#be185d;" onclick="applyPreset('#be185d','#500724','#f59e0b','#200010','')" title="Pink Dark"></div>
-                <div class="preset" style="background:#374151;" onclick="applyPreset('#374151','#111827','#6ee7b7','#030712','')" title="Charcoal Dark"></div>
+                <div class="preset" style="background:#2563eb;" onclick="applyPreset('#2563eb','#1e3a8a','#10b981','#0f172a')" title="Blue Dark"></div>
+                <div class="preset" style="background:#7c3aed;" onclick="applyPreset('#7c3aed','#4c1d95','#f59e0b','#1a0533')" title="Purple Dark"></div>
+                <div class="preset" style="background:#059669;" onclick="applyPreset('#059669','#064e3b','#3b82f6','#022c22')" title="Green Dark"></div>
+                <div class="preset" style="background:#dc2626;" onclick="applyPreset('#dc2626','#7f1d1d','#f59e0b','#1c0a0a')" title="Red Dark"></div>
+                <div class="preset" style="background:#d97706;" onclick="applyPreset('#d97706','#78350f','#2563eb','#1c1207')" title="Amber Dark"></div>
+                <div class="preset" style="background:#0891b2;" onclick="applyPreset('#0891b2','#164e63','#10b981','#061a20')" title="Cyan Dark"></div>
+                <div class="preset" style="background:#be185d;" onclick="applyPreset('#be185d','#500724','#f59e0b','#200010')" title="Pink Dark"></div>
+                <div class="preset" style="background:#374151;" onclick="applyPreset('#374151','#111827','#6ee7b7','#030712')" title="Charcoal Dark"></div>
               </div>
               <div style="margin-top:8px;">
                 <button type="button" onclick="resetToDefault()" style="display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:8px;border:1.5px solid #e4e6eb;background:#f0f2f5;color:#1c1e21;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;" onmouseover="this.style.background='#e4e6eb'" onmouseout="this.style.background='#f0f2f5'">
@@ -1501,19 +1498,6 @@ tr:hover td{background:<?= $td_hover ?>;}
               <div><label class="flabel">Secondary Color</label><div class="color-picker-wrap"><input type="color" name="secondary_color" id="cp_secondary" value="<?=htmlspecialchars($theme['secondary_color']??'#1e3a8a')?>" oninput="updatePreview()"><div class="color-preview" id="prev_secondary" style="background:<?=htmlspecialchars($theme['secondary_color']??'#1e3a8a')?>;">Secondary</div></div></div>
               <div><label class="flabel">Accent Color</label><div class="color-picker-wrap"><input type="color" name="accent_color" id="cp_accent" value="<?=htmlspecialchars($theme['accent_color']??'#10b981')?>" oninput="updatePreview()"><div class="color-preview" id="prev_accent" style="background:<?=htmlspecialchars($theme['accent_color']??'#10b981')?>;">Accent</div></div></div>
               <div><label class="flabel">Sidebar Color</label><div class="color-picker-wrap"><input type="color" name="sidebar_color" id="cp_sidebar" value="<?=htmlspecialchars($theme['sidebar_color']??'#ffffff')?>" oninput="updatePreview()"><div class="color-preview" id="prev_sidebar" style="background:<?=htmlspecialchars($theme['sidebar_color']??'#0f172a')?>;">Sidebar</div></div></div>
-              <div style="grid-column:1/-1;">
-                <label class="flabel">Sidebar Text Color <span style="font-size:.7rem;font-weight:400;color:#9ca3af;">(menu labels, nav items — leave blank for auto)</span></label>
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <div class="color-picker-wrap" style="flex:1;">
-                    <input type="color" name="sidebar_text_color" id="cp_sidebar_text" value="<?=htmlspecialchars(!empty($theme['sidebar_text_color'])&&preg_match('/^#[0-9a-fA-F]{6}$/',$theme['sidebar_text_color'])?$theme['sidebar_text_color']:'#1c1e21')?>" oninput="updatePreview()">
-                    <div class="color-preview" id="prev_sidebar_text" style="background:<?=htmlspecialchars(!empty($theme['sidebar_text_color'])&&preg_match('/^#[0-9a-fA-F]{6}$/',$theme['sidebar_text_color'])?$theme['sidebar_text_color']:'#1c1e21')?>;">Sidebar Text</div>
-                  </div>
-                  <label style="display:inline-flex;align-items:center;gap:6px;font-size:.76rem;color:#6b7280;cursor:pointer;flex-shrink:0;white-space:nowrap;">
-                    <input type="checkbox" id="auto_sidebar_text" onchange="toggleAutoSidebarText(this)" <?=empty($theme['sidebar_text_color'])?'checked':''?> style="accent-color:var(--t-primary,#2563eb);margin:0;">
-                    Auto (recommended)
-                  </label>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1522,16 +1506,16 @@ tr:hover td{background:<?= $td_hover ?>;}
             <div style="margin-bottom:12px;"><label class="flabel">System Name (title & browser tab)</label><input type="text" name="system_name" class="finput" placeholder="PawnHub" value="<?=htmlspecialchars($theme['system_name']??'PawnHub')?>"></div>
             <div style="margin-bottom:12px;"><label class="flabel">Logo Text (shown in sidebar)</label><input type="text" name="logo_text" class="finput" placeholder="e.g. GoldKing" value="<?=htmlspecialchars($theme['logo_text']??'')?>"></div>
 
-              <div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
-              <div style="font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
-              <div style="font-size:.72rem;color:#9ca3af;margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
+              <div style="background:<?= $is_light_mode ? '#f3f4f6' : 'rgba(255,255,255,.07)' ?>;border:1px solid <?= $is_light_mode ? '#e5e7eb' : 'rgba(255,255,255,.12)' ?>;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+              <div style="font-size:.72rem;font-weight:700;color:<?= $is_light_mode ? '#6b7280' : 'rgba(255,255,255,.5)' ?>;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🏠 Public Shop Hero Text</div>
+              <div style="font-size:.72rem;color:<?= $is_light_mode ? '#9ca3af' : 'rgba(255,255,255,.3)' ?>;margin-bottom:12px;line-height:1.6;">This is the big heading customers see on your public shop page. Default: <em>"Your Trusted / Pawnshop"</em></div>
               <div style="margin-bottom:10px;">
-                <label class="flabel">Main Heading (line 1)</label>
-                <input type="text" name="hero_title" class="finput" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
+                <label class="flabel flabel-light">Main Heading (line 1)</label>
+                <input type="text" name="hero_title" class="finput finput-light" placeholder="Your Trusted" value="<?=htmlspecialchars($theme['hero_title']??'Your Trusted')?>">
               </div>
               <div>
-                <label class="flabel">Accent Word (line 2 — shown in color)</label>
-                <input type="text" name="hero_subtitle" class="finput" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
+                <label class="flabel flabel-light">Accent Word (line 2 — shown in color)</label>
+                <input type="text" name="hero_subtitle" class="finput finput-light" placeholder="Pawnshop" value="<?=htmlspecialchars($theme['hero_subtitle']??'Pawnshop')?>">
               </div>
             </div>
             <div>
@@ -2138,21 +2122,11 @@ function updatePreview() {
   const sb = document.getElementById('cp_sidebar').value;
   const dark = colorIsDark(sb);
 
-  // Determine sidebar text color: auto or custom
-  const autoChk = document.getElementById('auto_sidebar_text');
-  const useAuto = autoChk && autoChk.checked;
-  const sbtEl   = document.getElementById('cp_sidebar_text');
-  // Auto: dark sidebar → white text, light → dark
-  const autoText = dark ? '#ffffff' : '#1c1e21';
-  const sbt = useAuto ? autoText : (sbtEl ? sbtEl.value : autoText);
-
   // Color swatch previews
   document.getElementById('prev_primary').style.background   = p;
   document.getElementById('prev_secondary').style.background = s;
   document.getElementById('prev_accent').style.background    = a;
   document.getElementById('prev_sidebar').style.background   = sb;
-  const prevSbt = document.getElementById('prev_sidebar_text');
-  if (prevSbt) prevSbt.style.background = sbt;
 
   // Sidebar preview box
   const sidebarBox = document.getElementById('prev_sidebar_box');
@@ -2164,11 +2138,11 @@ function updatePreview() {
     sidebarBox.style.borderBottom = '1px solid #e4e6eb';
   }
 
-  // Sidebar text colors — use custom sbt or auto fallback
-  const nameColor    = sbt;
-  const subtitleColor= sbt + '77';
-  const inactiveColor= sbt + 'aa';
-  const activeColor  = sbt;
+  // Sidebar text colors — flip based on darkness
+  const nameColor    = dark ? '#ffffff' : '#1c1e21';
+  const subtitleColor= dark ? 'rgba(255,255,255,.35)' : '#8a8d91';
+  const inactiveColor= dark ? 'rgba(255,255,255,.4)' : '#65676b';
+  const activeColor  = dark ? '#ffffff' : p;
   const activeBg     = dark ? 'rgba(255,255,255,.15)' : `color-mix(in srgb,${p} 12%,transparent)`;
   const contentBg    = dark ? 'rgba(255,255,255,.03)' : '#f0f2f5';
 
@@ -2193,7 +2167,6 @@ function updatePreview() {
   document.documentElement.style.setProperty('--t-secondary', s);
   document.documentElement.style.setProperty('--t-accent',    a);
   document.documentElement.style.setProperty('--t-sidebar',   sb);
-  document.documentElement.style.setProperty('--t-sidebar-text', sbt);
 
   // Live sidebar overrides on the actual sidebar element
   const sidebar = document.querySelector('.sidebar');
@@ -2205,32 +2178,24 @@ function updatePreview() {
       sidebar.style.background = sb;
       sidebar.style.borderRight = '1px solid #e4e6eb';
     }
-    // Update text colors in sidebar using the chosen sbt
-    sidebar.querySelectorAll('.sb-name,.sb-uname').forEach(el => el.style.color = sbt);
-    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = sbt + '77');
-    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => el.style.color = sbt + 'aa');
+    // Update text colors in sidebar
+    const isDarkSb = dark;
+    sidebar.querySelectorAll('.sb-name,.sb-uname').forEach(el => el.style.color = isDarkSb ? '#fff' : '#1c1e21');
+    sidebar.querySelectorAll('.sb-subtitle,.sb-urole,.sb-section').forEach(el => el.style.color = 'rgba(0,0,0,.5)');
+    sidebar.querySelectorAll('.sb-item:not(.active)').forEach(el => el.style.color = '#000000');
     sidebar.querySelectorAll('.sb-item.active').forEach(el => {
-      el.style.color = sbt;
-      el.style.background = activeBg;
+      el.style.color = '#000000';
+      el.style.background = 'rgba(0,0,0,.12)';
       el.style.fontWeight = '700';
     });
-    sidebar.querySelectorAll('.sb-logout').forEach(el => el.style.color = sbt + '77');
   }
 }
 
-function applyPreset(p, s, a, sb, sbt) {
+function applyPreset(p, s, a, sb) {
   document.getElementById('cp_primary').value   = p;
   document.getElementById('cp_secondary').value = s;
   document.getElementById('cp_accent').value    = a;
   document.getElementById('cp_sidebar').value   = sb;
-  const autoChk = document.getElementById('auto_sidebar_text');
-  const sbtEl   = document.getElementById('cp_sidebar_text');
-  if (sbt) {
-    if (sbtEl) sbtEl.value = sbt;
-    if (autoChk) autoChk.checked = false;
-  } else {
-    if (autoChk) autoChk.checked = true;
-  }
   updatePreview();
 }
 
@@ -2239,30 +2204,6 @@ function resetToDefault() {
   document.getElementById('cp_secondary').value = '#1e3a8a';
   document.getElementById('cp_accent').value    = '#10b981';
   document.getElementById('cp_sidebar').value   = '#ffffff';
-  const autoChk = document.getElementById('auto_sidebar_text');
-  if (autoChk) autoChk.checked = true;
-  updatePreview();
-}
-
-function handleThemeSubmit() {
-  // If "Auto" checkbox is checked, blank out sidebar_text_color so server saves ''
-  const autoChk = document.getElementById('auto_sidebar_text');
-  const sbtEl   = document.getElementById('cp_sidebar_text');
-  if (autoChk && autoChk.checked && sbtEl) {
-    sbtEl.value = '';
-  }
-}
-
-function toggleAutoSidebarText(chk) {
-  const sbtEl = document.getElementById('cp_sidebar_text');
-  if (sbtEl) sbtEl.disabled = chk.checked;
-  // When switching to auto, clear the hidden value so server saves empty
-  if (chk.checked && sbtEl) {
-    // Keep UI value for reference but mark it so PHP saves ''
-    sbtEl.dataset.autoMode = '1';
-  } else if (sbtEl) {
-    sbtEl.dataset.autoMode = '';
-  }
   updatePreview();
 }
 
