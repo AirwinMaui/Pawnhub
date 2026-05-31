@@ -1435,10 +1435,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
 
       <div class="two-col">
         <div class="card"><div class="card-hdr"><span class="card-title">👥 User Growth (6 Months)</span></div><div class="chart-wrap"><canvas id="userGrowthChart"></canvas></div></div>
-        <div class="card"><div class="card-hdr"><span class="card-title">🏢 New Tenants (6 Months)</span></div><div class="chart-wrap"><canvas id="tenantActivityChart"></canvas></div></div>
-      </div>
-
-      <div class="two-col">
         <div class="card">
           <div class="card-hdr"><span class="card-title">👤 User Role Distribution</span></div>
           <?php try{$rc=$pdo->query("SELECT role,COUNT(*) AS cnt FROM users WHERE role!='super_admin' GROUP BY role")->fetchAll(PDO::FETCH_KEY_PAIR);}catch(PDOException $e){$rc=[];}
@@ -1453,6 +1449,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card"><div class="card-hdr"><span class="card-title">🏢 New Tenants (6 Months)</span></div><div class="chart-wrap"><canvas id="tenantActivityChart"></canvas></div></div>
         <div class="card">
           <div class="card-hdr"><span class="card-title">⭐ Plan Distribution</span></div>
           <div style="display:flex;align-items:center;gap:24px;">
@@ -1924,21 +1924,18 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       <!-- Renewal History -->
       <?php if (!empty($sub_renewals)): ?>
       <div class="card" style="margin-top:8px;">
-        <div class="card-hdr"><span class="card-title">📋 All Renewal Requests</span></div>
+        <div class="card-hdr"><span class="card-title">📋 All Renewals</span></div>
         <div style="overflow-x:auto;">
           <table>
             <thead>
               <tr>
-                <?php foreach (['Business','Plan','Type','Billing','Method','Ref #','Amount','Status','Requested','Reviewed'] as $th): ?>
+                <?php foreach (['Business','Plan','Type','Billing','Method','Ref #','Amount'] as $th): ?>
                 <th><?= $th ?></th>
                 <?php endforeach; ?>
               </tr>
             </thead>
             <tbody>
               <?php foreach ($sub_renewals as $r):
-                $rc = match($r['status']) {
-                  'approved' => ['#15803d','#f0fdf4'], 'rejected' => ['#dc2626','#fee2e2'], default => ['#d97706','#fef3c7']
-                };
                 // Determine type label from notes or upgrade columns
                 $r_type = '—';
                 if (!empty($r['is_upgrade']) && ($r['upgrade_from'] ?? '') < ($r['upgrade_to'] ?? '')) {
@@ -1961,9 +1958,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
                 <td style="color:var(--text-dim);"><?= htmlspecialchars($r['payment_method']?:'—') ?></td>
                 <td style="font-size:.75rem;color:var(--text-dim);"><?= htmlspecialchars($r['payment_reference']?:'—') ?></td>
                 <td style="font-weight:600;">₱<?= number_format($r['amount'],2) ?></td>
-                <td><span style="display:inline-block;padding:2px 9px;border-radius:100px;font-size:.7rem;font-weight:700;color:<?= $rc[0] ?>;background:<?= $rc[1] ?>;"><?= ucfirst($r['status']) ?></span></td>
-                <td style="font-size:.74rem;color:var(--text-dim);"><?= date('M d, Y', strtotime($r['requested_at'])) ?></td>
-                <td style="font-size:.74rem;color:var(--text-dim);"><?= $r['reviewed_at'] ? date('M d, Y', strtotime($r['reviewed_at'])) : '—' ?></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
