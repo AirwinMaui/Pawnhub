@@ -765,24 +765,30 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
             <label class="flabel">Select Action *</label>
             <input type="hidden" name="pay_action" id="pay_action" value="release">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+              <?php
+              // Theme-aware inactive button style
+              $btn_inactive_border = $is_lm4 ? 'rgba(0,0,0,.15)' : 'rgba(255,255,255,.15)';
+              $btn_inactive_bg     = $is_lm4 ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.05)';
+              $btn_inactive_color  = $is_lm4 ? '#374151' : 'rgba(255,255,255,.7)';
+              ?>
               <button type="button" onclick="setAction('release')" id="btn_action_release"
-                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(16,185,129,.6);background:rgba(16,185,129,.15);color:#6ee7b7;transition:all .2s;font-family:inherit;">
+                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(16,185,129,.6);background:rgba(16,185,129,.15);color:<?=$is_lm4?'#065f46':'#6ee7b7'?>;transition:all .2s;font-family:inherit;">
                 ✅ Full Release
               </button>
               <button type="button" onclick="setAction('renew')" id="btn_action_renew"
-                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);transition:all .2s;font-family:inherit;">
+                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid <?=$btn_inactive_border?>;background:<?=$btn_inactive_bg?>;color:<?=$btn_inactive_color?>;transition:all .2s;font-family:inherit;">
                 🔄 Renew + Penalty
               </button>
               <button type="button" onclick="setAction('extend')" id="btn_action_extend"
-                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);transition:all .2s;font-family:inherit;">
+                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid <?=$btn_inactive_border?>;background:<?=$btn_inactive_bg?>;color:<?=$btn_inactive_color?>;transition:all .2s;font-family:inherit;">
                 ⏳ Extend (Interest Only)
               </button>
               <button type="button" onclick="setAction('partial')" id="btn_action_partial"
-                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:rgba(255,255,255,.6);transition:all .2s;font-family:inherit;">
+                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid <?=$btn_inactive_border?>;background:<?=$btn_inactive_bg?>;color:<?=$btn_inactive_color?>;transition:all .2s;font-family:inherit;">
                 💰 Partial Payment
               </button>
               <button type="button" onclick="setAction('forfeit')" id="btn_action_forfeit"
-                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:#fca5a5;transition:all .2s;font-family:inherit;grid-column:1/-1;">
+                style="padding:10px 8px;border-radius:10px;font-size:.76rem;font-weight:700;cursor:pointer;border:2px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:<?=$is_lm4?'#b91c1c':'#fca5a5'?>;transition:all .2s;font-family:inherit;grid-column:1/-1;">
                 🚫 Forfeit (Item to Pawnshop)
               </button>
             </div>
@@ -973,26 +979,32 @@ function fillPayment(sel) {
 function setAction(action) {
   document.getElementById('pay_action').value = action;
   const btns = ['release','renew','extend','partial','forfeit'];
+  const isLight = <?= $is_lm4 ? 'true' : 'false' ?>;
   const styles = {
-    release: {border:'rgba(16,185,129,.6)',bg:'rgba(16,185,129,.15)',color:'#6ee7b7'},
-    renew:   {border:'rgba(251,191,36,.5)',bg:'rgba(251,191,36,.10)',color:'#fcd34d'},
-    extend:  {border:'rgba(96,165,250,.5)',bg:'rgba(96,165,250,.10)',color:'#93c5fd'},
-    partial: {border:'rgba(167,139,250,.5)',bg:'rgba(167,139,250,.10)',color:'#c4b5fd'},
-    forfeit: {border:'rgba(239,68,68,.4)',bg:'rgba(239,68,68,.08)',color:'#fca5a5'},
+    release: {border:'rgba(16,185,129,.6)', bg:'rgba(16,185,129,.15)', color: isLight ? '#065f46' : '#6ee7b7'},
+    renew:   {border:'rgba(217,119,6,.5)',  bg:'rgba(251,191,36,.12)', color: isLight ? '#92400e' : '#fcd34d'},
+    extend:  {border:'rgba(37,99,235,.5)',  bg:'rgba(96,165,250,.12)', color: isLight ? '#1e40af' : '#93c5fd'},
+    partial: {border:'rgba(124,58,237,.5)', bg:'rgba(167,139,250,.12)',color: isLight ? '#5b21b6' : '#c4b5fd'},
+    forfeit: {border:'rgba(239,68,68,.4)',  bg:'rgba(239,68,68,.08)',  color: isLight ? '#b91c1c' : '#fca5a5'},
   };
+  // Inactive style — theme-aware
+  const inactiveBorder = isLight ? 'rgba(0,0,0,.15)'   : 'rgba(255,255,255,.12)';
+  const inactiveBg     = isLight ? 'rgba(0,0,0,.04)'   : 'rgba(255,255,255,.04)';
+  const inactiveColor  = isLight ? '#374151'            : 'rgba(255,255,255,.55)';
+
   btns.forEach(b => {
     const el = document.getElementById('btn_action_'+b);
     if (!el) return;
     if (b === action) {
-      el.style.border = '2px solid '+styles[b].border;
+      el.style.border     = '2px solid '+styles[b].border;
       el.style.background = styles[b].bg;
-      el.style.color = styles[b].color;
-      el.style.transform = 'scale(1.03)';
+      el.style.color      = styles[b].color;
+      el.style.transform  = 'scale(1.03)';
     } else {
-      el.style.border = '2px solid rgba(255,255,255,.12)';
-      el.style.background = 'rgba(255,255,255,.04)';
-      el.style.color = 'rgba(255,255,255,.45)';
-      el.style.transform = '';
+      el.style.border     = '2px solid '+inactiveBorder;
+      el.style.background = inactiveBg;
+      el.style.color      = inactiveColor;
+      el.style.transform  = '';
     }
   });
 

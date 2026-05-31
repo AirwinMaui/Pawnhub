@@ -1467,13 +1467,19 @@ $notif_count = count($notifs);
     <div style="max-width:540px;">
 
       <!-- Tab switcher -->
+      <?php
+      $tab_inactive_border = $is_lm2 ? 'rgba(0,0,0,.15)'  : 'rgba(255,255,255,.12)';
+      $tab_inactive_bg     = $is_lm2 ? 'rgba(0,0,0,.04)'  : 'rgba(255,255,255,.04)';
+      $tab_inactive_color  = $is_lm2 ? '#374151'           : 'rgba(255,255,255,.55)';
+      $tab_active_color    = $is_lm2 ? '#1e40af'           : '#93c5fd';
+      ?>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button onclick="showTab('tab_invite')" id="tbtn_invite"
-          style="flex:1;padding:9px;border-radius:10px;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid rgba(59,130,246,.6);background:rgba(59,130,246,.15);color:#93c5fd;">
+          style="flex:1;padding:9px;border-radius:10px;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid rgba(59,130,246,.6);background:rgba(59,130,246,.15);color:<?=$tab_active_color?>;">
           📧 Invite via Email
         </button>
         <button onclick="showTab('tab_direct')" id="tbtn_direct"
-          style="flex:1;padding:9px;border-radius:10px;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(255,255,255,.45);">
+          style="flex:1;padding:9px;border-radius:10px;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid <?=$tab_inactive_border?>;background:<?=$tab_inactive_bg?>;color:<?=$tab_inactive_color?>;">
           ➕ Add Account Directly
         </button>
       </div>
@@ -1557,10 +1563,16 @@ $notif_count = count($notifs);
       ['tab_invite','tab_direct'].forEach(t => {
         document.getElementById(t).style.display = (t===id) ? '' : 'none';
       });
-      const activeStyle  = 'border:2px solid rgba(59,130,246,.6);background:rgba(59,130,246,.15);color:#93c5fd;';
-      const inactiveStyle= 'border:2px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(255,255,255,.45);';
-      document.getElementById('tbtn_invite').style.cssText += (id==='tab_invite') ? activeStyle : inactiveStyle;
-      document.getElementById('tbtn_direct').style.cssText += (id==='tab_direct') ? activeStyle : inactiveStyle;
+      const isLight     = <?= $is_lm2 ? 'true' : 'false' ?>;
+      const activeStyle   = 'border:2px solid rgba(59,130,246,.6);background:rgba(59,130,246,.15);color:'+(isLight?'#1e40af':'#93c5fd')+';';
+      const inactiveStyle = 'border:2px solid '+(isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.12)')+';background:'+(isLight?'rgba(0,0,0,.04)':'rgba(255,255,255,.04)')+';color:'+(isLight?'#374151':'rgba(255,255,255,.55)')+';';
+      ['tbtn_invite','tbtn_direct'].forEach(btn => {
+        const isActive = (btn === 'tbtn_'+id.replace('tab_',''));
+        document.getElementById(btn).setAttribute('style',
+          document.getElementById(btn).getAttribute('style').replace(/border:[^;]+;background:[^;]+;color:[^;]+;/,'')
+          + (isActive ? activeStyle : inactiveStyle)
+        );
+      });
     }
     </script>
 

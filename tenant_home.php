@@ -1875,10 +1875,6 @@ table { width: 100%; border-collapse: collapse; min-width: 480px; }
           <span class="material-symbols-outlined" style="font-size:17px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">download</span>
           Download App
         </a>
-        <a href="<?= htmlspecialchars($register_url) ?>" style="display:inline-flex;align-items:center;gap:7px;font-size:.9rem;font-weight:700;color:var(--accent);text-decoration:none;background:color-mix(in srgb,var(--accent) 12%,transparent);border:1.5px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:11px 18px;border-radius:12px;transition:all .2s;white-space:nowrap;" onmouseover="this.style.background='color-mix(in srgb,var(--accent) 20%,transparent)'" onmouseout="this.style.background='color-mix(in srgb,var(--accent) 12%,transparent)'">
-          <span class="material-symbols-outlined" style="font-size:17px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 24;">person_add</span>
-          Register Free
-        </a>
       </div>
     </div>
   </div>
