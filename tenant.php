@@ -846,7 +846,7 @@ tr:hover td{background:<?= $td_hover ?>;}
     <div class="topbar-right">
       <?php if($active_page==='users'):?>
       <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="padding:7px 14px;font-size:.78rem;">
-        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Add Manager
+        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Add Account
       </button>
       <?php endif;?>
       <div class="topbar-icon" id="notifBtn" onclick="toggleNotifPanel(event)" style="<?=$notif_count>0?'color:#fff;background:rgba(255,255,255,.08);':''?>">
