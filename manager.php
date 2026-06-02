@@ -1617,11 +1617,11 @@ $notif_count = count($notifs);
           </div>
           <div class="fgroup">
             <label class="flabel">Email Address *</label>
-            <input type="email" name="d_email" id="d_email_input" class="finput" placeholder="staff@<?=htmlspecialchars(strtolower(preg_replace('/[^a-zA-Z0-9]/','',$business_name??'store')))?>.com" required>
+            <input type="email" name="d_email" id="d_email_input" class="finput" placeholder="staff@example.com" required>
           </div>
           <div class="fgroup">
             <label class="flabel">Username *</label>
-            <input type="text" name="d_username" id="d_username_input" class="finput" placeholder="mariasantos" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, and underscores only" required>
+            <input type="text" name="d_username" id="d_username_input" class="finput" placeholder="mariasantos@<?=htmlspecialchars(strtolower(preg_replace('/[^a-zA-Z0-9]/','',$business_name??'store')))?>.com" pattern="[a-zA-Z0-9_@.]+" title="Letters, numbers, underscores, @ and . allowed" required>
           </div>
           <div class="fgroup">
             <label class="flabel">Password * <span style="font-size:.68rem;color:rgba(255,255,255,.3);">min. 8 chars · must have upper, lower, number, special</span></label>
@@ -1670,14 +1670,12 @@ $notif_count = count($notifs);
     }
     </script>
     <script>
-    // Auto-suggest username + email from full name (Add Directly tab)
+    // Auto-suggest username (firstname@businessname.com) from full name (Add Directly tab)
     const _bizSlug = '<?=strtolower(preg_replace('/[^a-zA-Z0-9]/','',$business_name??'store'))?>';
     function direct_suggest(name) {
       const slug = name.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9_]/g,'');
       const uEl = document.getElementById('d_username_input');
-      if (uEl && !uEl.dataset.edited) uEl.value = slug;
-      const eEl = document.getElementById('d_email_input');
-      if (eEl && !eEl.dataset.edited && slug) eEl.value = slug + '@' + _bizSlug + '.com';
+      if (uEl && !uEl.dataset.edited && slug) uEl.value = slug + '@' + _bizSlug + '.com';
     }
     document.getElementById('d_username_input')?.addEventListener('input', function(){ this.dataset.edited='1'; });
     document.getElementById('d_email_input')?.addEventListener('input', function(){ this.dataset.edited='1'; });
