@@ -1682,6 +1682,8 @@ $notif_count = count($notifs);
     document.getElementById('d_username_input')?.addEventListener('input', function(){ this.dataset.edited='1'; });
     document.getElementById('d_email_input')?.addEventListener('input', function(){ this.dataset.edited='1'; });
     </script>
+    <script>
+    function checkPwdStrength(val) {
       const bar = document.getElementById('pwd_strength_bar');
       bar.style.display = val.length > 0 ? 'block' : 'none';
       const checks = {
