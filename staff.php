@@ -895,16 +895,6 @@ $notif_count = count($notifs);
             ⚠️ <em><strong>Disclaimer:</strong> The appraised value is an initial estimate and may change upon thorough physical inspection. The final loan amount and interest are subject to the pawnshop's assessment and policy.</em>
           </div>
 
-          <!-- Valid ID / Document Expiry Date -->
-          <div class="fgroup" style="margin-bottom:10px;">
-            <label class="flabel">Valid ID / Document Expiry Date <span style="color:#f87171;font-size:.72rem;">*</span></label>
-            <input type="date" name="document_expiry" id="document_expiry" class="finput"
-              min="<?= date('Y-m-d') ?>"
-              value="<?= htmlspecialchars($_POST['document_expiry'] ?? '') ?>"
-              required>
-            <div style="font-size:.67rem;color:rgba(255,255,255,.3);margin-top:3px;">Expiry date of the customer's submitted valid ID or supporting document</div>
-          </div>
-
           <!-- Terms & Conditions Checkbox -->
           <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
             <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.79rem;color:rgba(255,255,255,.8);line-height:1.5;">
