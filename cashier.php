@@ -559,6 +559,9 @@ $cashierBg = $rawBgCashier ?: 'https://images.unsplash.com/photo-1563013544-824a
     </a>
   </nav>
   <div class="sb-footer">
+    <a href="change_password.php" class="sb-item" style="margin:0 0 4px 0;">
+      <span class="material-symbols-outlined">lock_reset</span>Change Password
+    </a>
     <?php $logout_url = 'logout.php?role=cashier&slug=' . rawurlencode($u['tenant_slug'] ?? ''); ?>
     <button type="button" class="sb-logout" onclick="showLogoutModal('<?= $logout_url ?>')">
       <span class="material-symbols-outlined">logout</span>Sign Out
