@@ -1567,70 +1567,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       </div>
       <?php endif;?>
 
-      <?php
-      // Pending Permit Review:
-      // Only shows tenants that NEED manual SA review of their permit:
-      // - SA-added tenants (invited by SA) whose permit hasn't been reviewed
-      // - Tenants flagged with permit issues (sa_rejected needing re-review)
-      // NOTE: Self-signup tenants auto-pass OCR at signup, so they no longer
-      //       appear here for permit review. SA can still reject via All Tenants.
-      $permit_review_tenants = array_filter($tenants, function($t) {
-          // invite_status = 'accepted' means tenant already onboarded — skip
-          $invite_status   = $t['invite_status'] ?? '';
-          $is_sa_added     = !empty($invite_status) && $invite_status !== 'accepted';
-          $permit_reviewed = in_array($t['business_permit_status'] ?? '', ['sa_approved', 'sa_rejected']);
 
-          // Only show SA-added tenants (not yet accepted/onboarded) whose permit hasn't been reviewed yet
-          if ($is_sa_added && $t['status'] === 'active' && !empty($t['business_permit_url']) && !$permit_reviewed) return true;
-
-          return false;
-      });
-      if (!empty($permit_review_tenants)): ?>
-      <div class="card" style="border-color:#fb923c;">
-        <div class="card-hdr"><span class="card-title" style="color:#c2410c;">🔍 Pending Permit Review (<?=count($permit_review_tenants)?>)</span><span style="font-size:.73rem;color:#92400e;">Review business permits of newly activated tenants</span></div>
-        <div style="overflow-x:auto;"><table><thead><tr><th>Business Name</th><th>Owner</th><th>Plan</th><th>Permit</th><th>Paid</th><th>Actions</th></tr></thead><tbody>
-        <?php foreach($permit_review_tenants as $t): ?>
-        <tr>
-          <td style="font-weight:600;"><?=htmlspecialchars($t['business_name'])?></td>
-          <td style="font-size:.78rem;color:var(--text-dim);"><?=htmlspecialchars($t['owner_name'])?></td>
-          <td><span class="badge <?=$t['plan']==='Enterprise'?'plan-ent':'plan-pro'?>"><?=$t['plan']?></span></td>
-          <td>
-            <button onclick="openDocsModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm" style="font-size:.69rem;background:#1e293b;color:#93c5fd;border:1px solid #334155;">
-              📂 View Documents
-              <?php
-                $doc_count = 0;
-                foreach(['business_permit_url','bsp_certificate_url','aml_certificate_url','fire_safety_cert_url','sanitary_permit_url'] as $dk) {
-                  if (!empty($t[$dk])) $doc_count++;
-                }
-              ?>
-              <span style="background:#3b82f6;color:#fff;border-radius:10px;padding:1px 6px;font-size:.62rem;margin-left:3px;"><?=$doc_count?>/5</span>
-            </button>
-          </td>
-          <td>
-            <?php if ($t['payment_status'] === 'paid'): ?>
-              <span class="badge b-green" style="font-size:.68rem;">💳 Paid</span>
-            <?php else: ?>
-              <span class="badge b-yellow" style="font-size:.68rem;">⏳ Unpaid</span>
-            <?php endif; ?>
-          </td>
-          <td style="white-space:nowrap;">
-            <?php if ($t['status'] === 'pending'): ?>
-              <?php /* Self-signup paid+paid — needs permit check AND tenant approval */ ?>
-              <button onclick="openApproveModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-success" style="font-size:.69rem;">✓ Approve</button>
-              <button onclick="openRejectModal(<?=$t['id']?>,<?=(int)$t['admin_uid']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;">✗ Reject</button>
-            <?php else: ?>
-              <form method="POST" style="display:inline;" onsubmit="return confirm('Approve business permit for <?=htmlspecialchars(addslashes($t['business_name']))?> ?');">
-                <input type="hidden" name="action" value="approve_permit"/>
-                <input type="hidden" name="tenant_id" value="<?=$t['id']?>"/>
-                <button type="submit" class="btn-sm btn-success" style="font-size:.69rem;">✓ Approve Permit</button>
-              </form>
-              <button onclick="openRejectPermitModal(<?=$t['id']?>,'<?=htmlspecialchars($t['business_name'],ENT_QUOTES)?>')" class="btn-sm btn-danger" style="font-size:.69rem;">✗ Reject Permit</button>
-            <?php endif; ?>
-          </td>
-        </tr>
-        <?php endforeach;?></tbody></table></div>
-      </div>
-      <?php endif; ?>
 
       <div class="card">
         <div class="card-hdr"><span class="card-title">🏢 All Tenants</span><span style="font-size:.75rem;color:var(--text-dim);"><?=$total_tenants?> total</span></div>
