@@ -81,52 +81,59 @@ $theme = getTenantTheme($pdo, $tid);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-    // Invite Staff or Cashier via Email
-    if ($_POST['action'] === 'invite_staff') {
+    // Add Manager Account Directly (Admin/Owner only)
+    if ($_POST['action'] === 'add_manager_direct') {
         if (!$features['managers']) {
-            $error_msg = 'Inviting Managers is not available on your current plan. Please upgrade to Pro or Enterprise.';
+            $error_msg = 'Adding Managers is not available on your current plan. Please upgrade to Pro or Enterprise.';
         } else {
-        $email = trim($_POST['email'] ?? '');
-        $name  = trim($_POST['name']  ?? '');
-        // Admin/Owner can ONLY invite Managers — Managers handle Staff/Cashier themselves
-        $role  = 'manager';
+        $d_name     = trim($_POST['d_name']     ?? '');
+        $d_email    = trim($_POST['d_email']    ?? '');
+        $d_username = trim($_POST['d_username'] ?? '');
+        $d_password = trim($_POST['d_password'] ?? '');
 
-        if (!$email || !$name) {
-            $error_msg = 'Please fill in name and email.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!$d_name || !$d_email || !$d_username || !$d_password) {
+            $error_msg = 'Please fill in all fields.';
+        } elseif (!filter_var($d_email, FILTER_VALIDATE_EMAIL)) {
             $error_msg = 'Invalid email address.';
+        } elseif (strlen($d_password) < 8) {
+            $error_msg = 'Password must be at least 8 characters.';
+        } elseif (!preg_match('/[A-Z]/', $d_password)) {
+            $error_msg = 'Password must contain at least one uppercase letter.';
+        } elseif (!preg_match('/[a-z]/', $d_password)) {
+            $error_msg = 'Password must contain at least one lowercase letter.';
+        } elseif (!preg_match('/[0-9]/', $d_password)) {
+            $error_msg = 'Password must contain at least one number.';
+        } elseif (!preg_match('/[\W_]/', $d_password)) {
+            $error_msg = 'Password must contain at least one special character (e.g. @, #, !, $).';
         } else {
-            $chk = $pdo->prepare("SELECT id FROM users WHERE email=? AND tenant_id=?");
-            $chk->execute([$email, $tid]);
+            $chk = $pdo->prepare("SELECT id FROM users WHERE (email=? OR username=?) AND tenant_id=?");
+            $chk->execute([$d_email, $d_username, $tid]);
             if ($chk->fetch()) {
-                $error_msg = 'This email already has an account in your branch.';
+                $error_msg = 'An account with this email or username already exists.';
             } else {
-                // Expire only existing pending manager invitations for this email
-                $pdo->prepare("UPDATE tenant_invitations SET status='expired' WHERE email=? AND tenant_id=? AND status='pending' AND role='manager'")
-                    ->execute([$email, $tid]);
-
-                $token      = bin2hex(random_bytes(32));
-                $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
-
-                $pdo->prepare("INSERT INTO tenant_invitations (tenant_id, email, owner_name, role, token, status, expires_at, created_by) VALUES (?,?,?,?,?,'pending',?,?)")
-                    ->execute([$tid, $email, $name, $role, $token, $expires_at, $u['id']]);
-
-                // Get tenant slug AND business name in one query
-                $slug_row = $pdo->prepare("SELECT slug, business_name FROM tenants WHERE id=? LIMIT 1");
-                $slug_row->execute([$tid]);
-                $slug_row          = $slug_row->fetch();
-                $slug              = $slug_row['slug'] ?? '';
-                $biz_name_for_mail = $slug_row['business_name'] ?: $inv['business_name'] ?: 'your branch';
-
+                $hashed = password_hash($d_password, PASSWORD_BCRYPT);
+                $pdo->prepare("INSERT INTO users (tenant_id, fullname, username, email, password, role, status, approved_at, created_at) VALUES (?,?,?,?,?,'manager','approved',NOW(),NOW())")
+                    ->execute([$tid, $d_name, $d_username, $d_email, $hashed]);
+                $new_uid = $pdo->lastInsertId();
+                // Send welcome email with credentials
                 try {
                     require_once __DIR__ . '/mailer.php';
-                    // Pass slug so after registration manager lands on correct branch login
-                    sendManagerInvitation($email, $name, $biz_name_for_mail, $token, $slug);
-                    $success_msg = "Manager invitation sent to {$email}!";
+                    $slug_for_login  = $tenant['slug'] ?? '';
+                    $biz_name_mail   = $tenant['business_name'] ?? 'your branch';
+                    $login_url       = $slug_for_login ? "/{$slug_for_login}?login=1" : '/login.php';
+                    sendMail($d_email, $d_name,
+                        "Your Manager Account — {$biz_name_mail}",
+                        "<p>Hello <strong>{$d_name}</strong>,</p>
+                         <p>Your <strong>Manager</strong> account at <strong>{$biz_name_mail}</strong> has been created.</p>
+                         <p><strong>Username:</strong> {$d_username}<br>
+                            <strong>Password:</strong> {$d_password}<br>
+                            <strong>Login:</strong> <a href='{$login_url}'>{$login_url}</a></p>
+                         <p>Please change your password after your first login.</p>"
+                    );
+                    $success_msg = "Manager account for {$d_name} created successfully!";
                 } catch (Throwable $e) {
-                    $emailErr = $e->getMessage();
-                    error_log('Invite email failed: ' . $emailErr);
-                    $error_msg = 'Invitation created but email failed to send. Error: ' . htmlspecialchars($emailErr);
+                    error_log('[AddManagerDirect] Email error: '.$e->getMessage());
+                    $success_msg = "Manager account for {$d_name} created! (Email notification failed.)";
                 }
                 $active_page = 'users';
             }
@@ -855,7 +862,7 @@ tr:hover td{background:<?= $td_hover ?>;}
     <div class="topbar-right">
       <?php if($active_page==='users'):?>
       <button onclick="document.getElementById('addUserModal').classList.add('open')" class="btn-sm btn-primary" style="padding:7px 14px;font-size:.78rem;">
-        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Manager
+        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Add Manager
       </button>
       <?php endif;?>
       <div class="topbar-icon" id="notifBtn" onclick="toggleNotifPanel(event)" style="<?=$notif_count>0?'color:#fff;background:rgba(255,255,255,.08);':''?>">
@@ -2089,17 +2096,16 @@ tr:hover td{background:<?= $td_hover ?>;}
 
 <!-- INVITE MODAL -->
 <div class="modal-overlay" id="addUserModal">
-  <div class="modal">
+  <div class="modal" style="width:520px;max-width:96vw;">
     <div class="mhdr">
-      <div class="mtitle">Invite Branch Manager</div>
+      <div class="mtitle">Add Manager Account</div>
       <button class="mclose" onclick="document.getElementById('addUserModal').classList.remove('open')">
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
     <div class="mbody">
       <form method="POST">
-        <input type="hidden" name="action" value="invite_staff">
-        <input type="hidden" name="role" value="manager">
+        <input type="hidden" name="action" value="add_manager_direct">
         <div style="margin-bottom:12px;">
           <label class="flabel">Role</label>
           <div style="display:flex;align-items:center;gap:8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 14px;">
@@ -2107,23 +2113,90 @@ tr:hover td{background:<?= $td_hover ?>;}
             <span style="font-size:.85rem;font-weight:700;color:#6ee7b7;">Branch Manager</span>
           </div>
         </div>
-        <div style="margin-bottom:12px;"><label class="flabel">Full Name *</label><input type="text" name="name" class="finput" placeholder="Maria Santos" required></div>
-        <div style="margin-bottom:14px;"><label class="flabel">Email Address *</label><input type="email" name="email" class="finput" placeholder="manager@example.com" required><div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">An invitation link will be sent to this email.</div></div>
-        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:11px 13px;font-size:.76rem;color:rgba(110,231,183,.8);margin-bottom:14px;line-height:1.6;">
-          📧 The Manager will receive an email to set up their account credentials.<br>
-          <strong style="color:rgba(110,231,183,1);">Manager</strong> — can invite and manage their own staff &amp; cashiers.
+        <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:10px 13px;font-size:.76rem;color:#93c5fd;margin-bottom:14px;">
+          ℹ️ Creates the account immediately. Login credentials will be emailed to the manager.
+        </div>
+        <div style="margin-bottom:12px;"><label class="flabel">Full Name *</label><input type="text" name="d_name" id="mgr_d_name" class="finput" placeholder="Maria Santos" required oninput="mgr_suggest_username(this.value)"></div>
+        <div style="margin-bottom:12px;">
+          <label class="flabel">Email Address *</label>
+          <input type="email" name="d_email" id="mgr_d_email" class="finput" placeholder="manager@<?=htmlspecialchars(strtolower(preg_replace('/\s+/','',$business_name??'branch')))?>.com" required>
+          <div style="font-size:.71rem;color:rgba(255,255,255,.25);margin-top:5px;">Login credentials will be sent to this email.</div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="flabel">Username *</label>
+          <input type="text" name="d_username" id="mgr_d_username" class="finput" placeholder="mariasantos" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, and underscores only" required>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label class="flabel">Password * <span style="font-size:.68rem;color:rgba(255,255,255,.3);">min. 8 chars · upper, lower, number, special</span></label>
+          <input type="password" name="d_password" id="mgr_d_password" class="finput" placeholder="Set a strong password" minlength="8" required oninput="mgr_check_pwd(this.value)">
+          <div id="mgr_pwd_bar" style="margin-top:6px;display:none;">
+            <div style="display:flex;gap:4px;margin-bottom:5px;">
+              <div id="mps1" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div id="mps2" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div id="mps3" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              <div id="mps4" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+            </div>
+            <div id="mgr_req_list" style="font-size:.68rem;line-height:1.8;color:rgba(255,255,255,.35);">
+              <div id="mrq_len">✗ At least 8 characters</div>
+              <div id="mrq_upper">✗ Uppercase letter (A–Z)</div>
+              <div id="mrq_lower">✗ Lowercase letter (a–z)</div>
+              <div id="mrq_num">✗ Number (0–9)</div>
+              <div id="mrq_special">✗ Special character (@, #, !, $, etc.)</div>
+            </div>
+          </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:9px;">
           <button type="button" class="btn-sm" onclick="document.getElementById('addUserModal').classList.remove('open')">Cancel</button>
-          <button type="submit" class="btn-sm btn-primary">Send Manager Invitation</button>
+          <button type="submit" class="btn-sm btn-primary">
+            <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Create Manager Account
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
+<script>
+// Auto-suggest username from full name
+function mgr_suggest_username(name) {
+  const slug = name.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9_]/g,'');
+  const uEl = document.getElementById('mgr_d_username');
+  if (uEl && !uEl.dataset.edited) uEl.value = slug;
+  // Also auto-suggest email
+  const bizSlug = '<?=strtolower(preg_replace('/[^a-zA-Z0-9]/','',$business_name??'branch'))?>';
+  const eEl = document.getElementById('mgr_d_email');
+  if (eEl && !eEl.dataset.edited && slug) eEl.value = slug + '@' + bizSlug + '.com';
+}
+document.getElementById('mgr_d_username')?.addEventListener('input', function(){ this.dataset.edited = '1'; });
+document.getElementById('mgr_d_email')?.addEventListener('input', function(){ this.dataset.edited = '1'; });
+
+function mgr_check_pwd(val) {
+  const bar = document.getElementById('mgr_pwd_bar');
+  bar.style.display = val.length > 0 ? 'block' : 'none';
+  const checks = {
+    mrq_len:     val.length >= 8,
+    mrq_upper:   /[A-Z]/.test(val),
+    mrq_lower:   /[a-z]/.test(val),
+    mrq_num:     /[0-9]/.test(val),
+    mrq_special: /[\W_]/.test(val),
+  };
+  for (const [id, pass] of Object.entries(checks)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.textContent = (pass ? '✓ ' : '✗ ') + el.textContent.replace(/^[✓✗] /, '');
+    el.style.color = pass ? '#6ee7b7' : 'rgba(255,255,255,.35)';
+  }
+  const passed = Object.values(checks).filter(Boolean).length;
+  const colors = ['#ef4444','#f59e0b','#eab308','#22c55e'];
+  ['mps1','mps2','mps3','mps4'].forEach((id, i) => {
+    const s = document.getElementById(id);
+    if (s) s.style.background = i < passed ? colors[Math.min(passed-1,3)] : 'rgba(255,255,255,.1)';
+  });
+}
+</script>
 
 <script>
 document.getElementById('addUserModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+// Manager modal auto-close on outside click already handled above
 
 // Returns true if hex color is dark (luminance < 0.4)
 function colorIsDark(hex) {
