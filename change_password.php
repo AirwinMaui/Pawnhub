@@ -3,17 +3,18 @@ require_once __DIR__ . '/session_helper.php';
 require 'db.php';
 require 'theme_helper.php';
 
-// Try staff session first, then cashier session
-pawnhub_session_start('staff');
-if (empty($_SESSION['user']) || !in_array($_SESSION['user']['role'] ?? '', ['staff','cashier'])) {
-    // No valid staff session — try cashier session
-    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+// Use role hint from URL (?role=cashier or ?role=staff) to start correct session
+$_role_hint = $_GET['role'] ?? 'staff';
+if ($_role_hint === 'cashier') {
     pawnhub_session_start('cashier');
+} else {
+    pawnhub_session_start('staff');
 }
 
 // Must be logged in as staff or cashier
 if (empty($_SESSION['user'])) {
-    header('Location: /'); exit;
+    $slug = $_SESSION['user']['tenant_slug'] ?? '';
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) . '?login=1' : '/login.php')); exit;
 }
 $u = $_SESSION['user'];
 if (!in_array($u['role'], ['staff','cashier'])) {
