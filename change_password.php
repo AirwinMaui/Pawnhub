@@ -1,8 +1,15 @@
 <?php
 require_once __DIR__ . '/session_helper.php';
-pawnhub_session_start('staff'); // works for staff/cashier sessions
 require 'db.php';
 require 'theme_helper.php';
+
+// Try staff session first, then cashier session
+pawnhub_session_start('staff');
+if (empty($_SESSION['user']) || !in_array($_SESSION['user']['role'] ?? '', ['staff','cashier'])) {
+    // No valid staff session — try cashier session
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+    pawnhub_session_start('cashier');
+}
 
 // Must be logged in as staff or cashier
 if (empty($_SESSION['user'])) {
