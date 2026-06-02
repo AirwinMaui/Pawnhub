@@ -3,27 +3,23 @@ require_once __DIR__ . '/session_helper.php';
 require 'db.php';
 require 'theme_helper.php';
 
-// Detect which session is active based on cookie, then start the right one
-$_detected_session = '';
+// Try each possible session name until we find a valid user
+$_found_user = false;
 foreach (['cashier', 'staff'] as $_sname) {
-    if (!empty($_COOKIE['pawnhub_' . $_sname])) {
-        $_detected_session = $_sname;
-        break;
-    }
-}
-if ($_detected_session) {
-    pawnhub_session_start($_detected_session);
-} else {
-    pawnhub_session_start('staff');
-    if (empty($_SESSION['user'])) {
+    if (session_status() === PHP_SESSION_ACTIVE) {
         session_write_close();
-        pawnhub_session_start('cashier');
+    }
+    pawnhub_session_start($_sname);
+    if (!empty($_SESSION['user']) && in_array($_SESSION['user']['role'] ?? '', ['staff', 'cashier'])) {
+        $_found_user = true;
+        break;
     }
 }
 
 // Must be logged in as staff or cashier
-if (empty($_SESSION['user'])) {
-    header('Location: /'); exit;
+if (!$_found_user || empty($_SESSION['user'])) {
+    $slug = $_SESSION['user']['tenant_slug'] ?? '';
+    header('Location: ' . ($slug ? '/' . rawurlencode($slug) . '?login=1' : '/login.php')); exit;
 }
 $u = $_SESSION['user'];
 if (!in_array($u['role'], ['staff','cashier'])) {
