@@ -1575,10 +1575,12 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#f8fafc;}
       // NOTE: Self-signup tenants auto-pass OCR at signup, so they no longer
       //       appear here for permit review. SA can still reject via All Tenants.
       $permit_review_tenants = array_filter($tenants, function($t) {
-          $is_sa_added     = !empty($t['invite_status']);
-          $permit_reviewed = in_array($t['business_permit_status'] ?? 'pending', ['sa_approved','sa_rejected']);
+          // invite_status = 'accepted' means tenant already onboarded — skip
+          $invite_status   = $t['invite_status'] ?? '';
+          $is_sa_added     = !empty($invite_status) && $invite_status !== 'accepted';
+          $permit_reviewed = in_array($t['business_permit_status'] ?? '', ['sa_approved', 'sa_rejected']);
 
-          // Only show SA-added tenants whose permit hasn't been reviewed yet
+          // Only show SA-added tenants (not yet accepted/onboarded) whose permit hasn't been reviewed yet
           if ($is_sa_added && $t['status'] === 'active' && !empty($t['business_permit_url']) && !$permit_reviewed) return true;
 
           return false;
