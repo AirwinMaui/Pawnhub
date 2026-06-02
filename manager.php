@@ -178,6 +178,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $error_msg = 'Invalid email address.';
         } elseif (strlen($d_password) < 8) {
             $error_msg = 'Password must be at least 8 characters.';
+        } elseif (!preg_match('/[A-Z]/', $d_password)) {
+            $error_msg = 'Password must contain at least one uppercase letter.';
+        } elseif (!preg_match('/[a-z]/', $d_password)) {
+            $error_msg = 'Password must contain at least one lowercase letter.';
+        } elseif (!preg_match('/[0-9]/', $d_password)) {
+            $error_msg = 'Password must contain at least one number.';
+        } elseif (!preg_match('/[\W_]/', $d_password)) {
+            $error_msg = 'Password must contain at least one special character (e.g. @, #, !, $).';
         } else {
             $chk = $pdo->prepare("SELECT id FROM users WHERE (email=? OR username=?) AND tenant_id=?");
             $chk->execute([$d_email, $d_username, $tid]);
@@ -945,7 +953,7 @@ $bgImg = $rawBgMgr ?: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c
       <span class="material-symbols-outlined">badge</span>Staff &amp; Cashier
     </a>
     <a href="?page=invite" class="sb-item <?=$active_page==='invite'?'active':''?>">
-      <span class="material-symbols-outlined">person_add</span>Invite Member
+      <span class="material-symbols-outlined">person_add</span>Add Account
     </a>
 
     <div class="sb-section">Shop Management</div>
@@ -1490,7 +1498,7 @@ $notif_count = count($notifs);
     <div class="page-hdr">
       <div><h2>Staff &amp; Cashier Team</h2><p><?=count($my_team)?> member<?=count($my_team)!==1?'s':''?></p></div>
       <button onclick="document.getElementById('inviteModal').classList.add('open')" class="btn-sm btn-primary">
-        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Invite Member
+        <span class="material-symbols-outlined" style="font-size:15px;">person_add</span>Add Account
       </button>
     </div>
     <div class="card" style="overflow-x:auto;">
@@ -1534,7 +1542,7 @@ $notif_count = count($notifs);
     </div>
 
   <?php elseif($active_page==='invite'): ?>
-    <div class="page-hdr"><div><h2>Add Team Member</h2><p>Invite via email or create an account directly.</p></div></div>
+    <div class="page-hdr"><div><h2>Add Account</h2><p>Invite via email or create an account directly.</p></div></div>
     <div style="max-width:540px;">
 
       <!-- Tab switcher -->
@@ -1616,8 +1624,23 @@ $notif_count = count($notifs);
             <input type="text" name="d_username" class="finput" placeholder="mariasantos" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, and underscores only" required>
           </div>
           <div class="fgroup">
-            <label class="flabel">Password * <span style="font-size:.68rem;color:rgba(255,255,255,.3);">min. 8 characters</span></label>
-            <input type="password" name="d_password" class="finput" placeholder="Set a strong password" minlength="8" required>
+            <label class="flabel">Password * <span style="font-size:.68rem;color:rgba(255,255,255,.3);">min. 8 chars · must have upper, lower, number, special</span></label>
+            <input type="password" name="d_password" id="d_password_input" class="finput" placeholder="Set a strong password" minlength="8" required oninput="checkPwdStrength(this.value)">
+            <div id="pwd_strength_bar" style="margin-top:6px;display:none;">
+              <div style="display:flex;gap:4px;margin-bottom:5px;">
+                <div id="ps1" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+                <div id="ps2" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+                <div id="ps3" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+                <div id="ps4" style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);"></div>
+              </div>
+              <div id="pwd_req_list" style="font-size:.68rem;line-height:1.8;color:rgba(255,255,255,.35);">
+                <div id="req_len">✗ At least 8 characters</div>
+                <div id="req_upper">✗ Uppercase letter (A–Z)</div>
+                <div id="req_lower">✗ Lowercase letter (a–z)</div>
+                <div id="req_num">✗ Number (0–9)</div>
+                <div id="req_special">✗ Special character (@, #, !, $, etc.)</div>
+              </div>
+            </div>
           </div>
           <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:11px 13px;font-size:.75rem;color:#fcd34d;margin-bottom:14px;">
             ⚠️ As Manager, you can only add <strong>Staff</strong> and <strong>Cashier</strong> roles. To add another Manager, contact the Store Owner (Admin).
@@ -1643,6 +1666,30 @@ $notif_count = count($notifs);
           document.getElementById(btn).getAttribute('style').replace(/border:[^;]+;background:[^;]+;color:[^;]+;/,'')
           + (isActive ? activeStyle : inactiveStyle)
         );
+      });
+    }
+    </script>
+    <script>
+    function checkPwdStrength(val) {
+      const bar = document.getElementById('pwd_strength_bar');
+      bar.style.display = val.length > 0 ? 'block' : 'none';
+      const checks = {
+        req_len:     val.length >= 8,
+        req_upper:   /[A-Z]/.test(val),
+        req_lower:   /[a-z]/.test(val),
+        req_num:     /[0-9]/.test(val),
+        req_special: /[\W_]/.test(val),
+      };
+      for (const [id, pass] of Object.entries(checks)) {
+        const el = document.getElementById(id);
+        el.textContent = (pass ? '✓ ' : '✗ ') + el.textContent.replace(/^[✓✗] /, '');
+        el.style.color = pass ? '#6ee7b7' : 'rgba(255,255,255,.35)';
+      }
+      const passed = Object.values(checks).filter(Boolean).length;
+      const colors = ['#ef4444','#f59e0b','#eab308','#22c55e'];
+      const segs = [document.getElementById('ps1'),document.getElementById('ps2'),document.getElementById('ps3'),document.getElementById('ps4')];
+      segs.forEach((s, i) => {
+        s.style.background = i < passed ? colors[Math.min(passed-1, 3)] : 'rgba(255,255,255,.1)';
       });
     }
     </script>
